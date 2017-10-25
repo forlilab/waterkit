@@ -27,6 +27,7 @@ class Kits():
     
     def _place_optimal_water(self, molecule, ad_map):
         
+        angles = []
         waters = []
         coord_waters = []
         
@@ -52,90 +53,71 @@ class Kits():
                 if ob_atom.IsHbondDonorH():
                     # Get the coordinates of the neighbor atom
                     coord_neighbor_atoms = molecule.get_neighbor_atom_coordinates(id_atom)
+                    # Set HBond length
+                    hb_length = hb_acceptor_length
 
-                    print "Donor   ", coord_neighbor_atoms
-                    print ""
-                    
-                    # Get the coordinates of the water oxygen atom
-                    v = utils.vector(coord_neighbor_atoms[1], coord_atom)
-                    n = utils.normalized_vector(v)
-                    w = coord_atom + (n * hb_acceptor_length)
-                    
-                    coord_waters.append(w)
-                        
-                elif ob_atom.IsHbondAcceptor():
-                    
+                    p = utils.atom_to_move(coord_atom, coord_neighbor_atoms[1])
+                    # Rotation axis corresponds to the atom we have to move
+                    r = p
+                    angles = [0]
+                
+                if ob_atom.IsHbondAcceptor():
+                    # Get the coordinates of the neighbor atom
                     coord_neighbor_atoms = molecule.get_neighbor_atom_coordinates(id_atom, 2)
+                    # Set HBond length
+                    hb_length = hb_donor_length
                     
-                    """
-                    The hybridization of the O3 atom in the tyrosine residue is not
-                    correctly recognized by Open-babel. So I added a quick-fix in the
-                    if condition.
-                    """
-
-                    print "Acceptor", coord_neighbor_atoms
-                    print ""
+                    #The hybridization of the O3 atom in the tyrosine residue is not
+                    #correctly recognized by Open-babel. So I added a quick-fix in the
+                    #if condition.
                     
                     if hyb_atom == 2 and not type_atom == 'O3':
                         
+                        # It means probably that we have a backbone oxygen
                         if coord_neighbor_atoms[1].ndim == 1:
-                            # It means probably that we have a backbone oxygen
                             coord_atom1 = coord_neighbor_atoms[2][0]
                             coord_atom2 = coord_neighbor_atoms[2][1]
-                            angles = [np.radians(60), -np.radians(60)]
+                            angles = [-np.radians(60), np.radians(60)]
 
+                        # It means probably that we have a planar nitrogen
                         elif coord_neighbor_atoms[1].ndim == 2:
-                            # It means probably that we have a planar nitrogen
-                            atom1 = coord_neighbor_atoms[1][0]
-                            atom2 = coord_neighbor_atoms[1][1]
-                            angles = [0]
-
-                        v1 = utils.vector(coord_atom1, coord_atom)
-                        v2 = utils.vector(coord_atom2, coord_atom)
-                        v3 = utils.normalized_vector(v2 + v1)
-                        n = utils.normalized_vector(np.cross(v1, v2))
-
-                        tmp_waters = []
-                        
-                        for angle in angles:
-                            w = utils.rotate_atom(coord_atom+v3, coord_atom, coord_atom+n, angle, hb_donor_length)
-                            tmp_waters.append(w)
-                        
-                        coord_waters.extend(tmp_waters)
-                    
-                    elif hyb_atom == 3 or type_atom == 'O3':
-                        
-                        if coord_neighbor_atoms[1].ndim == 1:
-                            # It means that we have probably a tetrahedral nitrogen
-                            p = np.mean(coord_neighbor_atoms[2], axis=0)
-                            v = utils.vector(coord_atom, p)
-                            n = -1. * utils.normalized_vector(v)
-                            w = coord_atom + (n * hb_donor_length)
-                            
-                            coord_waters.append(w)
-                        
-                        elif coord_neighbor_atoms[1].ndim == 2:
-                            # It means that we have probably an hydroxyl group
                             coord_atom1 = coord_neighbor_atoms[1][0]
                             coord_atom2 = coord_neighbor_atoms[1][1]
-                            angle = np.radians(120)
-                            
-                            w1 = utils.rotate_atom(coord_atom2, coord_atom, coord_atom1, angle, hb_donor_length)
-                            w2 = utils.rotate_atom(coord_atom2, coord_atom, coord_atom1, -angle, hb_donor_length)
-                            
-                            coord_waters.extend([w1, w2])
+                            angles = [0]
 
-                elif ob_atom.IsAromatic():
-                    pass
-        
-        # Check if water molecules are in the map, otherwise don't keep them
-        coord_waters = [x for x in coord_waters if ad_map._is_in_map(x)]
+                        p = utils.atom_to_move(coord_atom, [coord_atom1, coord_atom2])
+                        r = utils.rotation_axis(coord_atom, coord_atom1, coord_atom2)
 
-        # Create all the water molecules
-        #for coord_water in coord_waters:
-        #    water = Water(coord_water)
+                    if hyb_atom == 3 or type_atom == 'O3':
+                        
+                        # It means that we have probably a tetrahedral nitrogen
+                        if coord_neighbor_atoms[1].ndim == 1:
+                            p = utils.atom_to_move(coord_atom, coord_neighbor_atoms[2])
+                            # Rotation axis corresponds to the atom we have to move
+                            r = p
+                            angles = [0]
+                        
+                        # It means that we have probably an hydroxyl group
+                        elif coord_neighbor_atoms[1].ndim == 2:
+                            # The atom to move correspond to the hydrogen already in position (-OH)
+                            p = coord_neighbor_atoms[1][1]
+                            # Carbon atom (in -OH context) correspond to the rotation axis
+                            r = coord_neighbor_atoms[1][0]
+                            angles = [-np.radians(120), np.radians(120)]
+
+                if angles:
+                    # Now we place the water molecule(s)!
+                    for angle in angles:
+                        w = utils.rotate_atom(p, coord_atom, r, angle, hb_length)
+
+                        # ... and check if it's in the map
+                        if ad_map._is_in_map(w):
+                            waters.append(w)
+                            #waters.append(Water(w, anchor))
+
+                    angles = []
         
-        return np.array(coord_waters)
+        return np.array(waters)
     
     def hydrate(self, molecule, ad_map):
 
