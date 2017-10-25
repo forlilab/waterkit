@@ -43,6 +43,8 @@ def atom_to_move(o, p):
     """
     Compute coordinates of atom just above acceptor/donor atom o
     """
+    # It won't work if there is just one dimension
+    p = np.atleast_2d(p)
     return o + normalize(-1. * vector(o, np.mean(p, axis=0)))
 
 
