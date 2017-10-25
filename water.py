@@ -16,11 +16,10 @@ from molecule import Molecule
 
 class Water(Molecule):
 
-    def __init__(self, oxygen, anchor, hybridization=1):
+    def __init__(self, oxygen, anchor):
         self._OBMol = ob.OBMol()
         self.add_atom(oxygen, atomic=8)
         self._anchor = anchor
-        self._hybridization = hybridization
 
     def add_atom(self, xyz, atomic, bond=None):
         a = self._OBMol.NewAtom()
