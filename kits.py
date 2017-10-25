@@ -56,9 +56,9 @@ class Kits():
                     # Set HBond length
                     hb_length = hb_acceptor_length
 
+                    # The angle will be zero, so no need for a rotation axis
+                    r = None
                     p = utils.atom_to_move(coord_atom, coord_neighbor_atoms[1])
-                    # Rotation axis corresponds to the atom we have to move
-                    r = p
                     angles = [0]
                 
                 if ob_atom.IsHbondAcceptor():
@@ -85,24 +85,24 @@ class Kits():
                             coord_atom2 = coord_neighbor_atoms[1][1]
                             angles = [0]
 
-                        p = utils.atom_to_move(coord_atom, [coord_atom1, coord_atom2])
                         r = utils.rotation_axis(coord_atom, coord_atom1, coord_atom2)
+                        p = utils.atom_to_move(coord_atom, [coord_atom1, coord_atom2])
 
                     if hyb_atom == 3 or type_atom == 'O3':
                         
                         # It means that we have probably a tetrahedral nitrogen
                         if coord_neighbor_atoms[1].ndim == 1:
+                            # The angle will be zero, so no need for a rotation axis
+                            r = None
                             p = utils.atom_to_move(coord_atom, coord_neighbor_atoms[2])
-                            # Rotation axis corresponds to the atom we have to move
-                            r = p
                             angles = [0]
                         
                         # It means that we have probably an hydroxyl group
                         elif coord_neighbor_atoms[1].ndim == 2:
-                            # The atom to move correspond to the hydrogen already in position (-OH)
-                            p = coord_neighbor_atoms[1][1]
                             # Carbon atom (in -OH context) correspond to the rotation axis
                             r = coord_neighbor_atoms[1][0]
+                            # The atom to move correspond to the hydrogen already in position (-OH)
+                            p = coord_neighbor_atoms[1][1]
                             angles = [-np.radians(120), np.radians(120)]
 
                 if angles:
