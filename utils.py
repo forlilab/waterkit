@@ -13,7 +13,7 @@ import numpy as np
 def vector(a, b):
     return b - a
 
-def normalized_vector(a):
+def normalize(a):
     return a/np.sqrt(np.sum(a**2))
 
 def euclidean_distance(a, b):
@@ -32,6 +32,19 @@ def get_angle(a, b, c, degree=True):
         return np.degrees(angle)
 
     return angle
+
+def rotation_axis(o, p1, p2):
+    """
+    Compute rotation axis centered at the origin o
+    """
+    return o + normalize(np.cross(vector(p1, o), vector(p2, o)))
+
+def atom_to_move(o, p):
+    """
+    Compute coordinates of atom just above acceptor/donor atom o
+    """
+    return o + normalize(-1. * vector(o, np.mean(p, axis=0)))
+
 
 def rotate_3d_point(p, p1, p2, angle):
     """http://paulbourke.net/geometry/rotate/PointRotate.py"""
@@ -66,7 +79,7 @@ def rotate_atom(p, p1, p2, angle=0, length=None):
     
     # Change the distance of the point from the origin
     if length is not None:
-        pn = normalized_vector(pn) * length
+        pn = normalize(pn) * length
     
     return pn + p1
 
