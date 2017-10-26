@@ -80,10 +80,7 @@ class Autodock_map():
         """
         idx = []
 
-        if not isinstance(xyz, np.ndarray):
-            xyz = np.array(xyz)
-
-        # Otherwise we can't "broadcast"
+        # Otherwise we can't "broadcast" xyz in the grid
         xyz = np.atleast_2d(xyz)
 
         for i in range(xyz.shape[0]):
@@ -136,7 +133,7 @@ class Autodock_map():
             else:
                 imax.append(self._npts[i])
 
-        
+
 
         print imin, imax
 
