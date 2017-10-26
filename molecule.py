@@ -42,7 +42,7 @@ class Molecule():
             for ob_atom in ob.OBResidueAtomIter(ob_residue):
 
                 # If at least one atom (whatever the type) is in the grid, add the residue
-                if ad_map._is_in_map([ob_atom.GetX(), ob_atom.GetY(), ob_atom.GetZ()]):
+                if ad_map.is_in_map([ob_atom.GetX(), ob_atom.GetY(), ob_atom.GetZ()]):
                     idx.append(ob_residue.GetIdx())
                     break
 
