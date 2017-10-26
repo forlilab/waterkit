@@ -29,7 +29,6 @@ class Kits():
         
         angles = []
         waters = []
-        coord_waters = []
         
         # Lentgh of hbonds between water oxygen and atoms
         hb_donor_length = 2.8 # if water is donor (distance Woxygen(-Whydrogen) -- Acceptor)
@@ -55,6 +54,7 @@ class Kits():
                     coord_neighbor_atoms = molecule.get_neighbor_atom_coordinates(id_atom)
                     # Set HBond length
                     hb_length = hb_acceptor_length
+                    anchor_type = 'donor'
 
                     # The angle will be zero, so no need for a rotation axis
                     r = None
@@ -66,6 +66,7 @@ class Kits():
                     coord_neighbor_atoms = molecule.get_neighbor_atom_coordinates(id_atom, 2)
                     # Set HBond length
                     hb_length = hb_donor_length
+                    anchor_type = 'acceptor'
                     
                     #The hybridization of the O3 atom in the tyrosine residue is not
                     #correctly recognized by Open-babel. So I added a quick-fix in the
@@ -111,13 +112,12 @@ class Kits():
                         w = utils.rotate_atom(p, coord_atom, r, angle, hb_length)
 
                         # ... and check if it's in the map
-                        if ad_map._is_in_map(w):
-                            waters.append(w)
-                            #waters.append(Water(w, anchor))
+                        if ad_map.is_in_map(w):
+                            waters.append(Water(w, anchor=coord_atom, anchor_type=anchor_type))
 
                     angles = []
         
-        return np.array(waters)
+        return waters
     
     def hydrate(self, molecule, ad_map):
 
@@ -125,6 +125,7 @@ class Kits():
         # Place optimal water molecules everywhere
         waters = self._place_optimal_water(molecule, ad_map)
         # Optimize them
+        [water.optimize(ad_map, radius=0.3, angle=110.) for water in waters]
         #o = Optimize(radius=3., angle=110)
         #waters = o.run(ad_map, waters)
 
@@ -173,7 +174,7 @@ def main():
     k = Kits()
     old = k.hydrate(molecule, ad_map)
 
-    utils.write_pdb('old_waters.pdb', old)
+    utils.write_water_pdb('old_waters.pdb', old, True)
     #utils.write_pdb('opt_waters.pdb', new)
     #utils.write_pdb_opt_water('waters.pdb', old, new)
 
