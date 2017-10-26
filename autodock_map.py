@@ -96,7 +96,7 @@ class Autodock_map():
 
         return idx
 
-    def _is_in_map(self, xyz):
+    def is_in_map(self, xyz):
 
         x, y, z = xyz
 
@@ -106,8 +106,39 @@ class Autodock_map():
             return False
 
     def get_energy(self, xyz):
-        i, j, k = self._cartesian_to_index(xyz)
-        return self._energy[i, j, k]
+        idx = self._cartesian_to_index(xyz)
+        return self._energy[idx]
+
+    def get_neighbor_points(self, xyz, radius):
+
+        imin, imax = [], []
+
+        idx = self._cartesian_to_index(xyz)
+
+        print idx, idx.shape[0]
+
+        if radius is not None:
+            n = np.int(np.rint(radius / self._spacing))
+        else:
+            n = 1
+
+        # Be sure, we don't go beyond limits of the grid
+        for i in range(idx.shape[0]):
+            # This is for the min border
+            if idx[i] - n > 0:
+                imin.append(idx[i] - n)
+            else:
+                imin.append(0)
+
+            # This is for the max border
+            if idx[i] + n <= self._npts[i]:
+                imax.append(idx[i] + n)
+            else:
+                imax.append(self._npts[i])
+
+        
+
+        print imin, imax
 
     def to_pdb(self, fname, max_energy=None):
         idx = np.array(np.where(self._energy <= max_energy)).T
