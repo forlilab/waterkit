@@ -14,7 +14,7 @@ def vector(a, b):
     return b - a
 
 def normalize(a):
-    return a/np.sqrt(np.sum(a**2))
+    return a / np.sqrt(np.sum(np.power(a, 2)))
 
 def euclidean_distance(a, b):
     """ Euclidean distance function """
@@ -84,6 +84,30 @@ def rotate_atom(p, p1, p2, angle=0, length=None):
         pn = normalize(pn) * length
     
     return pn + p1
+
+def write_water_pdb(fname, waters, anchor=False):
+
+    if not isinstance(waters, (list, tuple)):
+        waters = [waters]
+
+    i = 0
+    line = "ATOM  %5d%3s   DUM A%4d    %8.3f%8.3f%8.3f  1.00  1.00     0.000%2s\n"
+
+    with open(fname, 'w') as w:
+        for water in waters:
+            coord = water.coordinates(atom_id=0)
+
+            w.write(line % (i, 'O', i, coord[0][0], coord[0][1], coord[0][2], 'O'))
+            #w.write(line % (i, 'H', i, coord[0][0], coord[0][1], coord[0][2], 'H'))
+            #w.write(line % (i, 'H', i, coord[0][0], coord[0][1], coord[0][2], 'H'))
+
+            if anchor:
+                coord = water._anchor
+                w.write(line % (i, 'D', i, coord[0][0], coord[0][1], coord[0][2], 'D'))
+                w.write(line % (i, 'D', i, coord[1][0], coord[1][1], coord[1][2], 'D'))
+
+            i += 1
+
 
 def write_pdb(fname, coor_atoms):
     i = 0
