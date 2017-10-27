@@ -125,27 +125,20 @@ class Kits():
         # Place optimal water molecules everywhere
         waters = self._place_optimal_water(molecule, ad_map)
         # Optimize them
-        [water.optimize(ad_map, radius=0.3, angle=110.) for water in waters]
-        #o = Optimize(radius=3., angle=110)
-        #waters = o.run(ad_map, waters)
+        new_waters = []
 
-        #ad_map.to_pdb('test.pdb', max_energy=-0.8)
+        for water in waters:
+            water.optimize(ad_map, radius=3.2, angle=145.)
 
-        # Check if there is a clash with other atoms, except donor atom
-        # For the moment, the radius is zero. So we keep everything.
-        """
-        for coord_water, i in enumerate(coord_waters):
-            if not self._is_clash(coord_water, all_atoms, exclude=id_atom, radius=0):
-                coord_waters.append(coord_water)
-                # And maybe optimize
-        """
+            if water.get_energy(ad_map) < 0.:
+                new_waters.append(water)
 
         # Second hydration shell!!
         # Last hydration shell!!
         # ???
         # PROFIT!
         
-        return waters
+        return new_waters
       
 
 def cmd_lineparser():
@@ -172,11 +165,9 @@ def main():
 
     # Go kits!!
     k = Kits()
-    old = k.hydrate(molecule, ad_map)
+    waters = k.hydrate(molecule, ad_map)
 
-    utils.write_water_pdb('old_waters.pdb', old, True)
-    #utils.write_pdb('opt_waters.pdb', new)
-    #utils.write_pdb_opt_water('waters.pdb', old, new)
+    utils.write_water_pdb('waters.pdb', waters, previous=True)
 
 if __name__ == '__main__':
     main()
