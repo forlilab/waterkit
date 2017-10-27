@@ -9,6 +9,8 @@
 
 import numpy as np
 
+import utils
+
 
 class Autodock_map():
 
@@ -48,6 +50,9 @@ class Autodock_map():
         return center, spacing, npts, energy
 
     def _generate_cartesian(self):
+        """
+        Generate all the coordinates xyz for each AutoDock map node
+        """
         x = np.linspace(self._xmin, self._xmax, self._npts[0])
         y = np.linspace(self._ymin, self._ymax, self._npts[1])
         z = np.linspace(self._zmin, self._zmax, self._npts[2])
@@ -94,7 +99,9 @@ class Autodock_map():
         return idx
 
     def is_in_map(self, xyz):
-
+        """
+        Check if the coordinate xyz in the AutoDock map
+        """
         x, y, z = xyz
 
         if (self._xmin<=x<=self._xmax) & (self._ymin<=y<=self._ymax) & (self._zmin<=z<=self._zmax):
@@ -103,21 +110,26 @@ class Autodock_map():
             return False
 
     def get_energy(self, xyz):
+        """
+        Return the energy of each coordinates xyz
+        """
         idx = self._cartesian_to_index(xyz)
-        return self._energy[idx]
+        idx = np.atleast_2d(idx)
+        return self._energy[idx[:, 0], idx[:, 1], idx[:, 2]]
 
     def get_neighbor_points(self, xyz, radius):
-
+        """
+        Return all the coordinates xyz in a certaim radius around a point
+        """
         imin, imax = [], []
 
         idx = self._cartesian_to_index(xyz)
-
-        print idx, idx.shape[0]
 
         if radius is not None:
             n = np.int(np.rint(radius / self._spacing))
         else:
             n = 1
+            radius = self._spacing
 
         # Be sure, we don't go beyond limits of the grid
         for i in range(idx.shape[0]):
@@ -128,16 +140,31 @@ class Autodock_map():
                 imin.append(0)
 
             # This is for the max border
-            if idx[i] + n <= self._npts[i]:
+            if idx[i] + n < self._npts[i]:
                 imax.append(idx[i] + n)
             else:
-                imax.append(self._npts[i])
+                imax.append(self._npts[i]-1)
 
+        x = np.arange(imin[0], imax[0] + 1)
+        y = np.arange(imin[1], imax[1] + 1)
+        z = np.arange(imin[2], imax[2] + 1)
 
+        X, Y, Z = np.meshgrid(x, y, z)
+        data = np.vstack((X.ravel(), Y.ravel(), Z.ravel())).T
 
-        print imin, imax
+        coordinates = self._index_to_cartesian(data)
+
+        # We can have distance lower than self._spacing
+        # because xyz is not necessarily on the grid
+        distance = utils.get_euclidean_distance(xyz, coordinates)
+        coordinates = coordinates[distance <= radius]
+
+        return coordinates
 
     def to_pdb(self, fname, max_energy=None):
+        """
+        Write the AutoDock map in a PDB file
+        """
         idx = np.array(np.where(self._energy <= max_energy)).T
 
         i = 0
