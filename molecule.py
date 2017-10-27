@@ -10,6 +10,8 @@
 import numpy as np
 import openbabel as ob
 
+import utils
+
 
 class Molecule():
 
@@ -21,21 +23,30 @@ class Molecule():
         self._OBMol = ob.OBMol()
         obconv.ReadFile(self._OBMol, fname)
 
-    def get_atoms(self):
-        # Get coordinates of all atoms like this because OBMol.GetCoordinates isn't working
-        # ... and it never will (https://github.com/openbabel/openbabel/issues/1367)
-        coords = np.zeros(shape=(self._OBMol.NumAtoms(), 3))
-        
-        for ob_atom in ob.OBMolAtomIter(self._OBMol):
-            coords[ob_atom.GetId(),:] = [ob_atom.GetX(), ob_atom.GetY(), ob_atom.GetZ()]
+    def get_coordinates(self, atom_id=None):
+        """
+        Return coordinates of all atoms or a certain atom
+        We do it like this because OBMol.GetCoordinates isn't working
+        ... and it never will (https://github.com/openbabel/openbabel/issues/1367)
+        """
+        if atom_id is not None:
+            ob_atom = self._OBMol.GetAtomById(atom_id)
+            coordinate = [ob_atom.GetX(), ob_atom.GetY(), ob_atom.GetZ()]
+        else:
+            coordinate = [[x.GetX(), x.GetY(), x.GetZ()] for x in ob.OBMolAtomIter(self._OBMol)]
 
-        return coords
+        return np.atleast_2d(np.array(coordinate))
 
     def get_residue(self, i):
+        """
+        Return the OBResidue i
+        """
         return self._OBMol.GetResidue(i)
 
     def get_residues_in_map(self, ad_map):
-
+        """
+        Return a list of index of all the residues in the map
+        """
         idx = []
 
         for ob_residue in ob.OBResidueIter(self._OBMol):
@@ -47,22 +58,18 @@ class Molecule():
                     break
 
         return idx
-
-    def _euclidean_distance(self, a, b):
-        """
-        Euclidean distance function
-        """
-        return np.sqrt(np.sum((a - b)**2, axis=1))
     
     def is_clash(self, xyz, molecule=None, radius=None):
-
+        """
+        Check if there is a clash between a coordinate xyz and itself or another molecule
+        """
         if molecule is not None:
-            atoms = molecule.get_atoms()
+            atoms = molecule.get_coordinates()
         else:
-            atoms = self.get_atoms()
+            atoms = self.get_coordinates()
         
         # Compute all distances between atom and all other atoms
-        d = self._euclidean_distance(xyz, atoms)
+        d = utils.get_euclidean_distance(xyz, atoms)
 
         # Remove radius
         if radius is not None:
@@ -75,7 +82,9 @@ class Molecule():
         return False
 
     def _push_atom_to_end(self, lst, atomic_nums):
-
+        """
+        Return a list of OBAtom with all the atom type selected at the end
+        """
         if not isinstance(atomic_nums, (list, tuple)):
             atomic_nums = [atomic_nums]
 
@@ -92,9 +101,9 @@ class Molecule():
 
     def get_neighbor_atoms(self, start_index=1, depth=1, hydrogen=True):
         """
+        Return a nested list of all the neighbor OBAtoms by followinf the bond connectivity
         https://baoilleach.blogspot.com/2008/02/calculate-circular-fingerprints-with.html
         """
-        
         visited = [False] * (self._OBMol.NumAtoms() + 1)
         neighbors = []
         queue = list([(start_index, 0)])
@@ -130,6 +139,10 @@ class Molecule():
         return neighbors
     
     def get_neighbor_atom_coordinates(self, id_atom, depth=1, hydrogen=True):
+        """
+        Return a nested list of all the coordinates of all the neighbor 
+        atoms by following the bond connectivity
+        """
         coords = []
         
         atoms = self.get_neighbor_atoms(id_atom, depth, hydrogen)
@@ -141,14 +154,9 @@ class Molecule():
         return np.array(coords)
 
     def to_file(self, fname, fformat):
+        """
+        Write OBMolecule to a file
+        """
         obconv = ob.OBConversion()
         obconv.SetOutFormat(fformat)
         obconv.WriteFile(self._OBMol, fname)
-
-def main():
-
-    m = Molecule("dataset/1stp/1stp_protein.pdbqt")
-    m.residues_in_map()
-
-if __name__ == '__main__':
-    main()
