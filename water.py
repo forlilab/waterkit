@@ -20,11 +20,18 @@ class Water(Molecule):
         # Create ob molecule and add oxygen atom
         self._OBMol = ob.OBMol()
         self.add_atom(oxygen, atomic=8)
+
         # Store all the informations about the anchoring
         self._anchor = np.array([anchor, anchor + utils.normalize(utils.vector(oxygen, anchor))])
         self._anchor_type = anchor_type
 
+        # Used to store previous coordinates
+        self._previous = None
+
     def add_atom(self, xyz, atomic, bond=None):
+        """
+        Add an OBAtom to the molecule
+        """
         a = self._OBMol.NewAtom()
         a.SetAtomicNum(atomic)
         a.SetVector(xyz[0], xyz[1], xyz[2])
@@ -32,41 +39,45 @@ class Water(Molecule):
         if bond is not None and self._OBMol.NumAtoms() >= 1:
             self._OBMol.AddBond(bond[0], bond[1], bond[2])
 
-    def coordinates(self, atom_id=None):
-        if atom_id is not None:
-            ob_atom = self._OBMol.GetAtomById(atom_id)
-            coordinate = [ob_atom.GetX(), ob_atom.GetY(), ob_atom.GetZ()]
-        else:
-            coordinate = [[x.GetX(), x.GetY(), x.GetZ()] for x in ob.OBMolAtomIter(self._OBMol)]
-
-        return np.atleast_2d(np.array(coordinate))
-
-    def update_coordinates(xyz, atom_id):
+    def update_coordinates(self, xyz, atom_id):
+        """
+        Update the coordinates of an OBAtom
+        """
         ob_atom = self._OBMol.GetAtomById(atom_id)
         ob_atom.SetVector(xyz[0], xyz[1], xyz[2])
 
-    def optimize(self, ad_map, radius=3., angle=110., ignore=0):
-        # Get oxygen coordinate
-        coordinate = self.coordinates(atom_id=0)
-        # Get energy of the current position
-        energy = ad_map.get_energy(coordinate)
-
-        # Get all the point around a coordinate (sphere)
-        ad_map.get_neighbor_points(coordinate, radius)
-
+    def get_energy(self, ad_map):
         """
-        # Compute angle
-        angles = utils.get_angle(coordinates, self._anchor[0], self._anchor[1])
-        # Keep only coordinates within the angle
-        idx = np.array((angles <= angle).nonzero()).T
-
-        if new_energy < energy:
-            energy = new_energy
-            coordinate = new_coordinate
-
-        if energy < ignore:
-            self.update_coordinates(coordinate, atom_id=0)
+        Return the energy of the water molecule
         """
+        return np.sum(ad_map.get_energy(self.get_coordinates()))
+
+    def optimize(self, ad_map, radius=3., angle=110.):
+        """
+        Optimize the position of the oxygen atom. The movement of the 
+        atom is contrained by the distance and the angle with the anchor
+        """
+        # Get all the point around the anchor (sphere)
+        coord_sphere = ad_map.get_neighbor_points(self._anchor[0], radius)
+        # Compute angles between all the coordinates and the anchor
+        angle_sphere = utils.get_angle(coord_sphere, self._anchor[0], self._anchor[1])
+
+        # Select coordinates with an angle superior to the choosen angle
+        coord_sphere = coord_sphere[angle_sphere >= angle]
+
+        # Get energy of all the allowed coordinates (distance + angle)
+        energy_sphere = ad_map.get_energy(coord_sphere)
+        # ... and get energy of the oxygen
+        energy_oxygen = ad_map.get_energy(self.get_coordinates(atom_id=0))
+
+        # And if we find something better, we update the coordinate
+        if np.min(energy_sphere) < energy_oxygen:
+            t = energy_sphere.argmin()
+
+            # Save the old coordinate
+            self._previous = self.get_coordinates()
+            # ... update with the one
+            self.update_coordinates(coord_sphere[t], atom_id=0)
 
     def build_hydrogens(self):
         pass
