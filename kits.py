@@ -167,7 +167,7 @@ def main():
     k = Kits()
     waters = k.hydrate(molecule, ad_map)
 
-    utils.write_water_pdb('waters.pdb', waters, previous=True)
+    utils.write_water('waters.pdb', waters, previous=True)
 
 if __name__ == '__main__':
     main()
