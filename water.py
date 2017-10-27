@@ -79,8 +79,43 @@ class Water(Molecule):
             # ... update with the one
             self.update_coordinates(coord_sphere[t], atom_id=0)
 
-    def build_hydrogens(self):
-        pass
+    def build_tip5p(self):
+        """
+        Construct hydrogen atoms (H) and lone-pairs (Lp)
+        """
+        # Order in which we will build H/Lp
+        if self._anchor_type == "acceptor":
+            d = [1., 1., 0.7, 0.7]
+            a = [104.52, 109.47]
+        else:
+            d = [0.7, 0.7, 1., 1.]
+            a = [109.47, 104.52]
+
+        coord_oxygen = self.get_coordinates(atom_id=0)[0]
+
+        # Vector between O and the Acceptor/Donor atom
+        v = utils.vector(coord_oxygen, self._anchor[0])
+        v = utils.normalize(v)
+        # Compute a vector perpendicular to v
+        p = coord_oxygen + utils.get_perpendicular_vector(v)
+
+        # H/Lp between O and Acceptor/Donor atom
+        a1 = coord_oxygen + (d[0] * v)
+        # Build the second H/Lp using the perpendicular vector p
+        a2 = utils.rotate_atom(a1, coord_oxygen, p, np.radians(a[0]), d[1])
+
+        # ... and rotate it to build the last H/Lp
+        #t = utils.rotate_atom(a1, coord_oxygen, p, -np.radians(a[1]/2), d[2])
+        t = utils.atom_to_move(coord_oxygen, [a1, a2])
+        a3 = utils.rotate_atom(t, coord_oxygen, a1, np.radians(a[1]/2), d[3])
+        a4 = utils.rotate_atom(t, coord_oxygen, a1, -np.radians(a[1]/2), d[3])
+
+        # Add them 
+        self.add_atom(a1, atomic=1, bond=(1, 2, 1))
+        self.add_atom(a2, atomic=1, bond=(1, 3, 1))
+        self.add_atom(a3, atomic=1, bond=(1, 4, 1))
+        self.add_atom(a4, atomic=1, bond=(1, 5, 1))
+        #self.add_atom(t, atomic=1, bond=(1, 6, 1))
 
     def rotate_water(self, ref_id=1, angle=0.):
         pass

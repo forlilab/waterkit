@@ -161,6 +161,9 @@ class Autodock_map():
 
         return coordinates
 
+    def combine(self, ad_map, method='best'):
+        pass
+
     def to_pdb(self, fname, max_energy=None):
         """
         Write the AutoDock map in a PDB file

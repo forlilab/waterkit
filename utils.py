@@ -22,6 +22,15 @@ def normalize(a):
     """
     return a / np.sqrt(np.sum(np.power(a, 2)))
 
+def get_perpendicular_vector(u):
+    """
+    Return the perpendicular vector to u
+    """
+    v = normalize(np.random.rand(3))
+    v = np.cross(u, v)
+
+    return v
+
 def get_euclidean_distance(a, b):
     """ 
     Return euclidean distance a (can be multiple coordinates) and b
@@ -105,9 +114,13 @@ def write_water(fname, waters, anchor=False, previous=False):
 
     with open(fname, 'w') as w:
         for water in waters:
-            coord = water.get_coordinates(atom_id=0)
+            coord = water.get_coordinates()
 
             w.write(line % (i, 'O', i, coord[0][0], coord[0][1], coord[0][2], 'O'))
+
+            if coord.shape[0] > 1:
+                for i in range(1, coord.shape[0]):
+                    w.write(line % (i, 'H', i, coord[i][0], coord[i][1], coord[i][2], 'H'))
 
             if previous and water._previous is not None:
                 coord = water._previous

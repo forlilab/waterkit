@@ -14,7 +14,6 @@ import openbabel as ob
 
 import utils
 from autodock_map import Autodock_map
-from optimize import Optimize
 from molecule import Molecule
 from water import Water
 
@@ -131,6 +130,7 @@ class Kits():
             water.optimize(ad_map, radius=3.2, angle=145.)
 
             if water.get_energy(ad_map) < 0.:
+                water.build_tip5p()
                 new_waters.append(water)
 
         # Second hydration shell!!
@@ -167,7 +167,7 @@ def main():
     k = Kits()
     waters = k.hydrate(molecule, ad_map)
 
-    utils.write_water('waters.pdb', waters, previous=True)
+    utils.write_water('waters.pdb', waters)
 
 if __name__ == '__main__':
     main()
