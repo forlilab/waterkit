@@ -11,22 +11,32 @@ import numpy as np
 
 
 def vector(a, b):
+    """
+    Return the vector between a and b
+    """
     return b - a
 
 def normalize(a):
+    """
+    Return a normalized vector
+    """
     return a / np.sqrt(np.sum(np.power(a, 2)))
 
-def euclidean_distance(a, b):
-    """ Euclidean distance function """
+def get_euclidean_distance(a, b):
+    """ 
+    Return euclidean distance a (can be multiple coordinates) and b
+    """
     return np.sqrt(np.sum(np.power(a - b, 2), axis=1))
 
 def get_angle(a, b, c, degree=True):
-
-    ba = vector(a, b)
+    """
+    Returm angle between a (can be multiple coordinates), b and c
+    """
+    ba = np.atleast_2d(vector(b, a))
     bc = vector(b, c)
 
-    cos_angle = np.dot(ba, bc) / (np.linalg.norm(ba) * np.linalg.norm(bc))
-    angle = np.arcos(cos_angle)
+    cos_angle = np.dot(ba, bc) / (np.linalg.norm(ba, axis=1) * np.linalg.norm(bc))
+    angle = np.arccos(cos_angle)
 
     if degree:
         return np.degrees(angle)
@@ -41,12 +51,11 @@ def rotation_axis(o, p1, p2):
 
 def atom_to_move(o, p):
     """
-    Compute coordinates of atom just above acceptor/donor atom o
+    Return the coordinates xyz of an atom just above acceptor/donor atom o
     """
     # It won't work if there is just one dimension
     p = np.atleast_2d(p)
     return o + normalize(-1. * vector(o, np.mean(p, axis=0)))
-
 
 def rotate_3d_point(p, p1, p2, angle):
     """http://paulbourke.net/geometry/rotate/PointRotate.py"""
@@ -85,61 +94,34 @@ def rotate_atom(p, p1, p2, angle=0, length=None):
     
     return pn + p1
 
-def write_water_pdb(fname, waters, anchor=False):
+def write_water(fname, waters, anchor=False, previous=False):
 
     if not isinstance(waters, (list, tuple)):
         waters = [waters]
 
     i = 0
     line = "ATOM  %5d%3s   DUM A%4d    %8.3f%8.3f%8.3f  1.00  1.00     0.000%2s\n"
-
-    with open(fname, 'w') as w:
-        for water in waters:
-            coord = water.coordinates(atom_id=0)
-
-            w.write(line % (i, 'O', i, coord[0][0], coord[0][1], coord[0][2], 'O'))
-            #w.write(line % (i, 'H', i, coord[0][0], coord[0][1], coord[0][2], 'H'))
-            #w.write(line % (i, 'H', i, coord[0][0], coord[0][1], coord[0][2], 'H'))
-
-            if anchor:
-                coord = water._anchor
-                w.write(line % (i, 'D', i, coord[0][0], coord[0][1], coord[0][2], 'D'))
-                w.write(line % (i, 'D', i, coord[1][0], coord[1][1], coord[1][2], 'D'))
-
-            i += 1
-
-
-def write_pdb(fname, coor_atoms):
-    i = 0
-    line = "ATOM  %5d  D   DUM Z%4d    %8.3f%8.3f%8.3f  1.00  1.00     0.000 D\n"
-    
-    with open(fname, 'w') as w:
-        for j in range(0, coor_atoms.shape[0]):
-            try:
-                x, y, z = coor_atoms[i, 0], coor_atoms[i, 1], coor_atoms[i, 2]
-                w.write(line % (i, i, x, y, z))
-                i += 1
-            except:
-                continue
-
-def write_pdb_opt_water(fname, old, new):
-    i = 0
-    line = "ATOM  %5d%3s   DUM Z%4d    %8.3f%8.3f%8.3f  1.00  1.00     0.000%2s\n"
     connect_lines = ""
 
     with open(fname, 'w') as w:
-        for j in range(0, old.shape[0]):
-            try:
-                x1, y1, z1 = old[i, 0], old[i, 1], old[i, 2]
-                x2, y2, z2 = new[i, 0], new[i, 1], new[i, 2]
+        for water in waters:
+            coord = water.get_coordinates(atom_id=0)
 
-                w.write(line % (i, 'O', i, x1, y1, z1, 'O'))
-                w.write(line % (i+1, 'N', i, x2, y2, z2, 'N'))
+            w.write(line % (i, 'O', i, coord[0][0], coord[0][1], coord[0][2], 'O'))
 
+            if previous and water._previous is not None:
+                coord = water._previous
+
+                w.write(line % (i+1, 'D', i, coord[0][0], coord[0][1], coord[0][2], 'D'))
                 connect_lines += "CONECT%5d%5d\n" % (i, i+1)
 
-                i += 2
-            except:
-                continue
+            if anchor:
+                coord = water._anchor
 
-        w.write(connect_lines)
+                for i in range(coord.shape[0]):
+                    w.write(line % (i, 'D', i, coord[i][0], coord[i][1], coord[i][2], 'D'))
+
+            i += 2
+
+        if previous:
+            w.write(connect_lines)
