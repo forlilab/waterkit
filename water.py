@@ -105,17 +105,16 @@ class Water(Molecule):
         a2 = utils.rotate_atom(a1, coord_oxygen, p, np.radians(a[0]), d[1])
 
         # ... and rotate it to build the last H/Lp
-        #t = utils.rotate_atom(a1, coord_oxygen, p, -np.radians(a[1]/2), d[2])
-        t = utils.atom_to_move(coord_oxygen, [a1, a2])
-        a3 = utils.rotate_atom(t, coord_oxygen, a1, np.radians(a[1]/2), d[3])
-        a4 = utils.rotate_atom(t, coord_oxygen, a1, -np.radians(a[1]/2), d[3])
+        p = utils.atom_to_move(coord_oxygen, [a1, a2])
+        r = coord_oxygen + utils.normalize(utils.vector(a1, a2))
+        a3 = utils.rotate_atom(p, coord_oxygen, r, np.radians(a[1]/2), d[3])
+        a4 = utils.rotate_atom(p, coord_oxygen, r, -np.radians(a[1]/2), d[3])
 
         # Add them 
         self.add_atom(a1, atomic=1, bond=(1, 2, 1))
         self.add_atom(a2, atomic=1, bond=(1, 3, 1))
         self.add_atom(a3, atomic=1, bond=(1, 4, 1))
         self.add_atom(a4, atomic=1, bond=(1, 5, 1))
-        #self.add_atom(t, atomic=1, bond=(1, 6, 1))
 
     def rotate_water(self, ref_id=1, angle=0.):
         pass
