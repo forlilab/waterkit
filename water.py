@@ -82,6 +82,7 @@ class Water(Molecule):
     def build_tip5p(self):
         """
         Construct hydrogen atoms (H) and lone-pairs (Lp)
+        TIP5P parameters: http://www1.lsbu.ac.uk/water/water_models.html
         """
         # Order in which we will build H/Lp
         if self._anchor_type == "acceptor":
@@ -121,8 +122,24 @@ class Water(Molecule):
             self.add_atom(atom, atomic=1, bond=(1, i, 1))
             i += 1
 
-    def rotate_water(self, ref_id=1, angle=0.):
-        pass
+    def rotate_water(self, ref_id=2, angle=0.):
+        """
+        Rotate water molecule along the axis Oxygen and a choosen atom (H or Lp)
+        """
+        coord_water = self.get_coordinates()
+        coord_oxygen = coord_water[0]
+        # Open-Babel is 1-index but numpy is 0-index
+        coord_ref = coord_water[ref_id - 1]
+
+        r = coord_oxygen + utils.normalize(utils.vector(coord_ref, coord_oxygen))
+
+        # List of atom id from 2 (0-index)(O and the first H/Lp are fixed) to the last atom id
+        # except the one located in the rotation axis
+        atom_ids = [x for x in range(2, coord_water.shape[0] + 1) if x != ref_id]
+
+        for atom_id in atom_ids:
+            a = utils.rotate_atom(coord_water[atom_id], coord_oxygen, r, np.radians(angle))
+            self.update_coordinates(a, atom_id=atom_id + 1)
 
     def scan(self, ref_id=1):
         pass
