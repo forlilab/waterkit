@@ -85,10 +85,10 @@ class Water(Molecule):
         """
         # Order in which we will build H/Lp
         if self._anchor_type == "acceptor":
-            d = [1., 1., 0.7, 0.7]
+            d = [0.9572, 0.9572, 0.7, 0.7]
             a = [104.52, 109.47]
         else:
-            d = [0.7, 0.7, 1., 1.]
+            d = [0.7, 0.7, 0.9572, 0.9572]
             a = [109.47, 104.52]
 
         coord_oxygen = self.get_coordinates(atom_id=0)[0]
@@ -110,11 +110,16 @@ class Water(Molecule):
         a3 = utils.rotate_atom(p, coord_oxygen, r, np.radians(a[1]/2), d[3])
         a4 = utils.rotate_atom(p, coord_oxygen, r, -np.radians(a[1]/2), d[3])
 
-        # Add them 
-        self.add_atom(a1, atomic=1, bond=(1, 2, 1))
-        self.add_atom(a2, atomic=1, bond=(1, 3, 1))
-        self.add_atom(a3, atomic=1, bond=(1, 4, 1))
-        self.add_atom(a4, atomic=1, bond=(1, 5, 1))
+        # Add them in this order: H, H, Lp, Lp
+        if self._anchor_type == "acceptor":
+            atoms = [a1, a2, a3, a4]
+        else:
+            atoms = [a3, a4, a1, a2]
+
+        i = 2
+        for atom in atoms:
+            self.add_atom(atom, atomic=1, bond=(1, i, 1))
+            i += 1
 
     def rotate_water(self, ref_id=1, angle=0.):
         pass
