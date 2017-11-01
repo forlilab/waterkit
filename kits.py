@@ -43,10 +43,17 @@ class Kits():
             
             for ob_atom in ob.OBResidueAtomIter(ob_residue):
                 
+                type_atom = ob_atom.GetType()
+
+                # Quick-fix 1: The hybridization of the O3 atom in the tyrosine residue is not
+                # correctly recognized by Open-babel.
+                if type_atom == 'O3':
+                    ob_atom.SetHyb(3)
+
                 id_atom = ob_atom.GetId()
                 coord_atom = np.array([ob_atom.GetX(), ob_atom.GetY(), ob_atom.GetZ()])
                 hyb_atom = ob_atom.GetHyb()
-                type_atom = ob_atom.GetType()
+
                 
                 if ob_atom.IsHbondDonorH():
                     # Get the coordinates of the neighbor atom
@@ -60,35 +67,34 @@ class Kits():
                     p = utils.atom_to_move(coord_atom, coord_neighbor_atoms[1])
                     angles = [0]
                 
-                if ob_atom.IsHbondAcceptor():
+                if ob_atom.IsHbondAcceptorSimple():
                     # Get the coordinates of the neighbor atom
                     coord_neighbor_atoms = molecule.get_neighbor_atom_coordinates(id_atom, 2)
                     # Set HBond length
                     hb_length = hb_donor_length
                     anchor_type = 'acceptor'
                     
-                    #The hybridization of the O3 atom in the tyrosine residue is not
-                    #correctly recognized by Open-babel. So I added a quick-fix in the
-                    #if condition.
-                    
-                    if hyb_atom == 2 and not type_atom == 'O3':
+                    if hyb_atom == 2:
                         
                         # It means probably that we have a backbone oxygen
                         if coord_neighbor_atoms[1].ndim == 1:
-                            coord_atom1 = coord_neighbor_atoms[2][0]
-                            coord_atom2 = coord_neighbor_atoms[2][1]
+                            coord_atom1 = coord_neighbor_atoms[1]
+                            coord_atom2 = np.atleast_2d(coord_neighbor_atoms[2])[0]
+
+                            p = coord_atom + utils.normalize(utils.vector(coord_atom1, coord_atom))
+                            r = utils.rotation_axis(coord_atom1, coord_atom, coord_atom2, origin=coord_atom)
                             angles = [-np.radians(60), np.radians(60)]
 
                         # It means probably that we have a planar nitrogen
                         elif coord_neighbor_atoms[1].ndim == 2:
                             coord_atom1 = coord_neighbor_atoms[1][0]
                             coord_atom2 = coord_neighbor_atoms[1][1]
+
+                            p = utils.atom_to_move(coord_atom, [coord_atom1, coord_atom2])
+                            r = utils.rotation_axis(coord_atom, coord_atom1, coord_atom2)
                             angles = [0]
 
-                        r = utils.rotation_axis(coord_atom, coord_atom1, coord_atom2)
-                        p = utils.atom_to_move(coord_atom, [coord_atom1, coord_atom2])
-
-                    if hyb_atom == 3 or type_atom == 'O3':
+                    if hyb_atom == 3:
                         
                         # It means that we have probably a tetrahedral nitrogen
                         if coord_neighbor_atoms[1].ndim == 1:
