@@ -158,7 +158,7 @@ class Molecule():
             tmp = [[ob_atom.GetX(), ob_atom.GetY(), ob_atom.GetZ()] for ob_atom in level]
             coords.append(np.squeeze(np.array(tmp)))
             
-        return np.array(coords)
+        return coords
 
     def to_file(self, fname, fformat):
         """
