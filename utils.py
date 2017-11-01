@@ -52,11 +52,16 @@ def get_angle(a, b, c, degree=True):
 
     return angle
 
-def rotation_axis(o, p1, p2):
+def rotation_axis(p0, p1, p2, origin=None):
     """
-    Compute rotation axis centered at the origin o
+    Compute rotation axis centered at the origin if not None
     """
-    return o + normalize(np.cross(vector(p1, o), vector(p2, o)))
+    r = normalize(np.cross(vector(p1, p0), vector(p2, p0)))
+
+    if origin is not None:
+        return origin + r
+    
+    return p0 + r
 
 def atom_to_move(o, p):
     """
