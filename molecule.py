@@ -43,21 +43,28 @@ class Molecule():
         """
         return self._OBMol.GetResidue(i)
 
-    def get_residues_in_map(self, ad_map):
+    def get_residues_in_map(self, ad_map=None):
         """
         Return a list of index of all the residues in the map
         """
         idx = []
 
-        for ob_residue in ob.OBResidueIter(self._OBMol):
-            for ob_atom in ob.OBResidueAtomIter(ob_residue):
+        # If we don't provide an AutoDock Map, we return all the resiudes
+        if ad_map is None:
+            idx = [ob_residue.GetIdx() for ob_residue in ob.OBResidueIter(self._OBMol)]
+            return idx
+        else:
+            for ob_residue in ob.OBResidueIter(self._OBMol):
+                for ob_atom in ob.OBResidueAtomIter(ob_residue):
 
-                # If at least one atom (whatever the type) is in the grid, add the residue
-                if ad_map.is_in_map([ob_atom.GetX(), ob_atom.GetY(), ob_atom.GetZ()]):
-                    idx.append(ob_residue.GetIdx())
-                    break
+                    x, y, z = ob_atom.GetX(), ob_atom.GetY(), ob_atom.GetZ()
 
-        return idx
+                    # If at least one atom (whatever the type) is in the grid, add the residue
+                    if ad_map.is_in_map([x, y, z]):
+                        idx.append(ob_residue.GetIdx())
+                        break
+
+            return idx
     
     def is_clash(self, xyz, molecule=None, radius=None):
         """

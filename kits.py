@@ -24,7 +24,7 @@ class Kits():
         
         self._vdw_water = vdw_water
     
-    def _place_optimal_water(self, molecule, ad_map):
+    def _place_optimal_water(self, molecule, ad_map=None):
         
         angles = []
         waters = []
@@ -110,35 +110,45 @@ class Kits():
                     for angle in angles:
                         w = utils.rotate_atom(p, coord_atom, r, angle, hb_length)
 
-                        # ... and check if it's in the map
-                        if ad_map.is_in_map(w):
-                            waters.append(Water(w, anchor=coord_atom, anchor_type=anchor_type))
+                        # Create water molecule
+                        w = Water(w, anchor=coord_atom, anchor_type=anchor_type)
+
+                        # Check if it's in the map if we provided an AD map
+                        if ad_map is None:
+                            waters.append(w)
+                        else:
+                            if ad_map.is_in_map(w):
+                                waters.append(w)
 
                     angles = []
         
         return waters
     
-    def hydrate(self, molecule, ad_map):
+    def hydrate(self, molecule, ad_map=None):
 
         # First hydration shell!!
         # Place optimal water molecules everywhere
         waters = self._place_optimal_water(molecule, ad_map)
-        # Optimize them
-        new_waters = []
+        # If a AD_map is provide, we optimize water placement
+        # and keep only the favorable ones (energy < 0)
+        if ad_map is not None:
+            # Optimization
+            for water in waters:
+                water.optimize(ad_map, radius=3.2, angle=140)
 
+            # Energy filter
+            waters = [water for water in waters if water.get_energy(ad_map) < 0]
+
+        # Build TIP5P model for each water molecule
         for water in waters:
-            water.optimize(ad_map, radius=3.2, angle=145.)
-
-            if water.get_energy(ad_map) < 0.:
-                water.build_tip5p()
-                new_waters.append(water)
+            water.build_tip5p()
 
         # Second hydration shell!!
         # Last hydration shell!!
         # ???
         # PROFIT!
         
-        return new_waters
+        return waters
       
 
 def cmd_lineparser():
