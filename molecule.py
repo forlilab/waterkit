@@ -43,6 +43,25 @@ class Molecule():
         """
         return self._OBMol.GetResidue(i)
 
+    def get_atoms_in_map(self, ad_map=None):
+        """
+        Returns a list of index of all the atoms in the map
+        """
+        idx = []
+
+        # If we don't provide an AutoDock Map, we return all the atoms
+        if ad_map is None:
+            idx = [ob_atom.GetIdx() for ob_atom in ob.OBMolAtomIter(self._OBMol)]
+            return idx
+        else:
+            for ob_atom in ob.OBMolAtomIter(self._OBMol):
+                x, y, z = ob_atom.GetX(), ob_atom.GetY(), ob_atom.GetZ()
+
+                if ad_map.is_in_map([x, y, z]):
+                    idx.append(ob_atom.GetIdx())
+
+            return idx
+
     def get_residues_in_map(self, ad_map=None):
         """
         Return a list of index of all the residues in the map
@@ -56,7 +75,6 @@ class Molecule():
         else:
             for ob_residue in ob.OBResidueIter(self._OBMol):
                 for ob_atom in ob.OBResidueAtomIter(ob_residue):
-
                     x, y, z = ob_atom.GetX(), ob_atom.GetY(), ob_atom.GetZ()
 
                     # If at least one atom (whatever the type) is in the grid, add the residue
