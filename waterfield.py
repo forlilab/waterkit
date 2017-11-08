@@ -28,7 +28,7 @@ class Waterfield():
         with open(fname) as f:
             lines = f.readlines()
 
-            # ATOM NAME (%10s) TYPE (%2s) STRENGTH (%8.3f) WATER (%2s) SMARTS (%s)
+            # ATOM NAME(%10s) TYPE(%2s) STRENGTH(%8.3f) HYB(%2s) #WATER(%2s) RADIUS(%8.3f) SMARTS(%s)
 
             for line in lines:
                 if re.search('^ATOM', line):
@@ -38,10 +38,12 @@ class Waterfield():
                     sline = filter(None, sline)
 
                     name = sline[1]
-                    atom_type = np.int(sline[2])
+                    hb_type = np.int(sline[2])
                     strength = np.float(sline[3])
-                    n_water = np.int(sline[4])
-                    smarts =  sline[5]
+                    hyb = np.int(sline[4])
+                    n_water = np.int(sline[5])
+                    hb_length = np.float(sline[6])
+                    smarts =  sline[7]
 
                     # Initialize the SMARTS pattern and check if is valid
                     ob_smarts = ob.OBSmartsPattern()
@@ -49,7 +51,7 @@ class Waterfield():
 
                     # Add atom type if is valid
                     if success:
-                        self._atom_types[i] = [name, strength, n_water, ob_smarts]
+                        self._atom_types[i] = [name, hb_type, strength, hyb, n_water, hb_length, ob_smarts]
                         i += 1
                     else:
                         print "Warning: SMARTS %s is invalid" % smarts

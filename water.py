@@ -52,11 +52,15 @@ class Water(Molecule):
         """
         return np.sum(ad_map.get_energy(self.get_coordinates()))
 
-    def optimize(self, ad_map, radius=3., angle=110.):
+    def optimize(self, ad_map, radius=3., angle=140.):
         """
         Optimize the position of the oxygen atom. The movement of the 
         atom is contrained by the distance and the angle with the anchor
         """
+        # If the anchor type is donor, we have to reduce the radius by 1 angstrom
+        if self._anchor_type == 'donor':
+            radius -= 1
+
         # Get all the point around the anchor (sphere)
         coord_sphere = ad_map.get_neighbor_points(self._anchor[0], radius)
         # Compute angles between all the coordinates and the anchor
@@ -127,6 +131,7 @@ class Water(Molecule):
         Rotate water molecule along the axis Oxygen and a choosen atom (H or Lp)
         """
         coord_water = self.get_coordinates()
+        print coord_water
         coord_oxygen = coord_water[0]
         # Open-Babel is 1-index but numpy is 0-index
         coord_ref = coord_water[ref_id - 1]
@@ -135,11 +140,14 @@ class Water(Molecule):
 
         # List of atom id from 2 (0-index)(O and the first H/Lp are fixed) to the last atom id
         # except the one located in the rotation axis
-        atom_ids = [x for x in range(2, coord_water.shape[0] + 1) if x != ref_id]
+        atom_ids = [x for x in range(2, coord_water.shape[0]) if x != ref_id]
+
+        print atom_ids
 
         for atom_id in atom_ids:
+            print atom_id
             a = utils.rotate_atom(coord_water[atom_id], coord_oxygen, r, np.radians(angle))
-            self.update_coordinates(a, atom_id=atom_id + 1)
+            self.update_coordinates(a, atom_id=atom_id)
 
     def scan(self, ref_id=1):
         pass

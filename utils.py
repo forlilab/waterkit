@@ -123,10 +123,10 @@ def write_water(fname, waters):
             w.write(line % (j, 'O', i, coord[0][0], coord[0][1], coord[0][2], 0, 'O'))
 
             if coord.shape[0] == 5:
-                w.write(line % (j+1, 'H', i, coord[1][0], coord[1][1], coord[1][2], 0.2410, 'H'))
-                w.write(line % (j+2, 'H', i, coord[2][0], coord[2][1], coord[2][2], 0.2410, 'H'))
-                w.write(line % (j+3, 'LP', i, coord[3][0], coord[3][1], coord[3][2], -0.2410, 'LP'))
-                w.write(line % (j+4, 'LP', i, coord[4][0], coord[4][1], coord[4][2], -0.2410, 'LP'))
+                w.write(line % (j+1, 'H', i, coord[1][0], coord[1][1], coord[1][2], 0.2410, 'HD'))
+                w.write(line % (j+2, 'H', i, coord[2][0], coord[2][1], coord[2][2], 0.2410, 'HD'))
+                w.write(line % (j+3, 'LP', i, coord[3][0], coord[3][1], coord[3][2], -0.2410, 'H'))
+                w.write(line % (j+4, 'LP', i, coord[4][0], coord[4][1], coord[4][2], -0.2410, 'H'))
                 j += 4
 
             i += 1

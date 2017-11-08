@@ -23,6 +23,9 @@ class Molecule():
         self._OBMol = ob.OBMol()
         obconv.ReadFile(self._OBMol, fname)
 
+        # Save name of the molecule
+        self.name = fname.split('.')[0].split('/')[-1]
+
     def get_coordinates(self, atom_id=None):
         """
         Return coordinates of all atoms or a certain atom
@@ -36,6 +39,12 @@ class Molecule():
             coordinate = [[x.GetX(), x.GetY(), x.GetZ()] for x in ob.OBMolAtomIter(self._OBMol)]
 
         return np.atleast_2d(np.array(coordinate))
+
+    def get_atom(self, i):
+        """
+        Return the OBAtom i
+        """
+        return self._OBMol.GetAtom(i)
 
     def get_residue(self, i):
         """
