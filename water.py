@@ -16,24 +16,26 @@ from molecule import Molecule
 
 class Water(Molecule):
 
-    def __init__(self, oxygen, anchor, anchor_type):
+    def __init__(self, oxygen, weight, anchor_id, anchor, anchor_type):
         # Create ob molecule and add oxygen atom
         self._OBMol = ob.OBMol()
-        self.add_atom(oxygen, atomic=8)
+        self.add_atom(oxygen, atom_type='OA')
 
         # Store all the informations about the anchoring
+        self._anchor_id = anchor_id
         self._anchor = np.array([anchor, anchor + utils.normalize(utils.vector(oxygen, anchor))])
         self._anchor_type = anchor_type
+        self._weight = weight
 
         # Used to store previous coordinates
         self._previous = None
 
-    def add_atom(self, xyz, atomic, bond=None):
+    def add_atom(self, xyz, atom_type, bond=None):
         """
         Add an OBAtom to the molecule
         """
         a = self._OBMol.NewAtom()
-        a.SetAtomicNum(atomic)
+        a.SetType(atom_type)
         a.SetVector(xyz[0], xyz[1], xyz[2])
 
         if bond is not None and self._OBMol.NumAtoms() >= 1:
@@ -46,11 +48,19 @@ class Water(Molecule):
         ob_atom = self._OBMol.GetAtomById(atom_id)
         ob_atom.SetVector(xyz[0], xyz[1], xyz[2])
 
-    def get_energy(self, ad_map):
+    def get_energy(self, ad_map, atom_id=None):
         """
         Return the energy of the water molecule
         """
-        return np.sum(ad_map.get_energy(self.get_coordinates()))
+        coordinates = self.get_coordinates(atom_id)
+        atom_types = self.get_atom_types(atom_id)
+
+        energy = 0.
+
+        for coordinate, atom_type in zip(coordinates, atom_types):
+            energy += ad_map.get_energy(coordinate, atom_type)
+
+        return energy[0]
 
     def optimize(self, ad_map, radius=3., angle=140.):
         """
@@ -70,9 +80,9 @@ class Water(Molecule):
         coord_sphere = coord_sphere[angle_sphere >= angle]
 
         # Get energy of all the allowed coordinates (distance + angle)
-        energy_sphere = ad_map.get_energy(coord_sphere)
+        energy_sphere = ad_map.get_energy(coord_sphere, atom_type='O')
         # ... and get energy of the oxygen
-        energy_oxygen = ad_map.get_energy(self.get_coordinates(atom_id=0))
+        energy_oxygen = ad_map.get_energy(self.get_coordinates(atom_id=0), atom_type='O')
 
         # And if we find something better, we update the coordinate
         if np.min(energy_sphere) < energy_oxygen:
@@ -121,9 +131,11 @@ class Water(Molecule):
         else:
             atoms = [a3, a4, a1, a2]
 
+        atom_types = ['HD', 'HD', 'Lp', 'Lp']
+
         i = 2
-        for atom in atoms:
-            self.add_atom(atom, atomic=1, bond=(1, i, 1))
+        for atom, atom_type in zip(atoms, atom_types):
+            self.add_atom(atom, atom_type=atom_type, bond=(1, i, 1))
             i += 1
 
     def rotate_water(self, ref_id=2, angle=0.):

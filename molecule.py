@@ -15,10 +15,13 @@ import utils
 
 class Molecule():
 
-    def __init__(self, fname, fformat='pdbqt'):
+    def __init__(self, fname):
+
+        file_extension = fname.split('.')[-1]
+
         # Read PDBQT file
         obconv = ob.OBConversion()
-        obconv.SetInFormat(fformat)
+        obconv.SetInFormat(file_extension)
         
         self._OBMol = ob.OBMol()
         obconv.ReadFile(self._OBMol, fname)
@@ -39,6 +42,18 @@ class Molecule():
             coordinate = [[x.GetX(), x.GetY(), x.GetZ()] for x in ob.OBMolAtomIter(self._OBMol)]
 
         return np.atleast_2d(np.array(coordinate))
+
+    def get_atom_types(self, atom_id=None):
+        """
+        Return atom types of all atoms or a certain atom
+        """
+        if atom_id is not None:
+            ob_atom = self._OBMol.GetAtomById(atom_id)
+            atom_type = ob_atom.GetType()
+        else:
+            atom_type = [x.GetType() for x in ob.OBMolAtomIter(self._OBMol)]
+
+        return atom_type
 
     def get_atom(self, i):
         """
@@ -172,6 +187,18 @@ class Molecule():
 
         return neighbors
     
+    """
+    def buildConnectGraph(self, startAtomId=None, depth=-1):
+        if startAtomId == None:
+            startAtomId = 1
+        visited = [False] * (self._OBMol.NumAtoms() + 1)
+        self.neighbors = {}
+        for i in range(1, len(ob.OBMol().NumAtoms()+1)):
+            current = ob.OBMol.GetAtom(i)
+            self.neighbors[i] = [ x.GetIdx() for x in ob.OBAtomAtomIter(current)]
+    """
+
+
     def get_neighbor_atom_coordinates(self, id_atom, depth=1, hydrogen=True):
         """
         Return a nested list of all the coordinates of all the neighbor 
@@ -183,7 +210,7 @@ class Molecule():
         
         for level in atoms:
             tmp = [[ob_atom.GetX(), ob_atom.GetY(), ob_atom.GetZ()] for ob_atom in level]
-            coords.append(np.squeeze(np.array(tmp)))
+            coords.append(np.array(tmp))
             
         return coords
 

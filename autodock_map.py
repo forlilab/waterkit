@@ -6,7 +6,7 @@
 # Class to manage autodock maps
 #
 
-
+import re
 import numpy as np
 
 import utils
@@ -14,10 +14,10 @@ import utils
 
 class Autodock_map():
 
-    def __init__(self, map_file):
+    def __init__(self, fld_file):
 
-        # Read the map
-        self._center, self._spacing, self._npts, self._energy = self._read_map(map_file)
+        # Read the fld_file
+        self._center, self._spacing, self._npts, self._maps = self._read_fld(fld_file)
 
         # Compute min and max coordinates
         # Half of each side
@@ -25,11 +25,48 @@ class Autodock_map():
         # Minimum and maximum coordinates
         self._xmin, self._ymin, self._zmin = self._center - l
         self._xmax, self._ymax, self._zmax = self._center + l
-
         # Generate the cartesian grid
         self._grid = self._generate_cartesian()
 
-    def _read_map(self, map_file):
+        # Get the relative folder path from fld_file
+        path = '.'
+        if '/' in fld_file:
+            path = '/'.join(fld_file.split('/')[0:-1])
+        path += '/'
+
+        self._affinity = {}
+        # Read all the affinity maps
+        for map_type, map_file in self._maps.items():
+            self._maps[map_type] = self._read_affinity_map(path + map_file)
+
+    def _read_fld(self, fld_file):
+        """
+        Read the fld file and extract spacing, npts, center and the name of all the maps
+        """
+        labels = []
+        map_files = []
+        npts = []
+
+        with open(fld_file) as f:
+            for line in f:
+
+                if re.search('^#SPACING', line):
+                    spacing = np.float(line.split(' ')[1])
+                elif re.search('^dim', line):
+                    npts.append(line.split('=')[1].split('#')[0].strip())
+                elif re.search('^#CENTER', line):
+                    center = np.array(line.split(' ')[1:4], dtype=np.float)
+                elif re.search('^label=', line):
+                    labels.append(line.split('=')[1].split('#')[0].split('-')[0].strip())
+                elif re.search('^variable', line):
+                    map_files.append(line.split(' ')[2].split('=')[1])
+
+        npts = np.array(npts, dtype=np.int)
+        maps = {label: map_file for label, map_file in zip(labels, map_files)}
+
+        return center, spacing, npts, maps
+
+    def _read_affinity_map(self, map_file):
         """
         Take a grid file and extract gridcenter, spacing and npts info
         """
@@ -37,17 +74,14 @@ class Autodock_map():
             # Read all the lines directly
             lines = f.readlines()
 
-            # Since the format is known, we can retrieve all the information by the position
-            spacing = np.float(lines[3].split(' ')[1])
             npts = np.array(lines[4].split(' ')[1:4], dtype=np.int) + 1
-            center = np.array(lines[5].split(' ')[1:4], dtype=np.float)
 
             # Get the energy for each grid element
-            energy = [np.float(line) for line in lines[6:]]
+            affinity = [np.float(line) for line in lines[6:]]
             # Some sorceries happen here --> swap axes x and z
-            energy = np.swapaxes(np.reshape(energy, npts), 0, 2)
+            affinity = np.swapaxes(np.reshape(affinity, npts), 0, 2)
 
-        return center, spacing, npts, energy
+        return affinity
 
     def _generate_cartesian(self):
         """
@@ -109,13 +143,13 @@ class Autodock_map():
         else:
             return False
 
-    def get_energy(self, xyz):
+    def get_energy(self, xyz, atom_type):
         """
         Return the energy of each coordinates xyz
         """
         idx = self._cartesian_to_index(xyz)
         idx = np.atleast_2d(idx)
-        return self._energy[idx[:, 0], idx[:, 1], idx[:, 2]]
+        return self._maps[atom_type][idx[:, 0], idx[:, 1], idx[:, 2]]
 
     def get_neighbor_points(self, xyz, radius):
         """
@@ -161,14 +195,16 @@ class Autodock_map():
 
         return coordinates
 
-    def combine(self, ad_map, method='best'):
-        pass
+    def get_volume(self, map_type, min_energy=0.):
+        count = (self._maps[map_type] >= min_energy).sum()
+        volume = count * (self._spacing ** 3)
+        return volume
 
-    def to_pdb(self, fname, max_energy=None):
+    def to_pdb(self, fname, map_type, max_energy=None):
         """
         Write the AutoDock map in a PDB file
         """
-        idx = np.array(np.where(self._energy <= max_energy)).T
+        idx = np.array(np.where(self.maps[map_type] <= max_energy)).T
 
         i = 0
         line = "ATOM  %5d  D   DUM Z%4d    %8.3f%8.3f%8.3f  1.00  1.00     0.000 D\n"
