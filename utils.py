@@ -131,3 +131,16 @@ def write_water(fname, waters):
 
             i += 1
             j += 1
+
+def get_folder_path(fname):
+    """
+    Get the relative folder path from fname
+    """
+    path = '.'
+
+    if '/' in fname:
+        path = '/'.join(fname.split('/')[0:-1])
+        
+    path += '/'
+
+    return path
