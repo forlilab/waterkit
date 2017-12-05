@@ -9,6 +9,8 @@
 import re
 import numpy as np
 
+from scipy.interpolate import RegularGridInterpolator
+
 import utils
 
 
@@ -29,15 +31,15 @@ class Autodock_map():
         self._grid = self._generate_cartesian()
 
         # Get the relative folder path from fld_file
-        path = '.'
-        if '/' in fld_file:
-            path = '/'.join(fld_file.split('/')[0:-1])
-        path += '/'
+        path = utils.get_folder_path(fld_file)
 
-        self._affinity = {}
+        self._maps_interpn = {}
         # Read all the affinity maps
         for map_type, map_file in self._maps.items():
-            self._maps[map_type] = self._read_affinity_map(path + map_file)
+            affinity_map = self._read_affinity_map(path + map_file)
+
+            self._maps[map_type] = affinity_map
+            self._maps_interpn[map_type] = self._generate_affinity_map_interpn(affinity_map)
 
     def _read_fld(self, fld_file):
         """
@@ -82,6 +84,14 @@ class Autodock_map():
             affinity = np.swapaxes(np.reshape(affinity, npts), 0, 2)
 
         return affinity
+
+    def _generate_affinity_map_interpn(self, affinity_map):
+        """
+        Return a interpolate function from the grid and the affinity map.
+        This helps to interpolate the energy of coordinates off the grid.
+        """
+        grid = (self._grid[:,0], self._grid[:,1], self._grid[:,2])
+        return RegularGridInterpolator(grid, affinity_map, bounds_error=False, fill_value=np.nan)
 
     def _generate_cartesian(self):
         """
@@ -134,22 +144,26 @@ class Autodock_map():
 
     def is_in_map(self, xyz):
         """
-        Check if the coordinate xyz in the AutoDock map
+        Check if coordinates xyz are in the AutoDock map
+        and return a boolean numpy array
         """
-        x, y, z = xyz
+        xyz = np.atleast_2d(xyz)
+        x, y, z = xyz[:,0], xyz[:,1], xyz[:,2]
 
-        if (self._xmin<=x<=self._xmax) & (self._ymin<=y<=self._ymax) & (self._zmin<=z<=self._zmax):
-            return True
-        else:
-            return False
+        x_in = np.logical_and(self._xmin <= x, x <= self._xmax)
+        y_in = np.logical_and(self._ymin <= y, y <= self._ymax)
+        z_in = np.logical_and(self._zmin <= z, z <= self._zmax)
+        all_in = np.all((x_in, y_in, z_in), axis=0)
+        #all_in = np.logical_and(np.logical_and(x_in, y_in), z_in)
 
-    def get_energy(self, xyz, atom_type):
+        return all_in
+
+    def get_energy(self, xyz, atom_type, method='nearest'):
         """
         Return the energy of each coordinates xyz
         """
-        idx = self._cartesian_to_index(xyz)
-        idx = np.atleast_2d(idx)
-        return self._maps[atom_type][idx[:, 0], idx[:, 1], idx[:, 2]]
+        return self._maps_interpn[atom_type](xyz, method=method)
+
 
     def get_neighbor_points(self, xyz, radius):
         """
