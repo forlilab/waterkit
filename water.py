@@ -19,7 +19,7 @@ class Water(Molecule):
     def __init__(self, oxygen, weight, anchor_id, anchor, anchor_type):
         # Create ob molecule and add oxygen atom
         self._OBMol = ob.OBMol()
-        self.add_atom(oxygen, atom_type='OA')
+        self.add_atom(oxygen, atom_type='O')
 
         # Store all the informations about the anchoring
         self._anchor_id = anchor_id
