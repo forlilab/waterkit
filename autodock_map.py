@@ -61,7 +61,7 @@ class Autodock_map():
                 elif re.search('^label=', line):
                     labels.append(line.split('=')[1].split('#')[0].split('-')[0].strip())
                 elif re.search('^variable', line):
-                    map_files.append(line.split(' ')[2].split('=')[1])
+                    map_files.append(line.split(' ')[2].split('=')[1].split('/')[-1])
 
         npts = np.array(npts, dtype=np.int)
         maps = {label: map_file for label, map_file in zip(labels, map_files)}
@@ -80,7 +80,7 @@ class Autodock_map():
 
             # Get the energy for each grid element
             affinity = [np.float(line) for line in lines[6:]]
-            # Some sorceries happen here --> swap axes x and z
+            # Some sorceries happen here --> swap x and z axes
             affinity = np.swapaxes(np.reshape(affinity, npts), 0, 2)
 
         return affinity
@@ -90,8 +90,7 @@ class Autodock_map():
         Return a interpolate function from the grid and the affinity map.
         This helps to interpolate the energy of coordinates off the grid.
         """
-        grid = (self._grid[:,0], self._grid[:,1], self._grid[:,2])
-        return RegularGridInterpolator(grid, affinity_map, bounds_error=False, fill_value=np.nan)
+        return RegularGridInterpolator(self._grid, affinity_map, bounds_error=False, fill_value=np.nan)
 
     def _generate_cartesian(self):
         """
@@ -101,8 +100,9 @@ class Autodock_map():
         y = np.linspace(self._ymin, self._ymax, self._npts[1])
         z = np.linspace(self._zmin, self._zmax, self._npts[2])
 
-        # Column: x, y, z (Normally, numpy array are colum-wise. But it is easier to debug.)
-        arr = np.array([x, y, z]).T
+        # Column: z, y, x (Normally, numpy array are colum-wise. But it is easier to debug.)
+        # And like the affinity map, we have to swap x and z axes
+        arr = np.array([z, y, x]).T
 
         return arr
 
@@ -164,7 +164,6 @@ class Autodock_map():
         """
         return self._maps_interpn[atom_type](xyz, method=method)
 
-
     def get_neighbor_points(self, xyz, radius):
         """
         Return all the coordinates xyz in a certaim radius around a point
@@ -209,16 +208,16 @@ class Autodock_map():
 
         return coordinates
 
-    def get_volume(self, map_type, min_energy=0.):
-        count = (self._maps[map_type] >= min_energy).sum()
+    def get_volume(self, atom_type, min_energy=0.):
+        count = (self._maps[atom_type] >= min_energy).sum()
         volume = count * (self._spacing ** 3)
         return volume
 
-    def to_pdb(self, fname, map_type, max_energy=None):
+    def to_pdb(self, fname, atom_type, max_energy=None):
         """
         Write the AutoDock map in a PDB file
         """
-        idx = np.array(np.where(self.maps[map_type] <= max_energy)).T
+        idx = np.array(np.where(self.maps[atom_type] <= max_energy)).T
 
         i = 0
         line = "ATOM  %5d  D   DUM Z%4d    %8.3f%8.3f%8.3f  1.00  1.00     0.000 D\n"
