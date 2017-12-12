@@ -81,7 +81,7 @@ class Autodock_map():
             # Get the energy for each grid element
             affinity = [np.float(line) for line in lines[6:]]
             # Some sorceries happen here --> swap x and z axes
-            affinity = np.swapaxes(np.reshape(affinity, npts), 0, 2)
+            affinity = np.swapaxes(np.reshape(affinity, npts[::-1]), 0, 2)
 
         return affinity
 
@@ -100,9 +100,9 @@ class Autodock_map():
         y = np.linspace(self._ymin, self._ymax, self._npts[1])
         z = np.linspace(self._zmin, self._zmax, self._npts[2])
 
-        # Column: z, y, x (Normally, numpy array are colum-wise. But it is easier to debug.)
-        # And like the affinity map, we have to swap x and z axes
-        arr = np.array([z, y, x]).T
+        # We use a tuple of numpy arrays and not a complete numpy array 
+        # because otherwise the output will be different if the grid is cubic or not
+        arr = tuple([x, y, z])
 
         return arr
 
@@ -114,9 +114,9 @@ class Autodock_map():
         idx = np.atleast_2d(idx)
 
         # Get coordinates x, y, z
-        x = self._grid[idx[:, 0], 0]
-        y = self._grid[idx[:, 1], 1]
-        z = self._grid[idx[:, 2], 2]
+        x = self._grid[0][idx[:,0]]
+        y = self._grid[1][idx[:,1]]
+        z = self._grid[2][idx[:,2]]
 
         # Column: x, y, z
         arr = np.array([x, y, z]).T
@@ -133,9 +133,9 @@ class Autodock_map():
         xyz = np.atleast_2d(xyz)
 
         for i in range(xyz.shape[0]):
-            idx.append([np.abs(self._grid[:, 0] - xyz[i, 0]).argmin(),
-                        np.abs(self._grid[:, 1] - xyz[i, 1]).argmin(),
-                        np.abs(self._grid[:, 2] - xyz[i, 2]).argmin()])
+            idx.append([np.abs(self._grid[0] - xyz[i, 0]).argmin(),
+                        np.abs(self._grid[1] - xyz[i, 1]).argmin(),
+                        np.abs(self._grid[2] - xyz[i, 2]).argmin()])
 
         # We want just to keep the struict number of dim useful
         idx = np.squeeze(np.array(idx))
@@ -211,20 +211,25 @@ class Autodock_map():
     def get_volume(self, atom_type, min_energy=0.):
         count = (self._maps[atom_type] >= min_energy).sum()
         volume = count * (self._spacing ** 3)
+
         return volume
 
     def to_pdb(self, fname, atom_type, max_energy=None):
         """
         Write the AutoDock map in a PDB file
         """
-        idx = np.array(np.where(self.maps[atom_type] <= max_energy)).T
+        idx = np.array(np.where(self._maps[atom_type] <= max_energy)).T
 
         i = 0
-        line = "ATOM  %5d  D   DUM Z%4d    %8.3f%8.3f%8.3f  1.00  1.00     0.000 D\n"
+        line = "ATOM  %5d  D   DUM Z%4d    %8.3f%8.3f%8.3f  1.00%6.2f           D\n"
 
         with open(fname, 'w') as w:
             for j in range(idx.shape[0]):
-                #print idx[j], self.get_energy(idx[j])
-                w.write(line % (i, i, self._grid[0][idx[j][0]], self._grid[1][idx[j][1]], 
-                                self._grid[2][idx[j][2]]))
+
+                v = self._maps[atom_type][idx[j][0], idx[j][1], idx[j][2]]
+
+                if v > 999.99:
+                    v = 999.99
+
+                w.write(line % (i, i, self._grid[0][idx[j][0]], self._grid[1][idx[j][1]], self._grid[2][idx[j][2]], v))
                 i += 1
