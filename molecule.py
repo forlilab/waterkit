@@ -49,7 +49,7 @@ class Molecule():
         """
         if atom_id is not None:
             ob_atom = self._OBMol.GetAtomById(atom_id)
-            atom_type = ob_atom.GetType()
+            atom_type = [ob_atom.GetType()]
         else:
             atom_type = [x.GetType() for x in ob.OBMolAtomIter(self._OBMol)]
 
