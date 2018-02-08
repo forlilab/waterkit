@@ -1,0 +1,36 @@
+# AVS field file
+#
+# AutoDock Atomic Affinity and Electrostatic Grids
+#
+# Created by autogrid4.
+#
+#SPACING 0.100
+#NELEMENTS 78 78 78
+#CENTER 0.000 0.000 0.000
+#MACROMOLECULE water.pdbqt
+#GRID_PARAMETER_FILE water.gpf
+#
+ndim=3			# number of dimensions in the field
+dim1=79			# number of x-elements
+dim2=79			# number of y-elements
+dim3=79			# number of z-elements
+nspace=3		# number of physical coordinates per point
+veclen=5		# number of affinity values at each point
+data=float		# data type (byte, integer, float, double)
+field=uniform		# field type (uniform, rectilinear, irregular)
+coord 1 file=maps.xyz filetype=ascii offset=0
+coord 2 file=maps.xyz filetype=ascii offset=2
+coord 3 file=maps.xyz filetype=ascii offset=4
+label=HD-affinity	# component label for variable 1
+label=O-affinity	# component label for variable 2
+label=Lp-affinity	# component label for variable 3
+label=Electrostatics	# component label for variable 3
+label=Desolvation	# component label for variable 4
+#
+# location of affinity grid files and how to read them
+#
+variable 1 file=HD_water.map filetype=ascii skip=6
+variable 2 file=O_water.map filetype=ascii skip=6
+variable 3 file=Lp_water.map filetype=ascii skip=6
+variable 4 file=e.map filetype=ascii skip=6
+variable 5 file=d.map filetype=ascii skip=6
