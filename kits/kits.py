@@ -284,7 +284,7 @@ def main():
     k = Kits(waterfield, water_map)
     waters = k.hydrate(molecule, ad_map)
 
-    utils.write_water('waters.pdbqt', waters)
+    utils.write_water(output_file, waters)
 
 if __name__ == '__main__':
     main()
