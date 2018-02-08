@@ -13,30 +13,34 @@ import openbabel as ob
 import utils
 from molecule import Molecule
 
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+
 
 class Water(Molecule):
 
-    def __init__(self, oxygen, weight, anchor_id, anchor, anchor_type):
+    def __init__(self, oxygen, anchor, anchor_type):
         # Create ob molecule and add oxygen atom
         self._OBMol = ob.OBMol()
-        self.add_atom(oxygen, atom_type='O')
+        self.add_atom(oxygen, atom_type='O', atom_num=8)
 
         # Store all the informations about the anchoring
-        self._anchor_id = anchor_id
         self._anchor = np.array([anchor, anchor + utils.normalize(utils.vector(oxygen, anchor))])
         self._anchor_type = anchor_type
-        self._weight = weight
 
-        # Used to store previous coordinates
         self._previous = None
 
-    def add_atom(self, xyz, atom_type, bond=None):
+    def add_atom(self, xyz, atom_type='O', atom_num=1, bond=None):
         """
         Add an OBAtom to the molecule
         """
         a = self._OBMol.NewAtom()
-        a.SetType(atom_type)
         a.SetVector(xyz[0], xyz[1], xyz[2])
+        a.SetType(atom_type)
+        # Weird thing appends here...
+        # If I remove a.GetType(), the oxygen type become O3 instead of O
+        a.GetType()
+        a.SetAtomicNum(np.int(atom_num))
 
         if bond is not None and self._OBMol.NumAtoms() >= 1:
             self._OBMol.AddBond(bond[0], bond[1], bond[2])
@@ -62,37 +66,6 @@ class Water(Molecule):
 
         return energy[0]
 
-    def optimize(self, ad_map, radius=3., angle=140.):
-        """
-        Optimize the position of the oxygen atom. The movement of the 
-        atom is contrained by the distance and the angle with the anchor
-        """
-        # If the anchor type is donor, we have to reduce the radius by 1 angstrom
-        if self._anchor_type == 'donor':
-            radius -= 1
-
-        # Get all the point around the anchor (sphere)
-        coord_sphere = ad_map.get_neighbor_points(self._anchor[0], radius)
-        # Compute angles between all the coordinates and the anchor
-        angle_sphere = utils.get_angle(coord_sphere, self._anchor[0], self._anchor[1])
-
-        # Select coordinates with an angle superior to the choosen angle
-        coord_sphere = coord_sphere[angle_sphere >= angle]
-
-        # Get energy of all the allowed coordinates (distance + angle)
-        energy_sphere = ad_map.get_energy(coord_sphere, atom_type='O')
-        # ... and get energy of the oxygen
-        energy_oxygen = ad_map.get_energy(self.get_coordinates(atom_id=0), atom_type='O')
-
-        # And if we find something better, we update the coordinate
-        if np.min(energy_sphere) < energy_oxygen:
-            t = energy_sphere.argmin()
-
-            # Save the old coordinate
-            self._previous = self.get_coordinates()
-            # ... update with the one
-            self.update_coordinates(coord_sphere[t], atom_id=0)
-
     def build_tip5p(self):
         """
         Construct hydrogen atoms (H) and lone-pairs (Lp)
@@ -106,7 +79,7 @@ class Water(Molecule):
             d = [0.7, 0.7, 0.9572, 0.9572]
             a = [109.47, 104.52]
 
-        coord_oxygen = self.get_coordinates(atom_id=0)[0]
+        coord_oxygen = self.get_coordinates(0)[0]
 
         # Vector between O and the Acceptor/Donor atom
         v = utils.vector(coord_oxygen, self._anchor[0])
@@ -135,31 +108,118 @@ class Water(Molecule):
 
         i = 2
         for atom, atom_type in zip(atoms, atom_types):
-            self.add_atom(atom, atom_type=atom_type, bond=(1, i, 1))
+            self.add_atom(atom, atom_type=atom_type, atom_num=1, bond=(1, i, 1))
             i += 1
 
-    def rotate_water(self, ref_id=2, angle=0.):
+    @staticmethod
+    def complete_map(waters, ad_map, water_map, water_orientation=[[0, 0, 1], [1, 0, 0]]):
+
+        x_len = np.int(np.floor(water_map._grid[0].shape[0]/2.) + 5)
+        y_len = np.int(np.floor(water_map._grid[1].shape[0]/2.) + 5)
+        z_len = np.int(np.floor(water_map._grid[2].shape[0]/2.) + 5)
+
+        map_types = set(ad_map._maps.keys()) & set(water_map._maps.keys())
+
+        for water in waters:
+
+            o = water.get_coordinates(atom_id=0)[0]
+            h1, h2 = water.get_coordinates(atom_id=1)[0], water.get_coordinates(atom_id=2)[0]
+
+            # Create the grid around the protein water molecule
+            ix, iy, iz = ad_map._cartesian_to_index(o)
+
+            ix_min = ix - x_len if ix - x_len >= 0 else 0
+            ix_max = ix + x_len
+            iy_min = iy - y_len if iy - y_len >= 0 else 0
+            iy_max = iy + y_len
+            iz_min = iz - z_len if iz - z_len >= 0 else 0
+            iz_max = iz + z_len
+
+            x = ad_map._grid[0][ix_min:ix_max+1]
+            y = ad_map._grid[1][iy_min:iy_max+1]
+            z = ad_map._grid[2][iz_min:iz_max+1]
+
+            X, Y, Z = np.meshgrid(x, y, z)
+            grid = np.stack((X.ravel(), Y.ravel(), Z.ravel()), axis=-1)
+
+            # Do the translation
+            translation = utils.vector(o, water_map._center)
+            grid += translation
+
+            # First rotation along z-axis
+            u = utils.normalize(utils.vector(o, np.mean([h1, h2], axis=0)))
+            rotation_z = utils.get_rotation_matrix(u, water_orientation[0])
+            grid = np.dot(grid, rotation_z)
+
+            # Second rotation along x-axis
+            h1 = np.dot(h1 + translation, rotation_z)
+            h2 = np.dot(h2 + translation, rotation_z)
+            v = utils.normalize(np.cross(h1, h2))
+            rotation_x = utils.get_rotation_matrix(v, water_orientation[1])
+            grid = np.dot(grid, rotation_x)
+
+            #h1 = np.dot(h1, rotation_x)
+            #h2 = np.dot(h2, rotation_x)
+
+            """
+            print o
+            print ix, iy, iz
+            print ix_min, ix+x_len+1, ix_max, len(ad_map._grid[0]), x, len(x)
+            print iy_min, iy+y_len+1, iy_max, len(ad_map._grid[1]), y, len(y)
+            print iz_min, iz+z_len+1, iz_max, len(ad_map._grid[2]), z, len(z)
+            print translation
+            print rotation_z
+            print rotation_x
+            print ""
+
+            fig = plt.figure(figsize=(15, 15))
+            ax = fig.gca(projection='3d')
+            ax.set_aspect("equal")
+            ax.set_xlim([-6, 6])
+            ax.set_ylim([-6, 6])
+            ax.set_zlim([-6, 6])
+            #ax.plot(water_grid[:,0], water_grid[:,1], water_grid[:,2], ',')
+            ax.scatter(0, 0, 0, ',', c='red', s=100)
+            ax.scatter(0, 0.756, 0.586, ',', c='red', s=100)
+            ax.scatter(0, -0.756, 0.586, ',', c='red', s=100)
+
+            ax.plot(grid[:,0], grid[:,1], grid[:,2], ',')
+            ax.scatter(0, 0, 0, ',', c='green', s=100)
+            ax.scatter(h1[0], h1[1], h1[2], ',', c='green', s=100)
+            ax.scatter(h2[0], h2[1], h2[2], ',', c='green', s=100)
+
+            plt.show()
+            """
+
+            for map_type in map_types:
+                # Interpolate energy
+                energy = water_map.get_energy(grid, map_type)
+                # Replace inf by zero, otherwise we cannot add water energy to the grid
+                energy[energy == np.inf] = 0.
+                # Reshape, right? Easy.
+                energy = np.reshape(energy, (x.shape[0], y.shape[0], z.shape[0]))
+                # Add it to the existing grid
+                ad_map._maps[map_type][ix_min:ix_max+1, iy_min:iy_max+1, iz_min:iz_max+1] += energy
+
+        for map_type in map_types:
+            ad_map._maps_interpn[map_type] = ad_map._generate_affinity_map_interpn(ad_map._maps[map_type])
+
+    def rotate_water(self, ref_id=1, angle=0.):
         """
         Rotate water molecule along the axis Oxygen and a choosen atom (H or Lp)
         """
         coord_water = self.get_coordinates()
-        print coord_water
+
+        # Get the oxygen and the ref atom for the rotation axis
         coord_oxygen = coord_water[0]
-        # Open-Babel is 1-index but numpy is 0-index
-        coord_ref = coord_water[ref_id - 1]
+        coord_ref = coord_water[ref_id]
 
         r = coord_oxygen + utils.normalize(utils.vector(coord_ref, coord_oxygen))
 
-        # List of atom id from 2 (0-index)(O and the first H/Lp are fixed) to the last atom id
-        # except the one located in the rotation axis
-        atom_ids = [x for x in range(2, coord_water.shape[0]) if x != ref_id]
-
-        print atom_ids
+        # Ref of all the atom we want to move, minus the ref
+        atom_ids = list(range(1, coord_water.shape[0]))
+        atom_ids.remove(ref_id)
 
         for atom_id in atom_ids:
-            print atom_id
             a = utils.rotate_atom(coord_water[atom_id], coord_oxygen, r, np.radians(angle))
-            self.update_coordinates(a, atom_id=atom_id)
-
-    def scan(self, ref_id=1):
-        pass
+            self.update_coordinates(a, atom_id)
