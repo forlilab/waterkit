@@ -52,6 +52,22 @@ def get_angle(a, b, c, degree=True):
 
     return angle
 
+def get_rotation_matrix(a, b):
+    """
+    Return 3D rotation matrix between vectors a and b
+    Sources: 
+    https://stackoverflow.com/questions/45142959/calculate-rotation-matrix-to-align-two-vectors-in-3d-space
+    https://math.stackexchange.com/questions/180418/calculate-rotation-matrix-to-align-vector-a-to-vector-b-in-3d/897677
+    """
+    v = np.cross(b, a)
+    c = np.dot(b, a)
+    s = np.linalg.norm(v)
+    I = np.identity(3)
+    k = np.array([[0, -v[2], v[1]], [v[2], 0, -v[0]], [-v[1], v[0], 0]])
+    r = I + k + np.matmul(k, k) * ((1 - c)/(s**2))
+
+    return r
+
 def rotation_axis(p0, p1, p2, origin=None):
     """
     Compute rotation axis centered at the origin if not None
@@ -107,6 +123,51 @@ def rotate_atom(p, p1, p2, angle=0, length=None):
         pn = normalize(pn) * length
     
     return pn + p1
+
+def generate_random_sphere(center, radius=1, size=100):
+    """ 
+    Generate a sphere with random point
+    Source: https://www.cmu.edu/biolphys/deserno/pdf/sphere_equi.pdf
+    """
+    z = np.random.uniform(-radius, radius, size)
+    p = np.random.uniform(0, np.pi*2, size)
+
+    x = np.sqrt(radius**2 - z**2) * np.cos(p)
+    y = np.sqrt(radius**2 - z**2) * np.sin(p)
+
+    coordinates = np.stack((x, y, z), axis=-1)
+    coordinates += center
+
+    return coordinates
+
+def generate_sphere(center, radius=1, size=100):
+
+    a = 4 * np.pi * radius**2 / size
+    d = np.sqrt(a)
+    
+    M_v = np.int(np.round(np.pi / d))
+    d_v = np.pi / M_v
+    d_p = a / d_v
+
+    coordinates = []
+
+    for m in range(0, M_v):
+        v = np.pi * (m + 0.5) / M_v
+        M_p = np.int(np.round(2 * np.pi * np.sin(v) / d_p))
+
+        for n in range(0, M_p):
+            p = 2 * np.pi * n / M_p
+
+            x = radius * np.sin(v) * np.cos(p)
+            y = radius * np.sin(v) * np.sin(p)
+            z = radius * np.cos(v)
+
+            coordinates.append([x, y, z])
+
+    coordinates = np.array(coordinates)
+    coordinates += center
+
+    return coordinates
 
 def write_water(fname, waters):
 
