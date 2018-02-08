@@ -17,16 +17,17 @@ from autodock_map import Autodock_map
 from molecule import Molecule
 from water import Water
 from waterfield import Waterfield
+from optimize import Water_network
 
 
 class Kits():
 
-    def __init__(self, waterfield, vdw_water=2.8):
+    def __init__(self, waterfield, water_map):
         
-        self._vdw_water = vdw_water
+        self._water_map = water_map
         self._waterfield = waterfield
     
-    def _place_optimal_water(self, molecule, weight, idx, hyb, n_water, hb_type, hb_length):
+    def _place_optimal_water(self, molecule, idx, hyb, n_water, hb_type, hb_length):
 
         waters = []
         angles = []
@@ -87,6 +88,7 @@ class Kits():
 
         if hyb == 3:
 
+            #print idx, hb_type
             coord_atom1 = coord_neighbor_atoms[1][0]
             coord_atom2 = coord_neighbor_atoms[1][1]
 
@@ -143,13 +145,13 @@ class Kits():
         for angle in angles:
             w = utils.rotate_atom(p, coord_atom, r, angle, hb_length)
             # Create water molecule
-            waters.append(Water(w, weight, anchor_id=idx+1, anchor=coord_atom, anchor_type=anchor_type))
+            waters.append(Water(w, anchor=coord_atom, anchor_type=anchor_type))
 
         return waters
     
-    def hydrate(self, molecule, ad_map=None):
+    def hydrate(self, molecule, ad_map):
 
-        waters = []
+        first_waters = []
 
         # First hydration shell!!
         # Place optimal water molecules everywhere
@@ -187,31 +189,61 @@ class Kits():
                 if idx in idx_map and not visited[idx]:
                     #print '%10s %2d %s' % (atom_types[i][0], idx, 'YES WATER!')
                     visited[idx] = True
-                    waters.extend(self._place_optimal_water(molecule, weight, idx, hyb, n_water, hb_type, hb_length))
+                    try:
+                        first_waters.extend(self._place_optimal_water(molecule, idx, hyb, n_water, hb_type, hb_length))
+                    except:
+                        continue
 
-        # If a AD_map is provide, we optimize the water placement
+        # We optimize the water placement
         # and keep only the favorable ones (energy < 0)
-        if ad_map is not None:
-            # Optimization
-            for i, water in enumerate(waters):
-                if ad_map.is_in_map(water.get_coordinates(0)[0]):
-                    water.optimize(ad_map, radius=3.2, angle=140)
+        n = Water_network(distance=2.8, angle=90, cutoff=0)
+        first_waters = n.optimize(first_waters, ad_map)
+
+        # Complete map
+        Water.complete_map(first_waters, ad_map, self._water_map)
+
+        ad_map.to_map('HD.map', 'HD')
+        ad_map.to_map('Lp.map', 'Lp')
+        ad_map.to_map('O.map', 'O')
+
+        # Second to N hydration shell!!
+        """
+        n_waters = []
+        current_waters = first_waters
+
+        for n in range(5):
+
+            print n
+
+            tmp_waters = []
+
+            # Second hydration shell!!
+            for water in current_waters:
+                if water._anchor_type == 'acceptor':
+                    atom_ids = [3, 4, 5]
+                    hb_types = [1, 2, 2]
+                    hb_lengths = [1.8, 2.1, 2.1]
                 else:
-                    waters.pop(i)
+                    atom_ids = [2, 3, 5]
+                    hb_types = [1, 1, 2]
+                    hb_lengths = [1.8, 1.8, 2.1]
 
-            # Energy filter
-            waters = [w for w in waters if w.get_energy(ad_map) < 0.]
-
-        # Build TIP5P model for each water molecule
-        for water in waters:
-            water.build_tip5p()
-
-        # Second hydration shell!!
-        # Last hydration shell!!
-        # ???
-        # PROFIT!
-        
-        return waters
+                for idx, hb_type, hb_length in zip(atom_ids, hb_types, hb_lengths):
+                    tmp_waters.extend(self._place_optimal_water(water, idx, 1, 1, hb_type, hb_length))
+ 
+            # If a AD_map is provide, we optimize the water placement
+            # and keep only the favorable ones (energy < 0)
+            if ad_map is not None:
+                tmp_waters = self.optimize_waters(tmp_waters, ad_map, radius=[2.4, 3.3], angle=170, cutoff=0)
+ 
+            current_waters = tmp_waters
+            n_waters.extend(tmp_waters)
+        """
+ 
+         # ???
+         # PROFIT!
+         
+        return first_waters#, n_waters
       
 
 def cmd_lineparser():
@@ -219,10 +251,14 @@ def cmd_lineparser():
 
     parser.add_argument("-p", "--pdbqt", dest="pdbqt_file", required=True,
                         action="store", help="molecule file")
-    parser.add_argument("-m", "--map", dest="map_file", default=None,
+    parser.add_argument("-f", "--waterfield", dest="waterfield_file", required=True,
+                         action="store", help="waterfield file")
+    parser.add_argument("-w", "--watermap", dest="water_map_file", required=True,
+                        action="store", help="water autodock map file")
+    parser.add_argument("-m", "--map", dest="map_file", required=True,
                         action="store", help="autodock map file")
-    parser.add_argument("-w", "--water", dest="waterfield_file", required=True,
-                        action="store", help="waterfield file")
+    parser.add_argument("-o", "--output", dest="output_file", default='waters.pdbqt',
+                        action="store", help="water molecule file (pdbqt)")
 
     return parser.parse_args()
 
@@ -233,23 +269,22 @@ def main():
     pdbqt_file = args.pdbqt_file
     map_file = args.map_file
     waterfield_file = args.waterfield_file
-
-    ad_map = None
+    output_file = args.output_file
+    water_map_file = args.water_map_file
 
     # Read PDBQT file
     molecule = Molecule(pdbqt_file)
     # Read the Waterfield file
     waterfield = Waterfield(waterfield_file)
-
     # Read AutoDock grid map
-    if map_file is not None:
-        ad_map = Autodock_map(map_file)
+    ad_map = Autodock_map(map_file)
+    water_map = Autodock_map(water_map_file)
 
     # Go kits!!
-    k = Kits(waterfield)
+    k = Kits(waterfield, water_map)
     waters = k.hydrate(molecule, ad_map)
 
-    utils.write_water('waters.pdb', waters)
+    utils.write_water('waters.pdbqt', waters)
 
 if __name__ == '__main__':
     main()
