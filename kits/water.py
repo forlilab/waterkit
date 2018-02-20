@@ -196,8 +196,12 @@ class Water(Molecule):
                 energy = water_map.get_energy(grid, map_type)
                 # Replace inf by zero, otherwise we cannot add water energy to the grid
                 energy[energy == np.inf] = 0.
-                # Reshape, right? Easy.
-                energy = np.reshape(energy, (x.shape[0], y.shape[0], z.shape[0]))
+
+                # Reshape and swap x and y axis, right? Easy.
+                # Thank you Diogo Santos Martins!!
+                energy = np.reshape(energy, (y.shape[0], x.shape[0], z.shape[0]))
+                energy = np.swapaxes(energy, 0, 1)
+
                 # Add it to the existing grid
                 ad_map._maps[map_type][ix_min:ix_max+1, iy_min:iy_max+1, iz_min:iz_max+1] += energy
 
