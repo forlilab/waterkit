@@ -13,9 +13,6 @@ import openbabel as ob
 import utils
 from molecule import Molecule
 
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
-
 
 class Water(Molecule):
 
@@ -158,39 +155,6 @@ class Water(Molecule):
             rotation_x = utils.get_rotation_matrix(v, water_orientation[1])
             grid = np.dot(grid, rotation_x)
 
-            #h1 = np.dot(h1, rotation_x)
-            #h2 = np.dot(h2, rotation_x)
-
-            """
-            print o
-            print ix, iy, iz
-            print ix_min, ix+x_len+1, ix_max, len(ad_map._grid[0]), x, len(x)
-            print iy_min, iy+y_len+1, iy_max, len(ad_map._grid[1]), y, len(y)
-            print iz_min, iz+z_len+1, iz_max, len(ad_map._grid[2]), z, len(z)
-            print translation
-            print rotation_z
-            print rotation_x
-            print ""
-
-            fig = plt.figure(figsize=(15, 15))
-            ax = fig.gca(projection='3d')
-            ax.set_aspect("equal")
-            ax.set_xlim([-6, 6])
-            ax.set_ylim([-6, 6])
-            ax.set_zlim([-6, 6])
-            #ax.plot(water_grid[:,0], water_grid[:,1], water_grid[:,2], ',')
-            ax.scatter(0, 0, 0, ',', c='red', s=100)
-            ax.scatter(0, 0.756, 0.586, ',', c='red', s=100)
-            ax.scatter(0, -0.756, 0.586, ',', c='red', s=100)
-
-            ax.plot(grid[:,0], grid[:,1], grid[:,2], ',')
-            ax.scatter(0, 0, 0, ',', c='green', s=100)
-            ax.scatter(h1[0], h1[1], h1[2], ',', c='green', s=100)
-            ax.scatter(h2[0], h2[1], h2[2], ',', c='green', s=100)
-
-            plt.show()
-            """
-
             for map_type in map_types:
                 # Interpolate energy
                 energy = water_map.get_energy(grid, map_type)
@@ -205,6 +169,7 @@ class Water(Molecule):
                 # Add it to the existing grid
                 ad_map._maps[map_type][ix_min:ix_max+1, iy_min:iy_max+1, iz_min:iz_max+1] += energy
 
+        # Update interpolator
         for map_type in map_types:
             ad_map._maps_interpn[map_type] = ad_map._generate_affinity_map_interpn(ad_map._maps[map_type])
 
