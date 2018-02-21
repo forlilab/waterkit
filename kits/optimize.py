@@ -53,7 +53,7 @@ class Water_network():
         # If the anchor type is donor, we have to reduce the 
         # radius by 1 angstrom. Because hydrogen!
         if water._anchor_type == 'donor':
-            distance = self.distance - 1.
+            distance -= 1.
 
         # Get all the point around the anchor (sphere)
         coord_sphere = ad_map.get_neighbor_points(water._anchor[0], 0., distance)
@@ -130,9 +130,16 @@ class Water_network():
                 # Check energy
                 if water.get_energy(ad_map) <= self.cutoff:
                     opti_waters.append(water)
+                else:
+                    print "nope", water.get_energy(ad_map)
 
-        # Identify clusters of waters
-        clusters = self._cluster_waters(opti_waters, distance=cluster_distance)
+        if len(opti_waters) > 1:
+            # Identify clusters of waters
+            clusters = self._cluster_waters(opti_waters, distance=cluster_distance)
+        elif len(opti_waters) == 1:
+            return opti_waters
+        else:
+            return []
 
         # Optimize each cluster
         for cluster in clusters:
