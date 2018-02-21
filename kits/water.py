@@ -108,6 +108,17 @@ class Water(Molecule):
             self.add_atom(atom, atom_type=atom_type, atom_num=1, bond=(1, i, 1))
             i += 1
 
+    def get_available_anchors(self):
+        """ Get the ID and atom type of all available atoms """
+        if self._anchor_type == 'acceptor':
+            atom_ids = [3, 4, 5]
+            names = ['H_O_004', 'O_L_000', 'O_L_000']
+        else:
+            atom_ids = [2, 3, 5]
+            names = ['H_O_004', 'H_O_004', 'O_L_000']
+
+        return atom_ids, names
+
     @staticmethod
     def complete_map(waters, ad_map, water_map, water_orientation=[[0, 0, 1], [1, 0, 0]]):
 

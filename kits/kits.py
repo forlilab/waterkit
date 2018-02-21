@@ -67,7 +67,7 @@ class Kits():
             if atom_type.n_water == 1:
                 coord_atom1 = coord_neighbor_atoms[1][0]
                 coord_atom2 = coord_neighbor_atoms[1][1]
-                #
+
                 r = None
                 p = utils.atom_to_move(coord_atom, [coord_atom1, coord_atom2])
                 angles = [0]
@@ -135,7 +135,6 @@ class Kits():
                 p = utils.rotate_atom(coord_atom1, coord_atom, r, np.radians(109.47), atom_type.hb_length)
                 # The next rotation axis will be the vector along the neighbor atom and the origin atom 
                 r = coord_atom + utils.normalize(utils.vector(coord_atom1, coord_atom))
-
                 angles = [0, -np.radians(120), np.radians(120)]
 
         # Now we place the water molecule(s)!
@@ -156,6 +155,8 @@ class Kits():
 
         # Get all the atoms in the map
         idx_map = molecule.get_atoms_in_map(ad_map)
+
+
         # Get all the water types from the waterfield
         atom_types = self._waterfield.get_atom_types()
         # In order to keep track which one was alredy typed or not
@@ -201,12 +202,7 @@ class Kits():
 
             # Second hydration shell!!
             for water in current_waters:
-                if water._anchor_type == 'acceptor':
-                    atom_ids = [3, 4, 5]
-                    names = ['H_O_004', 'O_L_000', 'O_L_000']
-                else:
-                    atom_ids = [2, 3, 5]
-                    names = ['H_O_004', 'H_O_004', 'O_L_000']
+                atom_ids, names = water.get_available_anchors()
 
                 for idx, name in zip(atom_ids, names):
                     tmp_waters.extend(self._place_optimal_water(water, atom_types[name], idx))
@@ -246,7 +242,6 @@ def cmd_lineparser():
     return parser.parse_args()
 
 def main():
-
     args = cmd_lineparser()
     pdbqt_file = args.pdbqt_file
     map_file = args.map_file
