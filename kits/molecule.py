@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-# Kits
+# WaterKits
 #
 # Class for molecule
 #
 
-
+import os
 import numpy as np
 import openbabel as ob
 
@@ -17,7 +17,8 @@ class Molecule():
 
     def __init__(self, fname):
 
-        file_extension = fname.split('.')[-1]
+        # Get name and file extension
+        self.name, file_extension = os.path.splitext(fname)
 
         # Read PDBQT file
         obconv = ob.OBConversion()
@@ -25,9 +26,6 @@ class Molecule():
         
         self._OBMol = ob.OBMol()
         obconv.ReadFile(self._OBMol, fname)
-
-        # Save name of the molecule
-        self.name = fname.split('.')[0].split('/')[-1]
 
     def get_coordinates(self, atom_id=None):
         """
@@ -150,7 +148,7 @@ class Molecule():
 
     def get_neighbor_atoms(self, start_index=1, depth=1, hydrogen=True):
         """
-        Return a nested list of all the neighbor OBAtoms by followinf the bond connectivity
+        Return a nested list of all the neighbor OBAtoms by following the bond connectivity
         https://baoilleach.blogspot.com/2008/02/calculate-circular-fingerprints-with.html
         """
         visited = [False] * (self._OBMol.NumAtoms() + 1)
@@ -187,18 +185,6 @@ class Molecule():
 
         return neighbors
     
-    """
-    def buildConnectGraph(self, startAtomId=None, depth=-1):
-        if startAtomId == None:
-            startAtomId = 1
-        visited = [False] * (self._OBMol.NumAtoms() + 1)
-        self.neighbors = {}
-        for i in range(1, len(ob.OBMol().NumAtoms()+1)):
-            current = ob.OBMol.GetAtom(i)
-            self.neighbors[i] = [ x.GetIdx() for x in ob.OBAtomAtomIter(current)]
-    """
-
-
     def get_neighbor_atom_coordinates(self, id_atom, depth=1, hydrogen=True):
         """
         Return a nested list of all the coordinates of all the neighbor 
