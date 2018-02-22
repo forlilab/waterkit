@@ -9,9 +9,7 @@
 
 import numpy as np
 import openbabel as ob
-
-from scipy.cluster.hierarchy import dendrogram, linkage, fcluster
-from matplotlib import pyplot as plt
+from scipy.cluster.hierarchy import linkage, fcluster
 
 import utils
 
@@ -26,8 +24,7 @@ class Water_network():
         #self.beta = beta
 
     def _cluster_waters(self, waters, distance=2., method='single'):
-        """
-        Cluster water molecule based on their position using hierarchical clustering
+        """ Cluster water molecule based on their position using hierarchical clustering
         """
         coordinates = np.array([w.get_coordinates(atom_id=0)[0] for w in waters])
 
@@ -44,8 +41,7 @@ class Water_network():
         return water_clusters
 
     def _optimize_position(self, water, ad_map):
-        """
-        Optimize the position of the oxygen atom. The movement of the 
+        """ Optimize the position of the oxygen atom. The movement of the 
         atom is contrained by the distance and the angle with the anchor
         """
         distance = self.distance
@@ -57,12 +53,10 @@ class Water_network():
 
         # Get all the point around the anchor (sphere)
         coord_sphere = ad_map.get_neighbor_points(water._anchor[0], 0., distance)
-
         # Compute angles between all the coordinates and the anchor
         angle_sphere = utils.get_angle(coord_sphere, water._anchor[0], water._anchor[1])
         # Select coordinates with an angle superior to the choosen angle
         coord_sphere = coord_sphere[angle_sphere >= self.angle]
-
         # Get energy of all the allowed coordinates (distance + angle)
         energy_sphere = ad_map.get_energy(coord_sphere, atom_type='O')
         # ... and get energy of the oxygen
@@ -79,9 +73,7 @@ class Water_network():
                 water.update_coordinates(coord_sphere[t], 0)
 
     def _optimize_rotation(self, water, ad_map, rotation=10):
-        """
-        Optimize the rotation of a TIP5P water molecule
-        """
+        """ Optimize the rotation of a TIP5P water molecule """
         if water._anchor_type == 'donor':
             ref_id = 3
         else:
@@ -130,8 +122,6 @@ class Water_network():
                 # Check energy
                 if water.get_energy(ad_map) <= self.cutoff:
                     opti_waters.append(water)
-                else:
-                    print "nope", water.get_energy(ad_map)
 
         if len(opti_waters) > 1:
             # Identify clusters of waters
@@ -166,7 +156,5 @@ class Water_network():
         return None
 
     def identify_rings(self, waters):
-        """
-        Identify rings in the water network
-        """
+        """ Identify rings in the water network """
         return None
