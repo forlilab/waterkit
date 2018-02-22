@@ -7,6 +7,7 @@
 #
 
 import os
+
 import numpy as np
 import openbabel as ob
 
@@ -199,6 +200,38 @@ class Molecule():
             coords.append(np.array(tmp))
             
         return coords
+
+    def get_available_anchors(self, waterfield, ad_map=None):
+        """ Return all the anchors available on a molecule
+        based on the water forcefield.
+        """
+        atom_ids = []
+        names = []
+
+        # Get all the atoms in the map
+        idx_map = self.get_atoms_in_map(ad_map)
+        # Get all the water types from the waterfield
+        atom_types = waterfield.get_atom_types()
+        # In order to keep track which one was alredy typed or not
+        visited = [False] * (self._OBMol.NumAtoms() + 1)
+
+        for name in atom_types.keys()[::-1]:
+            atom_type = atom_types[name]
+            matches = waterfield.get_matches(name, self)
+
+            for match in matches:
+                idx = match[0]
+
+                if atom_type.hb_type == 0 and not visited[idx]:
+                    visited[idx] = True
+
+                if idx in idx_map and not visited[idx]:
+                    visited[idx] = True
+
+                    atom_ids.append(idx)
+                    names.append(name)
+
+        return names, atom_ids
 
     def to_file(self, fname, fformat):
         """

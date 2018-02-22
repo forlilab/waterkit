@@ -60,7 +60,7 @@ class Kits():
             if atom_type.n_water == 3:
                 hyb = 3
 
-        if hyb == 2:
+        elif hyb == 2:
             # Position of water is just above the origin atom
             # We need the 2 direct neighboring atoms of the origin atom
             # Example: Nitrogen
@@ -145,85 +145,76 @@ class Kits():
 
         return waters
     
-    def hydrate(self, molecule, ad_map):
+    def hydrate(self, molecule, ad_map, n_layer=0):
         """Hydrate the molecule by adding successive layers 
         of water molecules until the box is complety full
         """
         waters = []
+        water_layers = []
+
+        # Initialize the water netwrok optimizer
+        n = Water_network(distance=2.8, angle=145, cutoff=0)
 
         # First hydration shell!!
+        names, atom_ids = molecule.get_available_anchors(self._waterfield, ad_map)
 
-        # Get all the atoms in the map
-        idx_map = molecule.get_atoms_in_map(ad_map)
+        for name, idx in zip(names, atom_ids):
+            atom_type = self._waterfield.get_atom_types(name)
 
+            try:
+                waters.extend(self._place_optimal_water(molecule, atom_type, idx))
+            except:
+                print 'Error: Couldn\'t put water(s) on %s using %s atom type' % (idx, name)
+                continue
 
-        # Get all the water types from the waterfield
-        atom_types = self._waterfield.get_atom_types()
-        # In order to keep track which one was alredy typed or not
-        visited = [False] * (molecule._OBMol.NumAtoms() + 1)
-
-        # We will test every patterns. Not very efficient 
-        # but otherwise we have to do the contrary, test if the atom 
-        # is in the pattern list or not... more complicated
-        for key in atom_types.keys()[::-1]:
-            atom_type = atom_types[key]
-            matches = self._waterfield.get_matches(key, molecule)
-
-            for match in matches:
-                idx = match[0]
-
-                if atom_type.hb_type == 0 and not visited[idx]:
-                    visited[idx] = True
-
-                if idx in idx_map and not visited[idx]:
-                    visited[idx] = True
-
-                    try:
-                        waters.extend(self._place_optimal_water(molecule, atom_type, idx))
-                    except:
-                        print 'Error: Couldn\'t put water(s) on %s using %s atom type' % (idx, key)
-                        continue
-
-        # We optimize the water placement
-        # and keep only the favorable ones (energy < 0)
-        n = Water_network(distance=2.8, angle=145, cutoff=0)
+        # Optimize waters and complete the map
         waters = n.optimize(waters, ad_map)
-
-        # Complete map
         Water.complete_map(waters, ad_map, self._water_map)
 
-        # Second to N hydration shell!!
+        water_layers.append(waters)
 
+        # Second to N hydration shell!!
+        i = 1
         add_waters = True
-        current_waters = waters
+        previous_waters = waters
 
         while add_waters:
-            tmp_waters = []
+
+            # Stop if we reach the layer i
+            # If we choose n_shell equal 0, we will never reach that condition
+            # and he will continue forever and ever to add water molecules 
+            # until the box is full of water molecules
+            if i == n_layer:
+                break
+
+            waters = []
 
             # Second hydration shell!!
-            for water in current_waters:
-                atom_ids, names = water.get_available_anchors()
+            for water in previous_waters:
+                names, atom_ids = water.get_available_anchors(self._waterfield)
 
-                for idx, name in zip(atom_ids, names):
-                    tmp_waters.extend(self._place_optimal_water(water, atom_types[name], idx))
+                for name, idx in zip(names, atom_ids):
+                    atom_type = self._waterfield.get_atom_types(name)
+                    waters.extend(self._place_optimal_water(water, atom_type, idx))
  
-            # We optimize the water placement
-            # and keep only the favorable ones (energy < 0)
-            tmp_waters = n.optimize(tmp_waters, ad_map)
+            # Optimize water placement
+            waters = n.optimize(waters, ad_map)
 
-            if tmp_waters:
+            if waters:
                 # Complete map
-                Water.complete_map(tmp_waters, ad_map, self._water_map)
+                Water.complete_map(waters, ad_map, self._water_map)
 
-                current_waters = tmp_waters
-                waters.extend(tmp_waters)
+                previous_waters = waters
+                water_layers.append(waters)
             else:
                 add_waters = False
+
+            i += 1
  
          # ???
          # PROFIT!
          
-        return waters
+        return water_layers
       
 
 def cmd_lineparser():
@@ -257,7 +248,7 @@ def main():
 
     # Go kits!!
     k = Kits(waterfield, water_map)
-    waters = k.hydrate(molecule, ad_map)
+    waters = k.hydrate(molecule, ad_map, n_layer=3)
 
     # Write output files
     utils.write_water(output_file, waters)
