@@ -45,6 +45,8 @@ def get_angle(a, b, c, degree=True):
     bc = vector(b, c)
 
     cos_angle = np.dot(ba, bc) / (np.linalg.norm(ba, axis=1) * np.linalg.norm(bc))
+    # Make sure values fit between -1 and 1 for arccos
+    cos_angle = np.clip(cos_angle, -1, 1)
     angle = np.arccos(cos_angle)
 
     if degree:
