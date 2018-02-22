@@ -7,7 +7,6 @@
 #
 
 import re
-
 from collections import namedtuple
 from collections import OrderedDict
 
@@ -87,8 +86,10 @@ class Waterfield():
         """
         if name is None:
             return self._atom_types
-        else:
+        elif self._atom_types.has_key(name):
             return self._atom_types[name]
+        else:
+            return None
 
     def get_matches(self, name, molecule):
         """Return matches using smarts on the molecule
