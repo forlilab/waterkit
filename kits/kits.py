@@ -75,7 +75,7 @@ class Kits():
             # Position of waters are separated by angle of 120 degrees
             # And they are aligned with the neighboring atoms (deep=2) of the origin atom
             # Exemple: Backbone oxygen
-            elif n_water == 2:
+            elif atom_type.n_water == 2:
                 coord_atom1 = coord_neighbor_atoms[1][0]
                 coord_atom2 = coord_neighbor_atoms[2][0]
 
