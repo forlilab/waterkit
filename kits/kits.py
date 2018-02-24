@@ -61,11 +61,12 @@ class Kits():
                 hyb = 3
 
         elif hyb == 2:
+            coord_atom1 = coord_neighbor_atoms[1][0]
+
             # Position of water is just above the origin atom
             # We need the 2 direct neighboring atoms of the origin atom
             # Example: Nitrogen
             if atom_type.n_water == 1:
-                coord_atom1 = coord_neighbor_atoms[1][0]
                 coord_atom2 = coord_neighbor_atoms[1][1]
 
                 r = None
@@ -76,7 +77,6 @@ class Kits():
             # And they are aligned with the neighboring atoms (deep=2) of the origin atom
             # Exemple: Backbone oxygen
             elif atom_type.n_water == 2:
-                coord_atom1 = coord_neighbor_atoms[1][0]
                 coord_atom2 = coord_neighbor_atoms[2][0]
 
                 r = utils.rotation_axis(coord_atom1, coord_atom, coord_atom2, origin=coord_atom)
@@ -87,7 +87,6 @@ class Kits():
                 hyb = 3
 
         if hyb == 3:
-            #print idx, hb_type
             coord_atom1 = coord_neighbor_atoms[1][0]
             coord_atom2 = coord_neighbor_atoms[1][1]
 
@@ -121,8 +120,6 @@ class Kits():
             # Tetrahedral geometry, there is no reference so water molecules are placed randomly
             # Example: DMSO
             elif atom_type.n_water == 3:
-                coord_atom1 = coord_neighbor_atoms[1][0]
-
                 # Vector between coord_atom and the only neighbor atom
                 v = utils.vector(coord_atom, coord_atom1)
                 v = utils.normalize(v)
@@ -161,11 +158,11 @@ class Kits():
         for name, idx in zip(names, atom_ids):
             atom_type = self._waterfield.get_atom_types(name)
 
-            try:
-                waters.extend(self._place_optimal_water(molecule, atom_type, idx))
-            except:
-                print 'Error: Couldn\'t put water(s) on %s using %s atom type' % (idx, name)
-                continue
+            #try:
+            waters.extend(self._place_optimal_water(molecule, atom_type, idx))
+            #except:
+            #    print 'Error: Couldn\'t put water(s) on %s using %s atom type' % (idx, name)
+            #    continue
 
         # Optimize waters and complete the map
         waters = n.optimize(waters, ad_map)
