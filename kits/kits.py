@@ -46,9 +46,9 @@ class Kits():
         # Get coordinates of all the neihbor atoms
         coord_neighbor_atoms = molecule.get_neighbor_atom_coordinates(idx, depth=2)
 
-        if hyb == 1:
-            coord_atom1 = coord_neighbor_atoms[1][0]
+        coord_atom1 = coord_neighbor_atoms[1][0]
 
+        if hyb == 1:
             # Position of water is linear
             # And we just need the origin atom and the first neighboring atom
             # Example: H donor
@@ -61,8 +61,6 @@ class Kits():
                 hyb = 3
 
         elif hyb == 2:
-            coord_atom1 = coord_neighbor_atoms[1][0]
-
             # Position of water is just above the origin atom
             # We need the 2 direct neighboring atoms of the origin atom
             # Example: Nitrogen
@@ -87,7 +85,6 @@ class Kits():
                 hyb = 3
 
         if hyb == 3:
-            coord_atom1 = coord_neighbor_atoms[1][0]
             coord_atom2 = coord_neighbor_atoms[1][1]
 
             # Position of water is just above the origin atom
