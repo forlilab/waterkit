@@ -1,10 +1,11 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-# Kits
+# WaterKit
 #
 # Utils functions
 #
+
 
 from string import ascii_uppercase
 

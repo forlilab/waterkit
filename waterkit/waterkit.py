@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-# WaterKits
+# WaterKit
 #
-# The core of the WaterKits program
+# The core of the WaterKit program
 #
 
 
@@ -20,7 +20,7 @@ from waterfield import Waterfield
 from optimize import Water_network
 
 
-class Kits():
+class Waterkit():
 
     def __init__(self, waterfield, water_map):
         self._water_map = water_map
@@ -240,8 +240,8 @@ def main():
     ad_map = Autodock_map(map_file)
     water_map = Autodock_map(water_map_file)
 
-    # Go kits!!
-    k = Kits(waterfield, water_map)
+    # Go waterkit!!
+    k = Waterkit(waterfield, water_map)
     waters = k.hydrate(molecule, ad_map, n_layer=3)
 
     # Write output files

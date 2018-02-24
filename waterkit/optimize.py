@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-# Kits
+# WaterKit
 #
 # Class for water network optimizer
 #

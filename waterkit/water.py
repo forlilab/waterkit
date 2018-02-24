@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-# Kits
+# WaterKit
 #
 # Class for water
 #
@@ -117,7 +117,7 @@ class Water(Molecule):
             atom_ids = [2, 3, 5]
             names = ['H_O_004', 'H_O_004', 'O_L_000']
 
-        return atom_ids, names
+        return names, atom_ids
 
     @staticmethod
     def complete_map(waters, ad_map, water_map, water_orientation=[[0, 0, 1], [1, 0, 0]]):

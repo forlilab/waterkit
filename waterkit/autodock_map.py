@@ -1,14 +1,14 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-# Kits
+# WaterKit
 #
 # Class to manage autodock maps
 #
 
 import re
-import numpy as np
 
+import numpy as np
 from scipy.interpolate import RegularGridInterpolator
 
 import utils
