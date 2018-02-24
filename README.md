@@ -1,4 +1,4 @@
-# kits
+# Waterkit
 Tool to predict hydration of molecules
 
 ## Prerequisites
@@ -8,7 +8,6 @@ You need, at a minimum (requirements):
 * OpenBabel
 * Numpy 
 * Scipy
-* Matplotlib
 
 ## Installation
 
@@ -19,5 +18,5 @@ conda install openbabel
 
 ## How-To
 ```bash
-python kits/kits.py --pdbqt protein.mol2 --map protein_maps.fld -f kits/waterfield_0.1.par -w docs/water/water_maps.fld -o water.pdbqt
+python waterkit/waterkit.py --pdbqt protein.mol2 --map protein_maps.fld -f waterkit/waterfield_0.1.par -w docs/water/water_maps.fld -o water.pdbqt
 ```
