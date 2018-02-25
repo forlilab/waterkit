@@ -17,14 +17,14 @@ I highly recommand you to install the Anaconda distribution (https://www.continu
 conda install openbabel
 ```
 
-## How-To
+## How-To (by difficulty level)
 
-### Easy-way
+1 Finger in the nose
 ```bash
 python waterkit/waterkit.py -i protein.mol2 -m protein_maps.fld -o water.pdbqt
 ```
 
-### If you want to provide your own water forcefield or grid map for the water molecule
+2 Raccoon mode
 ```bash
 python waterkit/waterkit.py -i protein.mol2 -m protein_maps.fld -o water.pdbqt -f waterfield.par -w water/maps.fld
 ```
