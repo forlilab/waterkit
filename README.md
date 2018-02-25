@@ -25,9 +25,5 @@ python waterkit/waterkit.py -i protein.mol2 -m protein_maps.fld -o water.pdbqt
 
 * Raccoon mode:
 ```bash
-<<<<<<< HEAD
-python waterkit/waterkit.py --pdbqt protein.mol2 --map protein_maps.fld -f waterkit/waterfield_0.1.par -w docs/water/water_maps.fld -o water.pdbqt
-=======
 python waterkit/waterkit.py -i protein.mol2 -m protein_maps.fld -o water.pdbqt -f waterfield.par -w water/maps.fld
->>>>>>> dev
 ```
