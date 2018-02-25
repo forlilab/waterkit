@@ -18,6 +18,13 @@ conda install openbabel
 ```
 
 ## How-To
+
+### Easy-way
 ```bash
-python kits/kits.py --pdbqt protein.mol2 --map protein_maps.fld -f kits/waterfield_0.1.par -w docs/water/water_maps.fld -o water.pdbqt
+python waterkit/waterkit.py -i protein.mol2 -m protein_maps.fld -o water.pdbqt
+```
+
+### If you want to provide your own water forcefield or grid map for the water molecule
+```bash
+python waterkit/waterkit.py -i protein.mol2 -m protein_maps.fld -o water.pdbqt -f waterfield.par -w water/maps.fld
 ```
