@@ -19,12 +19,12 @@ conda install openbabel
 
 ## How-To (by difficulty level)
 
-1 Finger in the nose
+* Finger in the nose:
 ```bash
 python waterkit/waterkit.py -i protein.mol2 -m protein_maps.fld -o water.pdbqt
 ```
 
-2 Raccoon mode
+* Raccoon mode:
 ```bash
 python waterkit/waterkit.py -i protein.mol2 -m protein_maps.fld -o water.pdbqt -f waterfield.par -w water/maps.fld
 ```
