@@ -1,4 +1,4 @@
-# kits
+# Waterkit
 Tool to predict hydration of molecules
 
 ## Prerequisites
