@@ -14,7 +14,7 @@ from scipy.interpolate import RegularGridInterpolator
 import utils
 
 
-class Autodock_map():
+class Map():
 
     def __init__(self, fld_file):
 

@@ -14,7 +14,7 @@ import numpy as np
 import openbabel as ob
 
 import utils
-from autodock_map import Autodock_map
+from autodock_map import Map
 from molecule import Molecule
 from water import Water
 from waterfield import Waterfield
@@ -236,7 +236,7 @@ def main():
 
     # Read PDBQT/MOL2 file, Waterfield file and AutoDock grid map
     molecule = Molecule(mol_file)
-    ad_map = Autodock_map(map_file)
+    ad_map = Map(map_file)
 
     d = os.path.dirname(sys.modules[__name__].__file__)
 
@@ -247,7 +247,7 @@ def main():
         water_map_file = os.path.join(d, 'data/water/maps.fld')
 
     waterfield = Waterfield(waterfield_file)
-    water_map = Autodock_map(water_map_file)
+    water_map = Map(water_map_file)
 
     # Go waterkit!!
     k = Waterkit(waterfield, water_map)
