@@ -6,6 +6,7 @@
 # Class to manage autodock maps
 #
 
+import os
 import re
 
 import numpy as np
@@ -31,12 +32,12 @@ class Map():
         self._grid = self._generate_cartesian()
 
         # Get the relative folder path from fld_file
-        path = utils.get_folder_path(fld_file)
+        path = os.path.dirname(fld_file)
 
         self._maps_interpn = {}
         # Read all the affinity maps
         for map_type, map_file in self._maps.items():
-            affinity_map = self._read_affinity_map(path + map_file)
+            affinity_map = self._read_affinity_map('%s/%s' % (path, map_file))
 
             self._maps[map_type] = affinity_map
             self._maps_interpn[map_type] = self._generate_affinity_map_interpn(affinity_map)
