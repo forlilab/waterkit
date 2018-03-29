@@ -164,17 +164,20 @@ class Waterkit():
 
         # Optimize waters and complete the map
         waters = n.optimize(waters, ad_map)
+
+        for water in waters:
+            water.energy = water.get_energy(ad_map)
+
         Water.complete_map(waters, ad_map, self._water_map)
 
         water_layers.append(waters)
-
+        
         # Second to N hydration shell!!
         i = 1
         add_waters = True
         previous_waters = waters
 
         while add_waters:
-
             # Stop if we reach the layer i
             # If we choose n_shell equal 0, we will never reach that condition
             # and he will continue forever and ever to add water molecules 
@@ -195,6 +198,9 @@ class Waterkit():
             # Optimize water placement
             waters = n.optimize(waters, ad_map)
 
+            for water in waters:
+                water.energy = water.get_energy(ad_map)
+
             if waters:
                 # Complete map
                 Water.complete_map(waters, ad_map, self._water_map)
@@ -206,8 +212,8 @@ class Waterkit():
 
             i += 1
  
-         # ???
-         # PROFIT!
+        # ???
+        # PROFIT!
          
         return water_layers
       
@@ -251,7 +257,7 @@ def main():
 
     # Go waterkit!!
     k = Waterkit(waterfield, water_map)
-    waters = k.hydrate(molecule, ad_map, n_layer=3)
+    waters = k.hydrate(molecule, ad_map, n_layer=-1)
 
     # Write output files
     utils.write_water(output_file, waters)
