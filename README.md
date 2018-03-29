@@ -16,7 +16,9 @@ I highly recommand you to install the Anaconda distribution (https://www.continu
 conda install openbabel
 ```
 
-## How-To (by difficulty level)
+## Documentation
+
+### Usage
 
 * Finger in the nose:
 ```bash
