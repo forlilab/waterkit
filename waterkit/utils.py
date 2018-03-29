@@ -179,34 +179,26 @@ def write_water(fname, water_layers):
         water_layers = [water_layers]
 
     i, j = 1, 1
-    line = "ATOM  %5d  %-3s HOH%2s%4d    %8.3f%8.3f%8.3f  1.00  1.00    %6.3f %2s\n"
+    ernergy = 1.0
+    line = "ATOM  %5d  %-3s HOH%2s%4d    %8.3f%8.3f%8.3f  1.00%5.2f    %6.3f %2s\n"
 
-    with open(fname, 'w') as w:
-        for waters, chain in zip(water_layers, ascii_uppercase):
+    for waters, chain in zip(water_layers, ascii_uppercase):
+        i, j = 1, 1
+
+        with open('%s_%s.pdbqt' % (fname, chain), 'w') as w:
             for water in waters:
-                coord = water.get_coordinates()
+                c = water.get_coordinates()
+                e = water.energy
 
-                w.write(line % (j, 'O', chain, i, coord[0][0], coord[0][1], coord[0][2], 0, 'O'))
+                w.write(line % (j, 'O', chain, i, c[0][0], c[0][1], c[0][2], e, 0, 'O'))
 
-                if coord.shape[0] == 5:
-                    w.write(line % (j+1, 'H', chain, i, coord[1][0], coord[1][1], coord[1][2], 0.2410, 'HD'))
-                    w.write(line % (j+2, 'H', chain, i, coord[2][0], coord[2][1], coord[2][2], 0.2410, 'HD'))
-                    w.write(line % (j+3, 'LP', chain, i, coord[3][0], coord[3][1], coord[3][2], -0.2410, 'H'))
-                    w.write(line % (j+4, 'LP', chain, i, coord[4][0], coord[4][1], coord[4][2], -0.2410, 'H'))
+                if c.shape[0] == 5:
+                    w.write(line % (j+1, 'H', chain, i, c[1][0], c[1][1], c[1][2], e, 0.2410, 'HD'))
+                    w.write(line % (j+2, 'H', chain, i, c[2][0], c[2][1], c[2][2], e, 0.2410, 'HD'))
+                    w.write(line % (j+3, 'LP', chain, i, c[3][0], c[3][1], c[3][2], e, -0.2410, 'H'))
+                    w.write(line % (j+4, 'LP', chain, i, c[4][0], c[4][1], c[4][2], e, -0.2410, 'H'))
                     j += 4
 
                 i += 1
                 j += 1
 
-def get_folder_path(fname):
-    """
-    Get the relative folder path from fname
-    """
-    path = '.'
-
-    if '/' in fname:
-        path = '/'.join(fname.split('/')[0:-1])
-
-    path += '/'
-
-    return path
