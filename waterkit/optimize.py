@@ -58,9 +58,9 @@ class Water_network():
         # Select coordinates with an angle superior to the choosen angle
         coord_sphere = coord_sphere[angle_sphere >= self.angle]
         # Get energy of all the allowed coordinates (distance + angle)
-        energy_sphere = ad_map.get_energy(coord_sphere, atom_type='O')
+        energy_sphere = ad_map.get_energy(coord_sphere, atom_type='OA')
         # ... and get energy of the oxygen
-        energy_oxygen = ad_map.get_energy(water.get_coordinates(0), atom_type='O')
+        energy_oxygen = ad_map.get_energy(water.get_coordinates(0), atom_type='OA')
 
         if energy_sphere.size:
             # And if we find something better, we update the coordinate
@@ -110,6 +110,8 @@ class Water_network():
 
         opt_rotation = 10
         cluster_distance = 2.
+
+        # Optimize hydroxyl
 
         for water in waters:
             if ad_map.is_in_map(water.get_coordinates(0)[0]):

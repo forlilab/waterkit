@@ -2,13 +2,13 @@ npts 79 79 79
 parameter_file AD4_parameters.dat
 gridfld maps.fld        
 spacing 0.1                        
-receptor_types HD O Lp
-ligand_types HD O Lp
+receptor_types HD OA Lp
+ligand_types HD OA Lp
 receptor water.pdbqt          
 gridcenter 0.0 0.0 0.0     
 smooth 0.5                           
 map HD_water.map
-map O_water.map
+map OA_water.map
 map Lp_water.map
 elecmap e.map
 dsolvmap d.map

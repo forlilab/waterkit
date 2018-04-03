@@ -19,7 +19,7 @@ class Water(Molecule):
     def __init__(self, oxygen, anchor, anchor_type):
         # Create ob molecule and add oxygen atom
         self._OBMol = ob.OBMol()
-        self.add_atom(oxygen, atom_type='O', atom_num=8)
+        self.add_atom(oxygen, atom_type='OA', atom_num=8)
 
         # Store all the informations about the anchoring
         self._anchor = np.array([anchor, anchor + utils.normalize(utils.vector(oxygen, anchor))])
@@ -27,7 +27,7 @@ class Water(Molecule):
 
         self._previous = None
 
-    def add_atom(self, xyz, atom_type='O', atom_num=1, bond=None):
+    def add_atom(self, xyz, atom_type='OA', atom_num=1, bond=None):
         """
         Add an OBAtom to the molecule
         """

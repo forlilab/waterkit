@@ -148,7 +148,7 @@ class Waterkit():
         water_layers = []
 
         # Initialize the water netwrok optimizer
-        n = Water_network(distance=2.8, angle=145, cutoff=0)
+        n = Water_network(distance=2.9, angle=145, cutoff=0)
 
         # First hydration shell!!
         names, atom_ids = molecule.get_available_anchors(self._waterfield, ad_map)
@@ -263,7 +263,7 @@ def main():
     utils.write_water(output_file, waters)
     ad_map.to_map('HD.map', 'HD')
     ad_map.to_map('Lp.map', 'Lp')
-    ad_map.to_map('O.map', 'O')
+    ad_map.to_map('OA.map', 'OA')
 
 if __name__ == '__main__':
     main()
