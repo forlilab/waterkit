@@ -129,7 +129,6 @@ class Water(Molecule):
         map_types = set(ad_map._maps.keys()) & set(water_map._maps.keys())
 
         for water in waters:
-
             o = water.get_coordinates(atom_id=0)[0]
             h1, h2 = water.get_coordinates(atom_id=1)[0], water.get_coordinates(atom_id=2)[0]
 

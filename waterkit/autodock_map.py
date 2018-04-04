@@ -33,6 +33,9 @@ class Map():
 
         # Get the relative folder path from fld_file
         path = os.path.dirname(fld_file)
+        # If there is nothing, it means we are in the current directory
+        if path == '':
+            path = '.'
 
         self._maps_interpn = {}
         # Read all the affinity maps
