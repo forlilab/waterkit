@@ -28,6 +28,15 @@ class Molecule():
         self._OBMol = ob.OBMol()
         obconv.ReadFile(self._OBMol, fname)
 
+        # Remove all implicit hydrogens because OpenBabel
+        # is doing chemical perception, and we want to read the
+        # molecule as is.
+        for x in ob.OBMolAtomIter(self._OBMol):
+            if not x.IsHydrogen() and x.ImplicitHydrogenCount() != 0:
+                x.SetImplicitValence(x.GetValence())
+                # Really, there is no implicit hydrogen
+                x.ForceImplH()
+
     def get_coordinates(self, atom_id=None):
         """
         Return coordinates of all atoms or a certain atom
