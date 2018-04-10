@@ -6,9 +6,12 @@
 # Launch waterkit
 #
 
-
 import argparse
+import imp
+import os
+import sys
 
+from waterkit.waterkit import utils
 from waterkit.waterkit import Waterkit
 from waterkit.autodock_map import Map
 from waterkit.molecule import Molecule
@@ -41,7 +44,7 @@ def main():
     molecule = Molecule(mol_file)
     ad_map = Map(map_file)
 
-    d = os.path.dirname(sys.modules[__name__].__file__)
+    d = imp.find_module('waterkit')[1]
 
     if waterfield_file is None:
         waterfield_file = os.path.join(d, 'data/waterfield.par')
