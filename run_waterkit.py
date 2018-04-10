@@ -24,8 +24,8 @@ def cmd_lineparser():
                         action="store", help="molecule file")
     parser.add_argument("-m", "--map", dest="map_file", required=True,
                         action="store", help="autodock map file")
-    parser.add_argument("-o", "--output", dest="output_file", default='waters.pdbqt',
-                        action="store", help="water molecule file (pdbqt)")
+    parser.add_argument("-o", "--output", dest="output_file", default='water',
+                        action="store", help="prefix add to output files")
     parser.add_argument("-f", "--waterfield", dest="waterfield_file", default=None,
                          action="store", help="waterfield file")
     parser.add_argument("-w", "--watermap", dest="water_map_file", default=None,
@@ -61,9 +61,7 @@ def main():
 
     # Write output files
     k.write_waters(output_file)
-    ad_map.to_map('HD.map', 'HD')
-    ad_map.to_map('Lp.map', 'Lp')
-    ad_map.to_map('OA.map', 'OA')
+    ad_map.to_map(['HD', 'Lp', 'OA'], output_file)
 
 if __name__ == '__main__':
     main()

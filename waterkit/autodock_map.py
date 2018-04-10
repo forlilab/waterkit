@@ -355,22 +355,32 @@ class Map():
                 w.write(line % (i, i, self._grid[0][idx[j][0]], self._grid[1][idx[j][1]], self._grid[2][idx[j][2]], v))
                 i += 1
 
-    def to_map(self, fname, map_type, grid_parameter_file='grid.gpf', 
+    def to_map(self, map_types=None, prefix=None, grid_parameter_file='grid.gpf',
                grid_data_file='maps.fld', macromolecule='molecule.pdbqt'):
-        """
-        Write the AutoDock map in map format
-        """
-        with open(fname, 'w') as w:
+        """Write one or multiple AutoDock map in map format"""
+        if map_types is None:
+            map_types = self._maps.keys()
+        elif not isinstance(map_types, (list, tuple)):
+            map_types = [map_types]
 
-            npts = np.array([n if not n % 2 else n - 1 for n in self._npts])
+        for map_type in map_types:
+            if self._maps.has_key(map_type):
+                filename = '%s.map' % map_type
+                if prefix is not None:
+                    filename = '%s.%s' % (prefix, filename)
 
-            # Write header
-            w.write('GRID_PARAMETER_FILE %s\n' % grid_parameter_file)
-            w.write('GRID_DATA_FILE %s\n' % grid_data_file)
-            w.write('MACROMOLECULE %s\n' % macromolecule)
-            w.write('SPACING %s\n' % self._spacing)
-            w.write('NELEMENTS %s\n' % ' '.join(npts.astype(str)))
-            w.write('CENTER %s\n' % ' '.join(self._center.astype(str)))
-            # Write grid (swap x and z axis before)
-            m = np.swapaxes(self._maps[map_type], 0, 2).flatten()
-            w.write('\n'.join(m.astype(str)))
+                with open(filename, 'w') as w:
+                    npts = np.array([n if not n % 2 else n - 1 for n in self._npts])
+
+                    # Write header
+                    w.write('GRID_PARAMETER_FILE %s\n' % grid_parameter_file)
+                    w.write('GRID_DATA_FILE %s\n' % grid_data_file)
+                    w.write('MACROMOLECULE %s\n' % macromolecule)
+                    w.write('SPACING %s\n' % self._spacing)
+                    w.write('NELEMENTS %s\n' % ' '.join(npts.astype(str)))
+                    w.write('CENTER %s\n' % ' '.join(self._center.astype(str)))
+                    # Write grid (swap x and z axis before)
+                    m = np.swapaxes(self._maps[map_type], 0, 2).flatten()
+                    w.write('\n'.join(m.astype(str)))
+            else:
+                print 'Error: Map %s does not exist.' % map_type
