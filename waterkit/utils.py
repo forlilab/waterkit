@@ -7,8 +7,6 @@
 #
 
 
-from string import ascii_uppercase
-
 import numpy as np
 
 
