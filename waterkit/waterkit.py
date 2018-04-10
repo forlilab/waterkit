@@ -203,7 +203,7 @@ class Waterkit():
         of water molecules until the box is complety full
         """
         waters = []
-        water_layers = []
+        self.water_layers = []
 
         # Initialize the water netwrok optimizer
         n = Water_network(distance=2.9, angle=145, cutoff=0)
@@ -228,7 +228,7 @@ class Waterkit():
 
         self._complete_map(waters, ad_map, self._water_map)
 
-        water_layers.append(waters)
+        self.water_layers.append(waters)
         
         # Second to N hydration shell!!
         i = 1
@@ -264,7 +264,7 @@ class Waterkit():
                 self._complete_map(waters, ad_map, self._water_map)
 
                 previous_waters = waters
-                water_layers.append(waters)
+                self.water_layers.append(waters)
             else:
                 add_waters = False
 
@@ -272,6 +272,30 @@ class Waterkit():
  
         # ???
         # PROFIT!
-         
-        return water_layers
+
+    def write_waters(self, filename):
+        """ Write layers of water in a PDBQT file """
+        i, j = 1, 1
+        ernergy = 1.0
+        line = "ATOM  %5d  %-3s HOH%2s%4d    %8.3f%8.3f%8.3f  1.00%5.2f    %6.3f %2s\n"
+
+        for waters, chain in zip(self.water_layers, ascii_uppercase):
+            i, j = 1, 1
+
+            with open('%s_%s.pdbqt' % (filename, chain), 'w') as w:
+                for water in waters:
+                    c = water.get_coordinates()
+                    e = water.energy
+
+                    w.write(line % (j, 'O', chain, i, c[0][0], c[0][1], c[0][2], e, 0, 'O'))
+
+                    if c.shape[0] == 5:
+                        w.write(line % (j+1, 'H', chain, i, c[1][0], c[1][1], c[1][2], e, 0.2410, 'HD'))
+                        w.write(line % (j+2, 'H', chain, i, c[2][0], c[2][1], c[2][2], e, 0.2410, 'HD'))
+                        w.write(line % (j+3, 'LP', chain, i, c[3][0], c[3][1], c[3][2], e, -0.2410, 'H'))
+                        w.write(line % (j+4, 'LP', chain, i, c[4][0], c[4][1], c[4][2], e, -0.2410, 'H'))
+                        j += 4
+
+                    i += 1
+                    j += 1
       

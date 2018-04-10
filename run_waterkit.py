@@ -57,10 +57,10 @@ def main():
 
     # Go waterkit!!
     k = Waterkit(waterfield, water_map)
-    waters = k.hydrate(molecule, ad_map, n_layer=-1)
+    k.hydrate(molecule, ad_map, n_layer=-1)
 
     # Write output files
-    utils.write_water(output_file, waters)
+    k.write_waters(output_file)
     ad_map.to_map('HD.map', 'HD')
     ad_map.to_map('Lp.map', 'Lp')
     ad_map.to_map('OA.map', 'OA')
