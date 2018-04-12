@@ -6,10 +6,11 @@
 # The core of the WaterKit program
 #
 
-
 import imp
+import sys
 from string import ascii_uppercase
 
+import openbabel as ob
 import numpy as np
 
 import utils
@@ -205,6 +206,8 @@ class Waterkit():
         """
         waters = []
         self.water_layers = []
+        dict_prot_water = {}
+        n_waters = 0
 
         # Initialize the water netwrok optimizer
         n = Water_network(distance=2.9, angle=145, cutoff=0)
@@ -216,10 +219,97 @@ class Waterkit():
             atom_type = self._waterfield.get_atom_types(name)
 
             try:
-                waters.extend(self._place_optimal_water(molecule, atom_type, idx))
+                tmp_waters = self._place_optimal_water(molecule, atom_type, idx)
+                waters.extend(tmp_waters)
+
+                ##### FOR HYDROXYL OPTIMIZATION #####
+                # Save the relation between prot and water
+                for tmp_water in tmp_waters:
+                    if dict_prot_water.has_key(idx):
+                        dict_prot_water[idx].extend([n_waters])
+                    else:
+                        dict_prot_water[idx] = [n_waters]
+
+                    n_waters += 1
             except:
                 print 'Error: Couldn\'t put water(s) on %s using %s atom type' % (idx, name)
                 continue
+
+        ##### FOR HYDROXYL OPTIMIZATION #####
+        # Find all the hydroxyl
+        ob_smarts = ob.OBSmartsPattern()
+        success = ob_smarts.Init('[!#1][!#1][#8;X2;v2;H1][#1]')
+        ob_smarts.Match(molecule._OBMol)
+        matches = list(ob_smarts.GetMapList())
+
+        idx_map = molecule.get_atoms_in_map(ad_map)
+        #atom_children = ob.vectorInt()
+
+        rotation = 10
+        angles = [rotation] * (np.int(np.floor((360 / rotation))) - 1)
+        angles = np.radians(angles)
+
+        for match in matches:
+            if [x for x in match if x in idx_map]:
+
+                #print match
+
+                best_energy = 0
+                hydroxyl_waters = []
+
+                for atom_id in match:
+                    if dict_prot_water.has_key(atom_id):
+                        hydroxyl_waters.extend([waters[i] for i in dict_prot_water[atom_id]])
+
+                hydroxyl_energy = np.array([w.get_energy(ad_map) for w in tmp_waters])
+                # Keep only negative energies
+                hydroxyl_energy[hydroxyl_energy > 0] = 0
+                best_energy += np.sum(hydroxyl_energy)
+                current_angle = np.radians(molecule._OBMol.GetTorsion(match[0], match[1], match[2], match[3]))
+                best_angle = current_angle
+
+                #print best_energy, best_angle
+                #print match, molecule._OBMol.GetTorsion(match[0], match[1], match[2], match[3])
+                #molecule._OBMol.FindChildren(atom_children, match[2], match[3])
+                #print np.array(atom_children)
+
+                for angle in angles:
+                    #print np.degrees(current_angle)
+                    molecule._OBMol.SetTorsion(match[0], match[1], match[2], match[3], current_angle + angle)
+
+                    # Move water molecules HERE
+                    p1 = molecule.get_coordinates(match[1]-1)
+                    p2 = molecule.get_coordinates(match[2]-1)
+
+                    for hydroxyl_water in hydroxyl_waters:
+                        p = hydroxyl_water.get_coordinates()
+                        p_new = utils.rotate_atom(p[0], p1[0], p2[0], -angle)
+                        hydroxyl_water.update_coordinates(p_new, atom_id=0)
+
+                    current_energy = np.array([w.get_energy(ad_map) for w in hydroxyl_waters])
+                    current_energy[current_energy > 0] = 0
+                    current_energy = np.sum(current_energy)
+                    current_angle += angle
+
+                    if current_energy < best_energy:
+                        best_angle = current_angle
+                        best_energy = current_energy
+                        #print best_energy
+
+                # Set the hydroxyl to the best angle
+                molecule._OBMol.SetTorsion(match[0], match[1], match[2], match[3], best_angle)
+                # And also for each water molecule
+                best_angle = np.radians((360 - np.degrees(current_angle)) + np.degrees(best_angle))
+                for hydroxyl_water in hydroxyl_waters:
+                    p = hydroxyl_water.get_coordinates()
+                    p_new = utils.rotate_atom(p[0], p1[0], p2[0], -best_angle)
+                    hydroxyl_water.update_coordinates(p_new, atom_id=0)
+                    # Update also the anchor
+                    #print hydroxyl_water._anchor
+                    anchor = hydroxyl_water._anchor
+                    anchor[0] = utils.rotate_atom(anchor[0], p1[0], p2[0], -best_angle)
+                    anchor[1] = utils.rotate_atom(anchor[1], p1[0], p2[0], -best_angle)
+        ####################################
 
         # Optimize waters and complete the map
         waters = n.optimize(waters, ad_map)
