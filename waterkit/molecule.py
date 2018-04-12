@@ -17,7 +17,6 @@ import utils
 class Molecule():
 
     def __init__(self, fname):
-
         # Get name and file extension
         self.name, file_extension = os.path.splitext(fname)
 
