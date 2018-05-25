@@ -16,38 +16,39 @@ from molecule import Molecule
 
 class Water(Molecule):
 
-    def __init__(self, oxygen, anchor, anchor_type):
+    def __init__(self, oxygen_xyz, oxygen_type, anchor_xyz, anchor_type):
         # Create ob molecule and add oxygen atom
         self._OBMol = ob.OBMol()
-        self.add_atom(oxygen, atom_type='OA', atom_num=8)
+        self.add_atom(oxygen_xyz, atom_type=oxygen_type, atom_num=8)
 
         # Store all the informations about the anchoring
-        self._anchor = np.array([anchor, anchor + utils.normalize(utils.vector(oxygen, anchor))])
+        anchor_vector = anchor_xyz + utils.normalize(utils.vector(oxygen_xyz, anchor_xyz))
+        self._anchor = np.array([anchor_xyz, anchor_vector])
         self._anchor_type = anchor_type
 
         self._previous = None
 
-    def add_atom(self, xyz, atom_type='OA', atom_num=1, bond=None):
+    def add_atom(self, atom_xyz, atom_type='OA', atom_num=1, bond=None):
         """
         Add an OBAtom to the molecule
         """
         a = self._OBMol.NewAtom()
-        a.SetVector(xyz[0], xyz[1], xyz[2])
+        a.SetVector(atom_xyz[0], atom_xyz[1], atom_xyz[2])
         a.SetType(atom_type)
         # Weird thing appends here...
-        # If I remove a.GetType(), the oxygen type become O3 instead of O
+        # If I remove a.GetType(), the oxygen type become O3 instead of OA/HO
         a.GetType()
         a.SetAtomicNum(np.int(atom_num))
 
         if bond is not None and self._OBMol.NumAtoms() >= 1:
             self._OBMol.AddBond(bond[0], bond[1], bond[2])
 
-    def update_coordinates(self, xyz, atom_id):
+    def update_coordinates(self, atom_xyz, atom_id):
         """
         Update the coordinates of an OBAtom
         """
         ob_atom = self._OBMol.GetAtomById(atom_id)
-        ob_atom.SetVector(xyz[0], xyz[1], xyz[2])
+        ob_atom.SetVector(atom_xyz[0], atom_xyz[1], atom_xyz[2])
 
     def get_energy(self, ad_map, atom_id=None):
         """
