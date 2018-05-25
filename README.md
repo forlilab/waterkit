@@ -60,12 +60,10 @@ autogrid4 -p protein_grid.gpf -l protein_grid.glg
 
 ### Predict water molecules position with WaterKit
 
-* Finger in the nose:
+1. Run WaterKit:
 ```bash
 python run_waterkit.py -i protein.mol2 -m protein_maps.fld -o waters
 ```
 
-* Raccoon mode:
-```bash
-python run_waterkit.py -i protein.mol2 -m protein_maps.fld -o waters -f waterfield.par -w water/maps.fld
-```
+2. ???
+3. PROFIT
