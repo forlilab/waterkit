@@ -1,5 +1,5 @@
 # Waterkit
-Tool to predict hydration of molecules
+Tool to predict water molecules placement in ligand binding sites
 
 ## Prerequisites
 
@@ -18,7 +18,47 @@ conda install openbabel
 
 ## Documentation
 
-### Usage
+### Receptor preparation
+1. Conversion to PDBQT using AutoDock Tools
+```bash
+pythonsh prepare_receptor4.py -r protein.pdb -C -o protein.pdbqt
+```
+2. ... and now to mol2 format using OpenBabel
+```bash
+obabel protein.pdbqt -omol2 protein.mol2
+```
+
+### Grid calculation with autogrid4
+1. Create Grid Protein File (GPF)
+```
+npts 20 20 20                        
+parameter_file AD4_parameters.dat
+gridfld protein_maps.fld        
+spacing 0.375
+disorder_h 
+receptor_types A N NA C OA SA HD
+ligand_types OA HD Lp OD
+receptor protein.pdbqt          
+gridcenter 0.0 0.0 0.0      
+smooth 0.5                           
+map protein_OA.map
+map protein_HD.map
+map protein_Lp.map
+map protein_OD.map
+elecmap protein_e.map
+dsolvmap protein_d.map
+dielectric -0.1465
+nbp_r_eps 2.8 0.315 12 10 OD OA
+```
+
+Depending of your system, you would have at least to modify the grid parameters (```npts```, ```gridcenter```) and the receptor atom types list (```receptor_types```). The ```disorder_h``` and ```nbp_r_eps``` options are mandatory in order to optimize the hydroxyl position and to place the spherical water around acceptor atoms (OA). An example of GPF file (```protein_grid.gpf```) as well as the AutoDock parameters (```AD4_parameters.dat```) are provided. Those files are located in the ```data``` directory present in the waterkit package.
+
+2. Run autogrid4
+```bash
+autogrid4 -p protein_grid.gpf -l protein_grid.glg
+```
+
+### Predict water molecules position with WaterKit
 
 * Finger in the nose:
 ```bash
