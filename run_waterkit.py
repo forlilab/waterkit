@@ -61,7 +61,7 @@ def main():
 
     # Write output files
     k.write_waters(output_file)
-    ad_map.to_map(['HD', 'Lp', 'OA'], output_file)
+    ad_map.to_map(['HD', 'Lp', 'OW'], output_file)
 
 if __name__ == '__main__':
     main()
