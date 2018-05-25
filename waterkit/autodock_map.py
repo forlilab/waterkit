@@ -258,8 +258,6 @@ class Map():
         if unselected_types:
             print "Those maps can't be combined: %s" % ', '.join(unselected_types)
 
-        print selected_types, unselected_types
-
         selected_maps = []
 
         # Select maps
