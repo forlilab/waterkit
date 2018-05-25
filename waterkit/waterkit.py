@@ -31,6 +31,7 @@ class Waterkit():
         waters = []
         angles = []
         hyb = atom_type.hyb
+        oxygen_type = 'OW'
         
         if atom_type.hb_type == 1:
             anchor_type = 'donor'
@@ -40,11 +41,11 @@ class Waterkit():
         # It is not the same index
         idx -= 1
         # Get origin atom
-        coord_atom = molecule.get_coordinates(idx)[0]
+        anchor_xyz = molecule.get_coordinates(idx)[0]
         # Get coordinates of all the neihbor atoms
-        coord_neighbor_atoms = molecule.get_neighbor_atom_coordinates(idx, depth=2)
+        neighbors_xyz = molecule.get_neighbor_atom_coordinates(idx, depth=2)
 
-        coord_atom1 = coord_neighbor_atoms[1][0]
+        neighbor1_xyz = neighbors_xyz[1][0]
 
         if hyb == 1:
             # Position of water is linear
@@ -52,7 +53,7 @@ class Waterkit():
             # Example: H donor
             if atom_type.n_water == 1:
                 r = None
-                p = coord_atom + utils.vector(coord_atom1, coord_atom)
+                p = anchor_xyz + utils.vector(neighbor1_xyz, anchor_xyz)
                 angles = [0]
 
             if atom_type.n_water == 3:
@@ -63,87 +64,90 @@ class Waterkit():
             # We need the 2 direct neighboring atoms of the origin atom
             # Example: Nitrogen
             if atom_type.n_water == 1:
-                coord_atom2 = coord_neighbor_atoms[1][1]
+                neighbor2_xyz = neighbors_xyz[1][1]
 
                 r = None
-                p = utils.atom_to_move(coord_atom, [coord_atom1, coord_atom2])
+                p = utils.atom_to_move(anchor_xyz, [neighbor1_xyz, neighbor2_xyz])
                 angles = [0]
 
             # Position of waters are separated by angle of 120 degrees
             # And they are aligned with the neighboring atoms (deep=2) of the origin atom
             # Exemple: Backbone oxygen
             elif atom_type.n_water == 2:
-                coord_atom2 = coord_neighbor_atoms[2][0]
+                neighbor2_xyz = neighbors_xyz[2][0]
 
-                r = utils.rotation_axis(coord_atom1, coord_atom, coord_atom2, origin=coord_atom)
-                p = coord_atom1
+                r = utils.rotation_axis(neighbor1_xyz, anchor_xyz, neighbor2_xyz, origin=anchor_xyz)
+                p = neighbor1_xyz
                 angles = [-np.radians(120), np.radians(120)]
 
             elif atom_type.n_water == 3:
                 hyb = 3
 
         if hyb == 3:
-            coord_atom2 = coord_neighbor_atoms[1][1]
+            neighbor2_xyz = neighbors_xyz[1][1]
 
             # Position of water is just above the origin atom
             # We need the 3 direct neighboring atoms (tetrahedral)
             # Exemple: Ammonia
             if atom_type.n_water == 1:
-                coord_atom3 = coord_neighbor_atoms[1][2]
+                neighbor3_xyz = neighbors_xyz[1][2]
 
                 # We have to normalize bonds, otherwise the water molecule is not well placed
-                v1 = coord_atom + utils.normalize(utils.vector(coord_atom, coord_atom1))
-                v2 = coord_atom + utils.normalize(utils.vector(coord_atom, coord_atom2))
-                v3 = coord_atom + utils.normalize(utils.vector(coord_atom, coord_atom3))
+                v1 = anchor_xyz + utils.normalize(utils.vector(anchor_xyz, neighbor1_xyz))
+                v2 = anchor_xyz + utils.normalize(utils.vector(anchor_xyz, neighbor2_xyz))
+                v3 = anchor_xyz + utils.normalize(utils.vector(anchor_xyz, neighbor3_xyz))
 
                 r = None
-                p = utils.atom_to_move(coord_atom, [v1, v2, v3])
+                p = utils.atom_to_move(anchor_xyz, [v1, v2, v3])
                 angles = [0]
 
             # Position of waters are separated by angle of 109 degrees
             # Tetrahedral geometry, perpendicular with the neighboring atoms of the origin atom
             # Example: Oxygen of the hydroxyl group
             elif atom_type.n_water == 2:
-                v1 = coord_atom + utils.normalize(utils.vector(coord_atom, coord_atom1))
-                v2 = coord_atom + utils.normalize(utils.vector(coord_atom, coord_atom2))
+                v1 = anchor_xyz + utils.normalize(utils.vector(anchor_xyz, neighbor1_xyz))
+                v2 = anchor_xyz + utils.normalize(utils.vector(anchor_xyz, neighbor2_xyz))
 
-                r = coord_atom + utils.normalize(utils.vector(v1, v2))
-                p = utils.atom_to_move(coord_atom, [v1, v2])
+                r = anchor_xyz + utils.normalize(utils.vector(v1, v2))
+                p = utils.atom_to_move(anchor_xyz, [v1, v2])
                 angles = [-np.radians(60), np.radians(60)]
 
             # Position of waters are separated by angle of 109 degrees
             # Tetrahedral geometry, there is no reference so water molecules are placed randomly
             # Example: DMSO
             elif atom_type.n_water == 3:
-                # Vector between coord_atom and the only neighbor atom
-                v = utils.vector(coord_atom, coord_atom1)
+                # Vector between anchor_xyz and the only neighbor atom
+                v = utils.vector(anchor_xyz, neighbor1_xyz)
                 v = utils.normalize(v)
 
                 # Pick a random vector perpendicular to vector v
                 # It will be used as the rotation axis
-                r = coord_atom + utils.get_perpendicular_vector(v)
+                r = anchor_xyz + utils.get_perpendicular_vector(v)
 
                 # And we place a pseudo atom (will be the first water molecule)
-                p = utils.rotate_atom(coord_atom1, coord_atom, r, np.radians(109.47), atom_type.hb_length)
+                p = utils.rotate_atom(neighbor1_xyz, anchor_xyz, r, np.radians(109.47), atom_type.hb_length)
                 # The next rotation axis will be the vector along the neighbor atom and the origin atom 
-                r = coord_atom + utils.normalize(utils.vector(coord_atom1, coord_atom))
+                r = anchor_xyz + utils.normalize(utils.vector(neighbor1_xyz, anchor_xyz))
                 angles = [0, -np.radians(120), np.radians(120)]
 
         # Now we place the water molecule(s)!
         for angle in angles:
-            w = utils.rotate_atom(p, coord_atom, r, angle, atom_type.hb_length)
+            oxygen_xyz = utils.rotate_atom(p, anchor_xyz, r, angle, atom_type.hb_length)
             # Create water molecule
-            waters.append(Water(w, anchor=coord_atom, anchor_type=anchor_type))
+            waters.append(Water(oxygen_xyz, oxygen_type, anchor_xyz, anchor_type))
 
         return waters
 
-    def _complete_map(self, waters, ad_map, water_map, water_orientation=[[0, 0, 1], [1, 0, 0]]):
+    def _complete_map(self, waters, ad_map, water_map, water_orientation=[[0, 0, 1], [1, 0, 0]], choices=None):
 
         x_len = np.int(np.floor(water_map._grid[0].shape[0]/2.) + 5)
         y_len = np.int(np.floor(water_map._grid[1].shape[0]/2.) + 5)
         z_len = np.int(np.floor(water_map._grid[2].shape[0]/2.) + 5)
 
-        map_types = set(ad_map._maps.keys()) & set(water_map._maps.keys())
+        map_types = list(set(ad_map._maps.keys()) & set(water_map._maps.keys()))
+
+        if choices is not None:
+            map_types = list(set(map_types) & set(choices))
 
         for water in waters:
             o = water.get_coordinates(atom_id=0)[0]
@@ -208,6 +212,10 @@ class Waterkit():
         self.water_layers = []
         dict_prot_water = {}
         n_waters = 0
+
+        # Combine OA and HO maps to create the water map
+        ad_map.combine('OW', ['OA', 'OD'], how='best')
+        self._water_map.combine('OW', ['OA', 'OD'], how='best')
 
         # Initialize the water netwrok optimizer
         n = Water_network(distance=2.9, angle=145, cutoff=0)
@@ -317,7 +325,7 @@ class Waterkit():
         for water in waters:
             water.energy = water.get_energy(ad_map)
 
-        self._complete_map(waters, ad_map, self._water_map)
+        self._complete_map(waters, ad_map, self._water_map, choices=['OW', 'HD', 'Lp'])
 
         self.water_layers.append(waters)
         
@@ -352,7 +360,7 @@ class Waterkit():
 
             if waters:
                 # Complete map
-                self._complete_map(waters, ad_map, self._water_map)
+                self._complete_map(waters, ad_map, self._water_map, choices=['OW', 'HD', 'Lp'])
 
                 previous_waters = waters
                 self.water_layers.append(waters)
