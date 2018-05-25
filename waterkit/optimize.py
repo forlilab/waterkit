@@ -45,6 +45,7 @@ class Water_network():
         atom is contrained by the distance and the angle with the anchor
         """
         distance = self.distance
+        oxygen_type = water.get_atom_types(atom_id=0)[0]
 
         # If the anchor type is donor, we have to reduce the 
         # radius by 1 angstrom. Because hydrogen!
@@ -58,9 +59,9 @@ class Water_network():
         # Select coordinates with an angle superior to the choosen angle
         coord_sphere = coord_sphere[angle_sphere >= self.angle]
         # Get energy of all the allowed coordinates (distance + angle)
-        energy_sphere = ad_map.get_energy(coord_sphere, atom_type='OA')
+        energy_sphere = ad_map.get_energy(coord_sphere, atom_type=oxygen_type)
         # ... and get energy of the oxygen
-        energy_oxygen = ad_map.get_energy(water.get_coordinates(0), atom_type='OA')
+        energy_oxygen = ad_map.get_energy(water.get_coordinates(0), atom_type=oxygen_type)
 
         if energy_sphere.size:
             # And if we find something better, we update the coordinate
