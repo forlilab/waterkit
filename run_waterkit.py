@@ -24,6 +24,8 @@ def cmd_lineparser():
                         action="store", help="molecule file")
     parser.add_argument("-m", "--map", dest="map_file", required=True,
                         action="store", help="autodock map file")
+    parser.add_argument("-l", "--layer", dest="n_layer", default=-1,
+                        action="store", help="number of layer to add")
     parser.add_argument("-o", "--output", dest="output_file", default='water',
                         action="store", help="prefix add to output files")
     parser.add_argument("-f", "--waterfield", dest="waterfield_file",
@@ -38,6 +40,7 @@ def main():
     args = cmd_lineparser()
     mol_file = args.mol_file
     map_file = args.map_file
+    n_layer = args.n_layer
     waterfield_file = args.waterfield_file
     output_file = args.output_file
     water_map_file = args.water_map_file
@@ -59,7 +62,7 @@ def main():
 
     # Go waterkit!!
     k = Waterkit(waterfield, water_map)
-    k.hydrate(molecule, ad_map, n_layer=1)
+    k.hydrate(molecule, ad_map, n_layer=n_layer)
 
     # Write output files
     k.write_waters(output_file)
