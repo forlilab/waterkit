@@ -93,8 +93,8 @@ class Water(Molecule):
         # ... and rotate it to build the last H/Lp
         p = utils.atom_to_move(coord_oxygen, [a1, a2])
         r = coord_oxygen + utils.normalize(utils.vector(a1, a2))
-        a3 = utils.rotate_atom(p, coord_oxygen, r, np.radians(a[1]/2), d[3])
-        a4 = utils.rotate_atom(p, coord_oxygen, r, -np.radians(a[1]/2), d[3])
+        a3 = utils.rotate_atom(p, coord_oxygen, r, np.radians(a[1] / 2), d[3])
+        a4 = utils.rotate_atom(p, coord_oxygen, r, -np.radians(a[1] / 2), d[3])
 
         # Add them in this order: H, H, Lp, Lp
         if self._anchor_type == "acceptor":

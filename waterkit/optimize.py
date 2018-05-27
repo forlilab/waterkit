@@ -20,12 +20,9 @@ class Water_network():
         self.distance = distance
         self.angle = angle
         self.cutoff = cutoff
-        #self.alpha = alpha
-        #self.beta = beta
 
     def _cluster_waters(self, waters, distance=2., method='single'):
-        """ Cluster water molecule based on their position using hierarchical clustering
-        """
+        """ Cluster water molecule based on their position using hierarchical clustering """
         coordinates = np.array([w.get_coordinates(atom_id=0)[0] for w in waters])
 
         # Clustering
@@ -41,13 +38,13 @@ class Water_network():
         return water_clusters
 
     def _optimize_position(self, water, ad_map):
-        """ Optimize the position of the oxygen atom. The movement of the 
+        """ Optimize the position of the oxygen atom. The movement of the
         atom is contrained by the distance and the angle with the anchor
         """
         distance = self.distance
         oxygen_type = water.get_atom_types(atom_id=0)[0]
 
-        # If the anchor type is donor, we have to reduce the 
+        # If the anchor type is donor, we have to reduce the
         # radius by 1 angstrom. Because hydrogen!
         if water._anchor_type == 'donor':
             distance -= 1.
@@ -105,18 +102,15 @@ class Water_network():
         water.rotate_water(ref_id, angle=best_angle)
 
     def optimize(self, waters, ad_map):
-
+        """ Optimize position of water molecules """
         opti_waters = []
         uniq_waters = []
 
         opt_rotation = 10
         cluster_distance = 2.
 
-        # Optimize hydroxyl
-
         for water in waters:
             if ad_map.is_in_map(water.get_coordinates(0)[0]):
-
                 # Optimize position, build TIP5P, optimize rotation
                 self._optimize_position(water, ad_map)
                 water.build_tip5p()
@@ -137,7 +131,6 @@ class Water_network():
         # Optimize each cluster
         for cluster in clusters:
             if len(cluster) > 1:
-
                 best_energy = 999.
                 best_water = None
 

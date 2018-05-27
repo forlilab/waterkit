@@ -16,11 +16,13 @@ def vector(a, b):
     """
     return b - a
 
+
 def normalize(a):
     """
     Return a normalized vector
     """
     return a / np.sqrt(np.sum(np.power(a, 2)))
+
 
 def get_perpendicular_vector(u):
     """
@@ -31,11 +33,13 @@ def get_perpendicular_vector(u):
 
     return v
 
+
 def get_euclidean_distance(a, b):
-    """ 
+    """
     Return euclidean distance a (can be multiple coordinates) and b
     """
     return np.sqrt(np.sum(np.power(a - b, 2), axis=1))
+
 
 def get_angle(a, b, c, degree=True):
     """
@@ -54,10 +58,11 @@ def get_angle(a, b, c, degree=True):
 
     return angle
 
+
 def get_rotation_matrix(a, b):
     """
     Return 3D rotation matrix between vectors a and b
-    Sources: 
+    Sources:
     https://stackoverflow.com/questions/45142959/calculate-rotation-matrix-to-align-two-vectors-in-3d-space
     https://math.stackexchange.com/questions/180418/calculate-rotation-matrix-to-align-vector-a-to-vector-b-in-3d/897677
     """
@@ -66,9 +71,10 @@ def get_rotation_matrix(a, b):
     s = np.linalg.norm(v)
     I = np.identity(3)
     k = np.array([[0, -v[2], v[1]], [v[2], 0, -v[0]], [-v[1], v[0], 0]])
-    r = I + k + np.matmul(k, k) * ((1 - c)/(s**2))
+    r = I + k + np.matmul(k, k) * ((1 - c) / (s**2))
 
     return r
+
 
 def rotation_axis(p0, p1, p2, origin=None):
     """
@@ -78,8 +84,9 @@ def rotation_axis(p0, p1, p2, origin=None):
 
     if origin is not None:
         return origin + r
-    
+
     return p0 + r
+
 
 def atom_to_move(o, p):
     """
@@ -89,50 +96,52 @@ def atom_to_move(o, p):
     p = np.atleast_2d(p)
     return o + normalize(-1. * vector(o, np.mean(p, axis=0)))
 
+
 def rotate_3d_point(p, p1, p2, angle):
     """http://paulbourke.net/geometry/rotate/PointRotate.py"""
-    
     # Get the unit vector from the axis p1-p2
     n = p2 - p1
     nm = np.sqrt(np.sum(n ** 2))
     n /= nm
-    
+
     # Setup the rotation matrix
     c = np.cos(angle)
     t = 1. - np.cos(angle)
     s = np.sin(angle)
     x, y, z = n[0], n[1], n[2]
-    
+
     R = np.array([[t*x**2 + c, t*x*y - s*z, t*x*z + s*y],
                  [t*x*y + s*z, t*y**2 + c, t*y*z - s*x],
                  [t*x*z - s*y, t*y*z + s*x, t*z**2 + c]])
-    
+
     # ... and apply it
     ptr = np.dot(p, R)
-    
+
     return ptr
+
 
 def rotate_atom(p, p1, p2, angle=0, length=None):
     # Translate the point we want to rotate to the origin
     pn = p - p1
-    
+
     # Rotate the point if we have to
     if angle != 0:
         pn = rotate_3d_point(pn, p1, p2, angle)
-    
+
     # Change the distance of the point from the origin
     if length is not None:
         pn = normalize(pn) * length
-    
+
     return pn + p1
 
+
 def generate_random_sphere(center, radius=1, size=100):
-    """ 
+    """
     Generate a sphere with random point
     Source: https://www.cmu.edu/biolphys/deserno/pdf/sphere_equi.pdf
     """
     z = np.random.uniform(-radius, radius, size)
-    p = np.random.uniform(0, np.pi*2, size)
+    p = np.random.uniform(0, np.pi * 2, size)
 
     x = np.sqrt(radius**2 - z**2) * np.cos(p)
     y = np.sqrt(radius**2 - z**2) * np.sin(p)
@@ -142,11 +151,11 @@ def generate_random_sphere(center, radius=1, size=100):
 
     return coordinates
 
-def generate_sphere(center, radius=1, size=100):
 
+def generate_sphere(center, radius=1, size=100):
     a = 4 * np.pi * radius**2 / size
     d = np.sqrt(a)
-    
+
     M_v = np.int(np.round(np.pi / d))
     d_v = np.pi / M_v
     d_p = a / d_v

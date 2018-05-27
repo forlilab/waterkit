@@ -111,7 +111,7 @@ class Map():
         y = np.linspace(self._ymin, self._ymax, self._npts[1])
         z = np.linspace(self._zmin, self._zmax, self._npts[2])
 
-        # We use a tuple of numpy arrays and not a complete numpy array 
+        # We use a tuple of numpy arrays and not a complete numpy array
         # because otherwise the output will be different if the grid is cubic or not
         arr = tuple([x, y, z])
 
@@ -125,9 +125,9 @@ class Map():
         idx = np.atleast_2d(idx)
 
         # Get coordinates x, y, z
-        x = self._grid[0][idx[:,0]]
-        y = self._grid[1][idx[:,1]]
-        z = self._grid[2][idx[:,2]]
+        x = self._grid[0][idx[:, 0]]
+        y = self._grid[1][idx[:, 1]]
+        z = self._grid[2][idx[:, 2]]
 
         # Column: x, y, z
         arr = np.stack((x, y, z), axis=-1)
@@ -159,13 +159,13 @@ class Map():
         and return a boolean numpy array
         """
         xyz = np.atleast_2d(xyz)
-        x, y, z = xyz[:,0], xyz[:,1], xyz[:,2]
+        x, y, z = xyz[:, 0], xyz[:, 1], xyz[:, 2]
 
         x_in = np.logical_and(self._xmin <= x, x <= self._xmax)
         y_in = np.logical_and(self._ymin <= y, y <= self._ymax)
         z_in = np.logical_and(self._zmin <= z, z <= self._zmax)
         all_in = np.all((x_in, y_in, z_in), axis=0)
-        #all_in = np.logical_and(np.logical_and(x_in, y_in), z_in)
+        # all_in = np.logical_and(np.logical_and(x_in, y_in), z_in)
 
         return all_in
 
@@ -198,7 +198,7 @@ class Map():
             if idx[i] + n < self._npts[i]:
                 imax.append(idx[i] + n)
             else:
-                imax.append(self._npts[i]-1)
+                imax.append(self._npts[i] - 1)
 
         x = np.arange(imin[0], imax[0] + 1)
         y = np.arange(imin[1], imax[1] + 1)
@@ -220,7 +220,7 @@ class Map():
         Funtion to combine autodock map together
         """
         same_grid = True
-        indices = np.index_exp[:,:,:]
+        indices = np.index_exp[:, :, :]
 
         if ad_map is not None:
             # Check if the grid are the same between the two ad_maps
@@ -277,7 +277,7 @@ class Map():
 
                     selected_maps.append(energy)
 
-        if not self._maps.has_key(name):
+        if name not in self._maps:
             self._maps[name] = np.zeros(self._npts)
 
         # Combine all the maps
@@ -302,7 +302,7 @@ class Map():
 
         # Keep only unique point
         # We don't want to store the whole grid
-        new_grid = tuple((np.unique(grid[:,0]), np.unique(grid[:,1]), np.unique(grid[:,2])))
+        new_grid = tuple((np.unique(grid[:, 0]), np.unique(grid[:, 1]), np.unique(grid[:, 2])))
 
         self.update_grid(new_grid)
 
@@ -311,7 +311,7 @@ class Map():
         Update the grid and all the information derived (center, map_interpn..)
         """
         # Make sure that the new grid has the same dimension as the old one
-        same_shape = all([x.size == y.size for x,y in zip(self._grid, new_grid)])
+        same_shape = all([x.size == y.size for x, y in zip(self._grid, new_grid)])
 
         if same_shape is True:
 
@@ -362,7 +362,7 @@ class Map():
             map_types = [map_types]
 
         for map_type in map_types:
-            if self._maps.has_key(map_type):
+            if map_type in self._maps:
                 filename = '%s.map' % map_type
                 if prefix is not None:
                     filename = '%s.%s' % (prefix, filename)

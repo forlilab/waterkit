@@ -23,7 +23,7 @@ class Molecule():
         # Read PDBQT file
         obconv = ob.OBConversion()
         obconv.SetInFormat(file_extension)
-        
+
         self._OBMol = ob.OBMol()
         obconv.ReadFile(self._OBMol, fname)
 
@@ -114,7 +114,7 @@ class Molecule():
                         break
 
             return idx
-    
+
     def is_clash(self, xyz, molecule=None, radius=None):
         """
         Check if there is a clash between a coordinate xyz and itself or another molecule
@@ -123,18 +123,18 @@ class Molecule():
             atoms = molecule.get_coordinates()
         else:
             atoms = self.get_coordinates()
-        
+
         # Compute all distances between atom and all other atoms
         d = utils.get_euclidean_distance(xyz, atoms)
 
         # Remove radius
         if radius is not None:
             d -= radius
-        
+
         # Strictly inferior, otherwise it is always False because of itself
         if (d < 0.).any():
             return True
-        
+
         return False
 
     def _push_atom_to_end(self, lst, atomic_nums):
@@ -147,7 +147,7 @@ class Molecule():
         for atomic_num in atomic_nums:
             pop_count = 0
 
-            idx = [i for i,x in enumerate(lst) if x.GetAtomicNum() == atomic_num]
+            idx = [i for i, x in enumerate(lst) if x.GetAtomicNum() == atomic_num]
 
             for i in idx:
                 lst.append(lst.pop(i - pop_count))
@@ -167,12 +167,12 @@ class Molecule():
 
         if not hydrogen:
             atomic_num_to_keep = 2
-        
+
         while queue:
             i, d = queue.pop(0)
-            
+
             ob_atom = self._OBMol.GetAtomById(np.int(i))
-            
+
             # If we construct the data structure before [[n], [n1, n2, ...], ...]
             # and because the depth is too large compared to the molecule
             # we will have some extra [] not filled
@@ -183,30 +183,30 @@ class Molecule():
                 neighbors[d].append(ob_atom)
 
             visited[i] = True
-            
+
             if d < depth:
                 for a in ob.OBAtomAtomIter(ob_atom):
                     if not visited[a.GetId()] and a.GetAtomicNum() >= atomic_num_to_keep:
-                        queue.append((a.GetId(), d+1))
+                        queue.append((a.GetId(), d + 1))
 
         # We push all the hydrogen (= 1) atom to the end
         neighbors = [self._push_atom_to_end(x, 1) for x in neighbors]
 
         return neighbors
-    
+
     def get_neighbor_atom_coordinates(self, id_atom, depth=1, hydrogen=True):
         """
-        Return a nested list of all the coordinates of all the neighbor 
+        Return a nested list of all the coordinates of all the neighbor
         atoms by following the bond connectivity
         """
         coords = []
-        
+
         atoms = self.get_neighbor_atoms(id_atom, depth, hydrogen)
-        
+
         for level in atoms:
             tmp = [[ob_atom.GetX(), ob_atom.GetY(), ob_atom.GetZ()] for ob_atom in level]
             coords.append(np.array(tmp))
-            
+
         return coords
 
     def get_available_anchors(self, waterfield, ad_map=None):

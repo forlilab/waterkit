@@ -26,11 +26,13 @@ def cmd_lineparser():
                         action="store", help="autodock map file")
     parser.add_argument("-o", "--output", dest="output_file", default='water',
                         action="store", help="prefix add to output files")
-    parser.add_argument("-f", "--waterfield", dest="waterfield_file", default=None,
-                         action="store", help="waterfield file")
-    parser.add_argument("-w", "--watermap", dest="water_map_file", default=None,
-                        action="store", help="water autodock map file")
+    parser.add_argument("-f", "--waterfield", dest="waterfield_file",
+                        default=None, action="store", help="waterfield file")
+    parser.add_argument("-w", "--watermap", dest="water_map_file",
+                        default=None, action="store",
+                        help="water autodock map file")
     return parser.parse_args()
+
 
 def main():
     args = cmd_lineparser()
@@ -57,7 +59,7 @@ def main():
 
     # Go waterkit!!
     k = Waterkit(waterfield, water_map)
-    k.hydrate(molecule, ad_map, n_layer=-1)
+    k.hydrate(molecule, ad_map, n_layer=1)
 
     # Write output files
     k.write_waters(output_file)

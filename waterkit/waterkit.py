@@ -23,16 +23,16 @@ class Waterkit():
     def __init__(self, waterfield=None, water_map=None):
         self._water_map = water_map
         self._waterfield = waterfield
-    
+
     def _place_optimal_water(self, molecule, atom_type, idx):
-        """Place one or multiple water molecules in the ideal position 
+        """Place one or multiple water molecules in the ideal position
         above an acceptor or donor atom
         """
         waters = []
         angles = []
         hyb = atom_type.hyb
         oxygen_type = 'OW'
-        
+
         if atom_type.hb_type == 1:
             anchor_type = 'donor'
         else:
@@ -126,7 +126,7 @@ class Waterkit():
 
                 # And we place a pseudo atom (will be the first water molecule)
                 p = utils.rotate_atom(neighbor1_xyz, anchor_xyz, r, np.radians(109.47), atom_type.hb_length)
-                # The next rotation axis will be the vector along the neighbor atom and the origin atom 
+                # The next rotation axis will be the vector along the neighbor atom and the origin atom
                 r = anchor_xyz + utils.normalize(utils.vector(neighbor1_xyz, anchor_xyz))
                 angles = [0, -np.radians(120), np.radians(120)]
 
@@ -140,9 +140,9 @@ class Waterkit():
 
     def _complete_map(self, waters, ad_map, water_map, water_orientation=[[0, 0, 1], [1, 0, 0]], choices=None):
 
-        x_len = np.int(np.floor(water_map._grid[0].shape[0]/2.) + 5)
-        y_len = np.int(np.floor(water_map._grid[1].shape[0]/2.) + 5)
-        z_len = np.int(np.floor(water_map._grid[2].shape[0]/2.) + 5)
+        x_len = np.int(np.floor(water_map._grid[0].shape[0] / 2.) + 5)
+        y_len = np.int(np.floor(water_map._grid[1].shape[0] / 2.) + 5)
+        z_len = np.int(np.floor(water_map._grid[2].shape[0] / 2.) + 5)
 
         map_types = list(set(ad_map._maps.keys()) & set(water_map._maps.keys()))
 
@@ -163,9 +163,9 @@ class Waterkit():
             iz_min = iz - z_len if iz - z_len >= 0 else 0
             iz_max = iz + z_len
 
-            x = ad_map._grid[0][ix_min:ix_max+1]
-            y = ad_map._grid[1][iy_min:iy_max+1]
-            z = ad_map._grid[2][iz_min:iz_max+1]
+            x = ad_map._grid[0][ix_min:ix_max + 1]
+            y = ad_map._grid[1][iy_min:iy_max + 1]
+            z = ad_map._grid[2][iz_min:iz_max + 1]
 
             X, Y, Z = np.meshgrid(x, y, z)
             grid = np.stack((X.ravel(), Y.ravel(), Z.ravel()), axis=-1)
@@ -198,14 +198,14 @@ class Waterkit():
                 energy = np.swapaxes(energy, 0, 1)
 
                 # Add it to the existing grid
-                ad_map._maps[map_type][ix_min:ix_max+1, iy_min:iy_max+1, iz_min:iz_max+1] += energy
+                ad_map._maps[map_type][ix_min:ix_max + 1, iy_min:iy_max + 1, iz_min:iz_max + 1] += energy
 
         # Update interpolator
         for map_type in map_types:
             ad_map._maps_interpn[map_type] = ad_map._generate_affinity_map_interpn(ad_map._maps[map_type])
-    
+
     def hydrate(self, molecule, ad_map, n_layer=0):
-        """Hydrate the molecule by adding successive layers 
+        """Hydrate the molecule by adding successive layers
         of water molecules until the box is complety full
         """
         waters = []
@@ -230,10 +230,10 @@ class Waterkit():
                 tmp_waters = self._place_optimal_water(molecule, atom_type, idx)
                 waters.extend(tmp_waters)
 
-                ##### FOR HYDROXYL OPTIMIZATION #####
+                # #### FOR HYDROXYL OPTIMIZATION #####
                 # Save the relation between prot and water
                 for tmp_water in tmp_waters:
-                    if dict_prot_water.has_key(idx):
+                    if idx in dict_prot_water:
                         dict_prot_water[idx].extend([n_waters])
                     else:
                         dict_prot_water[idx] = [n_waters]
@@ -243,7 +243,7 @@ class Waterkit():
                 print 'Error: Couldn\'t put water(s) on %s using %s atom type' % (idx, name)
                 continue
 
-        ##### FOR HYDROXYL OPTIMIZATION #####
+        # #### FOR HYDROXYL OPTIMIZATION #####
         # Find all the hydroxyl
         ob_smarts = ob.OBSmartsPattern()
         success = ob_smarts.Init('[!#1][!#1][#8;X2;v2;H1][#1]')
@@ -251,7 +251,7 @@ class Waterkit():
         matches = list(ob_smarts.GetMapList())
 
         idx_map = molecule.get_atoms_in_map(ad_map)
-        #atom_children = ob.vectorInt()
+        # atom_children = ob.vectorInt()
 
         rotation = 10
         angles = [rotation] * (np.int(np.floor((360 / rotation))) - 1)
@@ -259,14 +259,11 @@ class Waterkit():
 
         for match in matches:
             if [x for x in match if x in idx_map]:
-
-                #print match
-
                 best_energy = 0
                 hydroxyl_waters = []
 
                 for atom_id in match:
-                    if dict_prot_water.has_key(atom_id):
+                    if atom_id in dict_prot_water:
                         hydroxyl_waters.extend([waters[i] for i in dict_prot_water[atom_id]])
 
                 hydroxyl_energy = np.array([w.get_energy(ad_map) for w in tmp_waters])
@@ -276,18 +273,18 @@ class Waterkit():
                 current_angle = np.radians(molecule._OBMol.GetTorsion(match[0], match[1], match[2], match[3]))
                 best_angle = current_angle
 
-                #print best_energy, best_angle
-                #print match, molecule._OBMol.GetTorsion(match[0], match[1], match[2], match[3])
-                #molecule._OBMol.FindChildren(atom_children, match[2], match[3])
-                #print np.array(atom_children)
+                # print best_energy, best_angle
+                # print match, molecule._OBMol.GetTorsion(match[0], match[1], match[2], match[3])
+                # molecule._OBMol.FindChildren(atom_children, match[2], match[3])
+                # print np.array(atom_children)
 
                 for angle in angles:
-                    #print np.degrees(current_angle)
+                    # print np.degrees(current_angle)
                     molecule._OBMol.SetTorsion(match[0], match[1], match[2], match[3], current_angle + angle)
 
                     # Move water molecules HERE
-                    p1 = molecule.get_coordinates(match[1]-1)
-                    p2 = molecule.get_coordinates(match[2]-1)
+                    p1 = molecule.get_coordinates(match[1] - 1)
+                    p2 = molecule.get_coordinates(match[2] - 1)
 
                     for hydroxyl_water in hydroxyl_waters:
                         p = hydroxyl_water.get_coordinates()
@@ -302,7 +299,7 @@ class Waterkit():
                     if current_energy < best_energy:
                         best_angle = current_angle
                         best_energy = current_energy
-                        #print best_energy
+                        # print best_energy
 
                 # Set the hydroxyl to the best angle
                 molecule._OBMol.SetTorsion(match[0], match[1], match[2], match[3], best_angle)
@@ -313,7 +310,7 @@ class Waterkit():
                     p_new = utils.rotate_atom(p[0], p1[0], p2[0], -best_angle)
                     hydroxyl_water.update_coordinates(p_new, atom_id=0)
                     # Update also the anchor
-                    #print hydroxyl_water._anchor
+                    # print hydroxyl_water._anchor
                     anchor = hydroxyl_water._anchor
                     anchor[0] = utils.rotate_atom(anchor[0], p1[0], p2[0], -best_angle)
                     anchor[1] = utils.rotate_atom(anchor[1], p1[0], p2[0], -best_angle)
@@ -328,7 +325,7 @@ class Waterkit():
         self._complete_map(waters, ad_map, self._water_map, choices=['OW', 'HD', 'Lp'])
 
         self.water_layers.append(waters)
-        
+
         # Second to N hydration shell!!
         i = 1
         add_waters = True
@@ -337,7 +334,7 @@ class Waterkit():
         while add_waters:
             # Stop if we reach the layer i
             # If we choose n_shell equal 0, we will never reach that condition
-            # and he will continue forever and ever to add water molecules 
+            # and he will continue forever and ever to add water molecules
             # until the box is full of water molecules
             if i == n_layer:
                 break
@@ -351,7 +348,7 @@ class Waterkit():
                 for name, idx in zip(names, atom_ids):
                     atom_type = self._waterfield.get_atom_types(name)
                     waters.extend(self._place_optimal_water(water, atom_type, idx))
- 
+
             # Optimize water placement
             waters = n.optimize(waters, ad_map)
 
@@ -368,7 +365,7 @@ class Waterkit():
                 add_waters = False
 
             i += 1
- 
+
         # ???
         # PROFIT!
 
@@ -384,17 +381,20 @@ class Waterkit():
             with open('%s_%s.pdbqt' % (filename, chain), 'w') as w:
                 for water in waters:
                     c = water.get_coordinates()
-                    e = water.energy
 
-                    w.write(line % (j, 'O', chain, i, c[0][0], c[0][1], c[0][2], e, 0, 'O'))
+                    try:
+                        e = water.energy
+                    except:
+                        e = 0.0
+
+                    w.write(line % (j, 'O', chain, i, c[0][0], c[0][1], c[0][2], e, 0, 'OA'))
 
                     if c.shape[0] == 5:
-                        w.write(line % (j+1, 'H', chain, i, c[1][0], c[1][1], c[1][2], e, 0.2410, 'HD'))
-                        w.write(line % (j+2, 'H', chain, i, c[2][0], c[2][1], c[2][2], e, 0.2410, 'HD'))
-                        w.write(line % (j+3, 'LP', chain, i, c[3][0], c[3][1], c[3][2], e, -0.2410, 'H'))
-                        w.write(line % (j+4, 'LP', chain, i, c[4][0], c[4][1], c[4][2], e, -0.2410, 'H'))
+                        w.write(line % (j + 1, 'H', chain, i, c[1][0], c[1][1], c[1][2], e, 0.2410, 'HD'))
+                        w.write(line % (j + 2, 'H', chain, i, c[2][0], c[2][1], c[2][2], e, 0.2410, 'HD'))
+                        w.write(line % (j + 3, 'LP', chain, i, c[3][0], c[3][1], c[3][2], e, -0.2410, 'Lp'))
+                        w.write(line % (j + 4, 'LP', chain, i, c[4][0], c[4][1], c[4][2], e, -0.2410, 'Lp'))
                         j += 4
 
                     i += 1
                     j += 1
-      

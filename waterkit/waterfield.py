@@ -86,7 +86,7 @@ class Waterfield():
         """
         if name is None:
             return self._atom_types
-        elif self._atom_types.has_key(name):
+        elif name in self._atom_types:
             return self._atom_types[name]
         else:
             return None
@@ -94,7 +94,7 @@ class Waterfield():
     def get_matches(self, name, molecule):
         """Return matches using smarts on the molecule
         """
-        if self._atom_types.has_key(name):
+        if name in self._atom_types:
             atom_type = self._atom_types[name]
 
             if atom_type.ob_smarts is not None:
@@ -106,5 +106,3 @@ class Waterfield():
             matches = []
 
         return matches
-
-
