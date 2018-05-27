@@ -7,7 +7,7 @@
 #ATOM H_000    1   0.000 1 1 1.8 [#1] # all hydrogens
 
 ## HC
-#ATOM H_C_000  0   0.000 1 1 1.8 [#1][#6] # all CH
+ATOM H_C_000  0   0.000 1 1 1.8 [#1][#6] # all CH
 ATOM H_C_001  1   0.500 1 1 1.8 [#1][#6;X2] # acetylene
 ATOM H_C_002  1   0.250 1 1 1.8 [#1][#6;X3] # ethylene / benzene
 ATOM H_C_003  1   0.120 1 1 1.8 [#1][#6;X4] # methane
@@ -34,7 +34,7 @@ ATOM H_S_002  1   0.700 1 1 1.8 [#1;X1][#16;X2;v2;H1][a] # Ar-SH (benzenethiol-l
 
 # Oxygen
 ## O
-ATOM O_000     2   0.000 1 2 2.8 [#8] # all oxygens
+ATOM O_000     2   0.000 2 2 2.8 [#8] # all oxygens
 ATOM O_001     2   0.900 2 2 2.8 [#8;X1;v2]=[#6;X3;v4][*] # in acetone / ester(sp2) / aldehyde
 ATOM O_002     2   0.900 2 2 2.8 [#8;X1;v2]=[#6;X3;v4]([#6])[#6,#1] # in acetone / aldehyde
 ATOM O_003     2   0.900 2 2 2.8 [#8;X1;v2]=[#6;X3;v4]([a]) # acetophenone
