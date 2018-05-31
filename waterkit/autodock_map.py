@@ -8,6 +8,7 @@
 
 import os
 import re
+import copy
 
 import numpy as np
 from scipy.interpolate import RegularGridInterpolator
@@ -214,6 +215,9 @@ class Map():
         selected_coordinates = coordinates[(distance >= min_radius) & (distance <= max_radius)]
 
         return selected_coordinates
+
+    def copy(self):
+        return copy.deepcopy(self)
 
     def combine(self, name, atom_types, how='best', ad_map=None):
         """
