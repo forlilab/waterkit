@@ -327,12 +327,6 @@ class Map():
             for map_type in self._maps.iterkeys():
                 self._maps_interpn[map_type] = self._generate_affinity_map_interpn(self._maps[map_type])
 
-    def get_volume(self, atom_type, min_energy=0.):
-        count = (self._maps[atom_type] >= min_energy).sum()
-        volume = count * (self._spacing ** 3)
-
-        return volume
-
     def to_pdb(self, fname, map_type, max_energy=None):
         """
         Write the AutoDock map in a PDB file
