@@ -24,6 +24,9 @@ class Waterkit():
         self._water_map = water_map
         self._waterfield = waterfield
 
+        self.water_layers = []
+        self.map_layers = []
+
     def _place_optimal_water(self, molecule, atom_type, idx):
         """Place one or multiple water molecules in the ideal position
         above an acceptor or donor atom
@@ -209,7 +212,6 @@ class Waterkit():
         of water molecules until the box is complety full
         """
         waters = []
-        self.water_layers = []
         dict_prot_water = {}
         n_waters = 0
 
@@ -322,9 +324,11 @@ class Waterkit():
         for water in waters:
             water.energy = water.get_energy(ad_map)
 
-        self._complete_map(waters, ad_map, self._water_map, choices=['OW', 'HD', 'Lp'])
-
+        # Save the map and the water layer before updating the map
+        self.map_layers.append(ad_map.copy())
         self.water_layers.append(waters)
+
+        self._complete_map(waters, ad_map, self._water_map, choices=['OW', 'HD', 'Lp'])
 
         # Second to N hydration shell!!
         i = 1
@@ -356,11 +360,13 @@ class Waterkit():
                 water.energy = water.get_energy(ad_map)
 
             if waters:
-                # Complete map
+                # Save the map and the water layer before updating the map
+                self.map_layers.append(ad_map.copy())
+                self.water_layers.append(waters)
+
                 self._complete_map(waters, ad_map, self._water_map, choices=['OW', 'HD', 'Lp'])
 
                 previous_waters = waters
-                self.water_layers.append(waters)
             else:
                 add_waters = False
 
@@ -392,9 +398,14 @@ class Waterkit():
                     if c.shape[0] == 5:
                         w.write(line % (j + 1, 'H', chain, i, c[1][0], c[1][1], c[1][2], e, 0.2410, 'HD'))
                         w.write(line % (j + 2, 'H', chain, i, c[2][0], c[2][1], c[2][2], e, 0.2410, 'HD'))
-                        w.write(line % (j + 3, 'LP', chain, i, c[3][0], c[3][1], c[3][2], e, -0.2410, 'Lp'))
-                        w.write(line % (j + 4, 'LP', chain, i, c[4][0], c[4][1], c[4][2], e, -0.2410, 'Lp'))
+                        w.write(line % (j + 3, 'H', chain, i, c[3][0], c[3][1], c[3][2], e, -0.2410, 'Lp'))
+                        w.write(line % (j + 4, 'H', chain, i, c[4][0], c[4][1], c[4][2], e, -0.2410, 'Lp'))
                         j += 4
 
                     i += 1
                     j += 1
+
+    def write_maps(self, prefix, map_types=None):
+        """ Write maps for each layer of water molecules """
+        for map_layer in self._map_layers:
+            map_layer.to_map(map_types, prefix)
