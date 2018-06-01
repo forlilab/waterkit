@@ -26,7 +26,7 @@ def cmd_lineparser():
                         action="store", help="autodock map file")
     parser.add_argument("-l", "--layer", dest="n_layer", default=-1,
                         action="store", help="number of layer to add")
-    parser.add_argument("-o", "--output", dest="output_file", default='water',
+    parser.add_argument("-o", "--output", dest="output_prefix", default='water',
                         action="store", help="prefix add to output files")
     parser.add_argument("-f", "--waterfield", dest="waterfield_file",
                         default=None, action="store", help="waterfield file")
@@ -42,7 +42,7 @@ def main():
     map_file = args.map_file
     n_layer = args.n_layer
     waterfield_file = args.waterfield_file
-    output_file = args.output_file
+    output_prefix = args.output_prefix
     water_map_file = args.water_map_file
 
     # Read PDBQT/MOL2 file, Waterfield file and AutoDock grid map
@@ -65,8 +65,8 @@ def main():
     k.hydrate(molecule, ad_map, n_layer=n_layer)
 
     # Write output files
-    k.write_waters(output_file)
-    ad_map.to_map(['HD', 'Lp', 'OW'], output_file)
+    k.write_waters(output_prefix)
+    k.write_maps(output_prefix, ['HD', 'Lp', 'OW'])
 
 if __name__ == '__main__':
     main()
