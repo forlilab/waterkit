@@ -375,7 +375,7 @@ class Waterkit():
         # ???
         # PROFIT!
 
-    def write_waters(self, filename):
+    def write_waters(self, prefix):
         """ Write layers of water in a PDBQT file """
         i, j = 1, 1
         ernergy = 1.0
@@ -384,7 +384,9 @@ class Waterkit():
         for waters, chain in zip(self.water_layers, ascii_uppercase):
             i, j = 1, 1
 
-            with open('%s_%s.pdbqt' % (filename, chain), 'w') as w:
+            fname = '%s_%s.pdbqt' % (prefix, chain)
+
+            with open(fname, 'w') as w:
                 for water in waters:
                     c = water.get_coordinates()
 
@@ -407,5 +409,5 @@ class Waterkit():
 
     def write_maps(self, prefix, map_types=None):
         """ Write maps for each layer of water molecules """
-        for map_layer in self._map_layers:
-            map_layer.to_map(map_types, prefix)
+        for map_layer, chain in zip(self.map_layers, ascii_uppercase):
+            map_layer.to_map(map_types, '%s_%s' % (prefix, chain))
