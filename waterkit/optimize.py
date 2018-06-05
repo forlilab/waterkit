@@ -111,14 +111,19 @@ class Water_network():
 
         for water in waters:
             if ad_map.is_in_map(water.get_coordinates(0)[0]):
-                # Optimize position, build TIP5P, optimize rotation
+                # Optimize the position of the spherical water
                 self._optimize_position(water, ad_map)
-                water.build_tip5p()
-                self._optimize_rotation(water, ad_map, rotation=opt_rotation)
 
-                # Check energy
+                # Before going further we check the energy
                 if water.get_energy(ad_map) <= self.cutoff:
-                    opti_waters.append(water)
+                    # ... and we build the TIP5
+                    water.build_tip5p()
+                    # ... and optimize the rotation
+                    self._optimize_rotation(water, ad_map, rotation=opt_rotation)
+
+                    # Again, we check the energy and if it is good we keep it
+                    if water.get_energy(ad_map) <= self.cutoff:
+                        opti_waters.append(water)
 
         if len(opti_waters) > 1:
             # Identify clusters of waters
