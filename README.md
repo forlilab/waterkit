@@ -19,11 +19,15 @@ conda install openbabel
 ## Documentation
 
 ### Receptor preparation
-1. Conversion to PDBQT using AutoDock Tools
+1. Add hydrogen atoms and optimize side-chains
 ```bash
-pythonsh prepare_receptor4.py -r protein.pdb -C -o protein.pdbqt
+reduce -FLIP protein.pdb > protein_reduce.pdb
 ```
-2. ... and now to mol2 format using OpenBabel
+2. Conversion to PDBQT using AutoDock Tools
+```bash
+pythonsh prepare_receptor4.py -r protein_reduce.pdb -A 'None' -o protein.pdbqt
+```
+3. ... and now to mol2 format using OpenBabel
 ```bash
 obabel protein.pdbqt -omol2 protein.mol2
 ```
