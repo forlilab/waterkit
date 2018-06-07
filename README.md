@@ -19,7 +19,7 @@ conda install openbabel
 ## Documentation
 
 ### Receptor preparation
-1. Add hydrogen atoms and optimize side-chains
+1. Add hydrogen atoms and optimize side-chains using REDUCE
 ```bash
 reduce -FLIP protein.pdb > protein_reduce.pdb
 ```
