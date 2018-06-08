@@ -97,12 +97,15 @@ def atom_to_move(o, p):
     return o + normalize(-1. * vector(o, np.mean(p, axis=0)))
 
 
-def rotate_3d_point(p, p1, p2, angle):
-    """http://paulbourke.net/geometry/rotate/PointRotate.py"""
+def rotate_point(p, p1, p2, angle):
+    """ Rotate the point p around the axis p1-p2
+    Source: http://paulbourke.net/geometry/rotate/PointRotate.py"""
+    # Translate the point we want to rotate to the origin
+    pn = p - p1
+
     # Get the unit vector from the axis p1-p2
     n = p2 - p1
-    nm = np.sqrt(np.sum(n ** 2))
-    n /= nm
+    n = normalize(n)
 
     # Setup the rotation matrix
     c = np.cos(angle)
@@ -115,24 +118,20 @@ def rotate_3d_point(p, p1, p2, angle):
                  [t*x*z - s*y, t*y*z + s*x, t*z**2 + c]])
 
     # ... and apply it
-    ptr = np.dot(p, R)
+    ptr = np.dot(pn, R)
 
-    return ptr
+    # And to finish, we put it back
+    p = ptr + p1
+
+    return p
 
 
-def rotate_atom(p, p1, p2, angle=0, length=None):
-    # Translate the point we want to rotate to the origin
-    pn = p - p1
-
-    # Rotate the point if we have to
-    if angle != 0:
-        pn = rotate_3d_point(pn, p1, p2, angle)
-
-    # Change the distance of the point from the origin
-    if length is not None:
-        pn = normalize(pn) * length
-
-    return pn + p1
+def resize_vector(v, length, origin=None):
+    """ Resize a vector v to a new length in regard to a origin """
+    if origin is not None:
+        return (normalize(v - origin) * length) + origin
+    else:
+        return normalize(v) * length
 
 
 def generate_random_sphere(center, radius=1, size=100):

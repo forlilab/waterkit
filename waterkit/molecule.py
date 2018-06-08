@@ -209,7 +209,7 @@ class Molecule():
 
         return coords
 
-    def get_available_anchors(self, waterfield, ad_map=None):
+    def get_hb_anchors(self, waterfield, ad_map=None):
         """ Return all the anchors available on a molecule
         based on the water forcefield.
         """
@@ -240,6 +240,111 @@ class Molecule():
                     names.append(name)
 
         return names, atom_ids
+
+    def get_hb_vectors(self, idx, hyb, n_hbond, hb_length):
+        """ Return all the hydrogen bond vectors the atom idx """
+        vectors = []
+
+        # Get origin atom
+        anchor_xyz = self.get_coordinates(idx)[0]
+        # Get coordinates of all the neihbor atoms
+        neighbors_xyz = self.get_neighbor_atom_coordinates(idx, depth=2)
+        neighbor1_xyz = neighbors_xyz[1][0]
+
+        if hyb == 1:
+            # Position of water is linear
+            # And we just need the origin atom and the first neighboring atom
+            # Example: H donor
+            if n_hbond == 1:
+                r = None
+                p = anchor_xyz + utils.vector(neighbor1_xyz, anchor_xyz)
+                angles = [0]
+
+            if n_hbond == 3:
+                hyb = 3
+
+        elif hyb == 2:
+            # Position of water is just above the origin atom
+            # We need the 2 direct neighboring atoms of the origin atom
+            # Example: Nitrogen
+            if n_hbond == 1:
+                neighbor2_xyz = neighbors_xyz[1][1]
+
+                r = None
+                p = utils.atom_to_move(anchor_xyz, [neighbor1_xyz, neighbor2_xyz])
+                angles = [0]
+
+            # Position of waters are separated by angle of 120 degrees
+            # And they are aligned with the neighboring atoms (deep=2) of the origin atom
+            # Exemple: Backbone oxygen
+            elif n_hbond == 2:
+                neighbor2_xyz = neighbors_xyz[2][0]
+
+                r = utils.rotation_axis(neighbor1_xyz, anchor_xyz, neighbor2_xyz, origin=anchor_xyz)
+                p = neighbor1_xyz
+                angles = [-np.radians(120), np.radians(120)]
+
+            elif n_hbond == 3:
+                hyb = 3
+
+        if hyb == 3:
+            neighbor2_xyz = neighbors_xyz[1][1]
+
+            # Position of water is just above the origin atom
+            # We need the 3 direct neighboring atoms (tetrahedral)
+            # Exemple: Ammonia
+            if n_hbond == 1:
+                neighbor3_xyz = neighbors_xyz[1][2]
+
+                # We have to normalize bonds, otherwise the water molecule is not well placed
+                v1 = anchor_xyz + utils.normalize(utils.vector(anchor_xyz, neighbor1_xyz))
+                v2 = anchor_xyz + utils.normalize(utils.vector(anchor_xyz, neighbor2_xyz))
+                v3 = anchor_xyz + utils.normalize(utils.vector(anchor_xyz, neighbor3_xyz))
+
+                r = None
+                p = utils.atom_to_move(anchor_xyz, [v1, v2, v3])
+                angles = [0]
+
+            # Position of waters are separated by angle of 109 degrees
+            # Tetrahedral geometry, perpendicular with the neighboring atoms of the origin atom
+            # Example: Oxygen of the hydroxyl group
+            elif n_hbond == 2:
+                v1 = anchor_xyz + utils.normalize(utils.vector(anchor_xyz, neighbor1_xyz))
+                v2 = anchor_xyz + utils.normalize(utils.vector(anchor_xyz, neighbor2_xyz))
+
+                r = anchor_xyz + utils.normalize(utils.vector(v1, v2))
+                p = utils.atom_to_move(anchor_xyz, [v1, v2])
+                angles = [-np.radians(60), np.radians(60)]
+
+            # Position of waters are separated by angle of 109 degrees
+            # Tetrahedral geometry, there is no reference so water molecules are placed randomly
+            # Example: DMSO
+            elif n_hbond == 3:
+                # Vector between anchor_xyz and the only neighbor atom
+                v = utils.vector(anchor_xyz, neighbor1_xyz)
+                v = utils.normalize(v)
+
+                # Pick a random vector perpendicular to vector v
+                # It will be used as the rotation axis
+                r = anchor_xyz + utils.get_perpendicular_vector(v)
+
+                # And we place a pseudo atom (will be the first water molecule)
+                p = utils.rotate_point(neighbor1_xyz, anchor_xyz, r, np.radians(109.47))
+                # The next rotation axis will be the vector along the neighbor atom and the origin atom
+                r = anchor_xyz + utils.normalize(utils.vector(neighbor1_xyz, anchor_xyz))
+                angles = [0, -np.radians(120), np.radians(120)]
+
+        # We rotate p to get each vectors if necessary
+        for angle in angles:
+            vector = p
+            if angle != 0.:
+                vector = utils.rotate_point(vector, anchor_xyz, r, angle)
+            vector = utils.resize_vector(vector, hb_length, anchor_xyz)
+            vectors.append(vector)
+
+        vectors = np.array(vectors)
+
+        return vectors
 
     def to_file(self, fname, fformat):
         """

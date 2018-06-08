@@ -88,13 +88,16 @@ class Water(Molecule):
         # H/Lp between O and Acceptor/Donor atom
         a1 = coord_oxygen + (d[0] * v)
         # Build the second H/Lp using the perpendicular vector p
-        a2 = utils.rotate_atom(a1, coord_oxygen, p, np.radians(a[0]), d[1])
+        a2 = utils.rotate_point(a1, coord_oxygen, p, np.radians(a[0]))
+        a2 = utils.resize_vector(a2, d[1], coord_oxygen)
 
         # ... and rotate it to build the last H/Lp
         p = utils.atom_to_move(coord_oxygen, [a1, a2])
         r = coord_oxygen + utils.normalize(utils.vector(a1, a2))
-        a3 = utils.rotate_atom(p, coord_oxygen, r, np.radians(a[1] / 2), d[3])
-        a4 = utils.rotate_atom(p, coord_oxygen, r, -np.radians(a[1] / 2), d[3])
+        a3 = utils.rotate_point(p, coord_oxygen, r, np.radians(a[1] / 2))
+        a3 = utils.resize_vector(a3, d[3], coord_oxygen)
+        a4 = utils.rotate_point(p, coord_oxygen, r, -np.radians(a[1] / 2))
+        a4 = utils.resize_vector(a4, d[3], coord_oxygen)
 
         # Add them in this order: H, H, Lp, Lp
         if self._anchor_type == "acceptor":
@@ -109,7 +112,7 @@ class Water(Molecule):
             self.add_atom(atom, atom_type=atom_type, atom_num=1, bond=(1, i, 1))
             i += 1
 
-    def get_available_anchors(self):
+    def get_hb_anchors(self):
         """ Get the ID and atom type of all available atoms """
         if self._anchor_type == 'acceptor':
             atom_ids = [3, 4, 5]
@@ -137,5 +140,5 @@ class Water(Molecule):
         atom_ids.remove(ref_id)
 
         for atom_id in atom_ids:
-            a = utils.rotate_atom(coord_water[atom_id], coord_oxygen, r, np.radians(angle))
+            a = utils.rotate_point(coord_water[atom_id], coord_oxygen, r, np.radians(angle))
             self.update_coordinates(a, atom_id)

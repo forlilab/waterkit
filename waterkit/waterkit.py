@@ -31,113 +31,17 @@ class Waterkit():
         """Place one or multiple water molecules in the ideal position
         above an acceptor or donor atom
         """
-        waters = []
-        angles = []
-        hyb = atom_type.hyb
-        oxygen_type = 'OW'
-
-        if atom_type.hb_type == 1:
-            anchor_type = 'donor'
-        else:
-            anchor_type = 'acceptor'
-
         # It is not the same index
         idx -= 1
+        waters = []
+        hb_type = 'donor' if atom_type.hb_type == 1 else 'acceptor'
+
         # Get origin atom
         anchor_xyz = molecule.get_coordinates(idx)[0]
-        # Get coordinates of all the neihbor atoms
-        neighbors_xyz = molecule.get_neighbor_atom_coordinates(idx, depth=2)
+        vectors = molecule.get_hb_vectors(idx, atom_type.hyb, atom_type.n_water, atom_type.hb_length)
 
-        neighbor1_xyz = neighbors_xyz[1][0]
-
-        if hyb == 1:
-            # Position of water is linear
-            # And we just need the origin atom and the first neighboring atom
-            # Example: H donor
-            if atom_type.n_water == 1:
-                r = None
-                p = anchor_xyz + utils.vector(neighbor1_xyz, anchor_xyz)
-                angles = [0]
-
-            if atom_type.n_water == 3:
-                hyb = 3
-
-        elif hyb == 2:
-            # Position of water is just above the origin atom
-            # We need the 2 direct neighboring atoms of the origin atom
-            # Example: Nitrogen
-            if atom_type.n_water == 1:
-                neighbor2_xyz = neighbors_xyz[1][1]
-
-                r = None
-                p = utils.atom_to_move(anchor_xyz, [neighbor1_xyz, neighbor2_xyz])
-                angles = [0]
-
-            # Position of waters are separated by angle of 120 degrees
-            # And they are aligned with the neighboring atoms (deep=2) of the origin atom
-            # Exemple: Backbone oxygen
-            elif atom_type.n_water == 2:
-                neighbor2_xyz = neighbors_xyz[2][0]
-
-                r = utils.rotation_axis(neighbor1_xyz, anchor_xyz, neighbor2_xyz, origin=anchor_xyz)
-                p = neighbor1_xyz
-                angles = [-np.radians(120), np.radians(120)]
-
-            elif atom_type.n_water == 3:
-                hyb = 3
-
-        if hyb == 3:
-            neighbor2_xyz = neighbors_xyz[1][1]
-
-            # Position of water is just above the origin atom
-            # We need the 3 direct neighboring atoms (tetrahedral)
-            # Exemple: Ammonia
-            if atom_type.n_water == 1:
-                neighbor3_xyz = neighbors_xyz[1][2]
-
-                # We have to normalize bonds, otherwise the water molecule is not well placed
-                v1 = anchor_xyz + utils.normalize(utils.vector(anchor_xyz, neighbor1_xyz))
-                v2 = anchor_xyz + utils.normalize(utils.vector(anchor_xyz, neighbor2_xyz))
-                v3 = anchor_xyz + utils.normalize(utils.vector(anchor_xyz, neighbor3_xyz))
-
-                r = None
-                p = utils.atom_to_move(anchor_xyz, [v1, v2, v3])
-                angles = [0]
-
-            # Position of waters are separated by angle of 109 degrees
-            # Tetrahedral geometry, perpendicular with the neighboring atoms of the origin atom
-            # Example: Oxygen of the hydroxyl group
-            elif atom_type.n_water == 2:
-                v1 = anchor_xyz + utils.normalize(utils.vector(anchor_xyz, neighbor1_xyz))
-                v2 = anchor_xyz + utils.normalize(utils.vector(anchor_xyz, neighbor2_xyz))
-
-                r = anchor_xyz + utils.normalize(utils.vector(v1, v2))
-                p = utils.atom_to_move(anchor_xyz, [v1, v2])
-                angles = [-np.radians(60), np.radians(60)]
-
-            # Position of waters are separated by angle of 109 degrees
-            # Tetrahedral geometry, there is no reference so water molecules are placed randomly
-            # Example: DMSO
-            elif atom_type.n_water == 3:
-                # Vector between anchor_xyz and the only neighbor atom
-                v = utils.vector(anchor_xyz, neighbor1_xyz)
-                v = utils.normalize(v)
-
-                # Pick a random vector perpendicular to vector v
-                # It will be used as the rotation axis
-                r = anchor_xyz + utils.get_perpendicular_vector(v)
-
-                # And we place a pseudo atom (will be the first water molecule)
-                p = utils.rotate_atom(neighbor1_xyz, anchor_xyz, r, np.radians(109.47), atom_type.hb_length)
-                # The next rotation axis will be the vector along the neighbor atom and the origin atom
-                r = anchor_xyz + utils.normalize(utils.vector(neighbor1_xyz, anchor_xyz))
-                angles = [0, -np.radians(120), np.radians(120)]
-
-        # Now we place the water molecule(s)!
-        for angle in angles:
-            oxygen_xyz = utils.rotate_atom(p, anchor_xyz, r, angle, atom_type.hb_length)
-            # Create water molecule
-            waters.append(Water(oxygen_xyz, oxygen_type, anchor_xyz, anchor_type))
+        for vector in vectors:
+            waters.append(Water(vector, 'OW', anchor_xyz, hb_type))
 
         return waters
 
@@ -223,7 +127,7 @@ class Waterkit():
         n = Water_network(distance=2.9, angle=145, cutoff=0)
 
         # First hydration shell!!
-        names, atom_ids = molecule.get_available_anchors(self._waterfield, ad_map)
+        names, atom_ids = molecule.get_hb_anchors(self._waterfield, ad_map)
 
         for name, idx in zip(names, atom_ids):
             atom_type = self._waterfield.get_atom_types(name)
@@ -290,7 +194,7 @@ class Waterkit():
 
                     for hydroxyl_water in hydroxyl_waters:
                         p = hydroxyl_water.get_coordinates()
-                        p_new = utils.rotate_atom(p[0], p1[0], p2[0], -angle)
+                        p_new = utils.rotate_point(p[0], p1[0], p2[0], -angle)
                         hydroxyl_water.update_coordinates(p_new, atom_id=0)
 
                     current_energy = np.array([w.get_energy(ad_map) for w in hydroxyl_waters])
@@ -309,13 +213,13 @@ class Waterkit():
                 best_angle = np.radians((360 - np.degrees(current_angle)) + np.degrees(best_angle))
                 for hydroxyl_water in hydroxyl_waters:
                     p = hydroxyl_water.get_coordinates()
-                    p_new = utils.rotate_atom(p[0], p1[0], p2[0], -best_angle)
+                    p_new = utils.rotate_point(p[0], p1[0], p2[0], -best_angle)
                     hydroxyl_water.update_coordinates(p_new, atom_id=0)
                     # Update also the anchor
                     # print hydroxyl_water._anchor
                     anchor = hydroxyl_water._anchor
-                    anchor[0] = utils.rotate_atom(anchor[0], p1[0], p2[0], -best_angle)
-                    anchor[1] = utils.rotate_atom(anchor[1], p1[0], p2[0], -best_angle)
+                    anchor[0] = utils.rotate_point(anchor[0], p1[0], p2[0], -best_angle)
+                    anchor[1] = utils.rotate_point(anchor[1], p1[0], p2[0], -best_angle)
         ####################################
 
         # Optimize waters and complete the map
@@ -347,7 +251,7 @@ class Waterkit():
 
             # Second hydration shell!!
             for water in previous_waters:
-                names, atom_ids = water.get_available_anchors()
+                names, atom_ids = water.get_hb_anchors()
 
                 for name, idx in zip(names, atom_ids):
                     atom_type = self._waterfield.get_atom_types(name)
