@@ -24,7 +24,7 @@ def cmd_lineparser():
                         action="store", help="molecule file")
     parser.add_argument("-m", "--map", dest="map_file", required=True,
                         action="store", help="autodock map file")
-    parser.add_argument("-l", "--layer", dest="n_layer", default=-1,
+    parser.add_argument("-l", "--layer", dest="n_layer", default=-1, type=int,
                         action="store", help="number of layer to add")
     parser.add_argument("-o", "--output", dest="output_prefix", default='water',
                         action="store", help="prefix add to output files")
