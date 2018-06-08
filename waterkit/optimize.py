@@ -13,6 +13,7 @@ from scipy.cluster.hierarchy import linkage, fcluster
 
 import utils
 
+import matplotlib.pyplot as plt
 
 class Water_network():
 
@@ -23,7 +24,7 @@ class Water_network():
 
     def _cluster_waters(self, waters, distance=2., method='single'):
         """ Cluster water molecule based on their position using hierarchical clustering """
-        coordinates = np.array([w.get_coordinates(atom_id=0)[0] for w in waters])
+        coordinates = np.array([w.get_coordinates(atom_ids=[0])[0] for w in waters])
 
         # Clustering
         Z = linkage(coordinates, method=method, metric='euclidean')
@@ -42,7 +43,7 @@ class Water_network():
         atom is contrained by the distance and the angle with the anchor
         """
         distance = self.distance
-        oxygen_type = water.get_atom_types(atom_id=0)[0]
+        oxygen_type = water.get_atom_types(atom_ids=[0])[0]
 
         # If the anchor type is donor, we have to reduce the
         # radius by 1 angstrom. Because hydrogen!
@@ -80,6 +81,7 @@ class Water_network():
         best_angle = 0
         best_energy = water.get_energy(ad_map)
         current_rotation = 0.
+        energy_profile = [[], [], [], [], []]
 
         # Save the old coordinate
         water._previous = water.get_coordinates()
@@ -92,6 +94,12 @@ class Water_network():
             current_energy = water.get_energy(ad_map)
             current_rotation += angle
 
+            energy_profile[0].append(water.get_energy(ad_map, 1))
+            energy_profile[1].append(water.get_energy(ad_map, 2))
+            energy_profile[2].append(water.get_energy(ad_map, 3))
+            energy_profile[3].append(water.get_energy(ad_map, 4))
+            energy_profile[4].append(current_energy)
+
             if current_energy < best_energy:
                 best_angle = current_rotation
                 best_energy = current_energy
@@ -101,6 +109,9 @@ class Water_network():
         best_angle = (360. - current_rotation) + best_angle
         water.rotate_water(ref_id, angle=best_angle)
 
+        # Save the energy profile
+        water._energy_profile = energy_profile
+
     def optimize(self, waters, ad_map):
         """ Optimize position of water molecules """
         opti_waters = []
@@ -108,6 +119,7 @@ class Water_network():
 
         opt_rotation = 10
         cluster_distance = 2.
+        i = 0
 
         for water in waters:
             if ad_map.is_in_map(water.get_coordinates(0)[0]):
@@ -124,6 +136,30 @@ class Water_network():
                     # Again, we check the energy and if it is good we keep it
                     if water.get_energy(ad_map) <= self.cutoff:
                         opti_waters.append(water)
+
+                    tmp = water._energy_profile
+                    angles = np.linspace(0, 360, len(tmp[0]))
+                    fig, axarr = plt.subplots(5, figsize=(18, 12), sharex=True)
+                    axarr[0].plot(angles, tmp[0], color='turquoise', label='hydrogen 1')
+                    axarr[0].legend(loc='upper right')
+                    axarr[0].set_ylabel('Energy (kcal/mol)')
+                    axarr[1].plot(angles, tmp[1], color='turquoise', label='hydrogen 2')
+                    axarr[1].legend(loc='upper right')
+                    axarr[1].set_ylabel('Energy (kcal/mol)')
+                    axarr[2].plot(angles, tmp[2], color='silver', label='lone pair 1')
+                    axarr[2].legend(loc='upper right')
+                    axarr[2].set_ylabel('Energy (kcal/mol)')
+                    axarr[3].plot(angles, tmp[3], color='silver', label='lone pair 2')
+                    axarr[3].legend(loc='upper right')
+                    axarr[3].set_ylabel('Energy (kcal/mol)')
+                    axarr[4].plot(angles, tmp[4], color='tomato', label='total')
+                    axarr[4].legend(loc='upper right')
+                    axarr[4].set_xlabel('Orientation (degrees)')
+                    axarr[4].set_ylabel('Energy (kcal/mol)')
+                    plt.savefig('waters_rotation_profile_%03d.png' % i, bbox_inches='tight')
+                    plt.close('all')
+
+                    i += 1
 
         if len(opti_waters) > 1:
             # Identify clusters of waters

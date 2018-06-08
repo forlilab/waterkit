@@ -45,7 +45,7 @@ class Waterkit():
 
         return waters
 
-    def _complete_map(self, waters, ad_map, water_map, water_orientation=[[0, 0, 1], [1, 0, 0]], choices=None):
+    def _update_map(self, waters, ad_map, water_map, water_orientation=[[0, 0, 1], [1, 0, 0]], choices=None):
 
         x_len = np.int(np.floor(water_map._grid[0].shape[0] / 2.) + 5)
         y_len = np.int(np.floor(water_map._grid[1].shape[0] / 2.) + 5)
@@ -57,8 +57,7 @@ class Waterkit():
             map_types = list(set(map_types) & set(choices))
 
         for water in waters:
-            o = water.get_coordinates(atom_id=0)[0]
-            h1, h2 = water.get_coordinates(atom_id=1)[0], water.get_coordinates(atom_id=2)[0]
+            o, h1, h2 = water.get_coordinates(atom_ids=[0, 1, 2])
 
             # Create the grid around the protein water molecule
             ix, iy, iz = ad_map._cartesian_to_index(o)
@@ -232,7 +231,7 @@ class Waterkit():
         self.map_layers.append(ad_map.copy())
         self.water_layers.append(waters)
 
-        self._complete_map(waters, ad_map, self._water_map, choices=['OW', 'HD', 'Lp'])
+        self._update_map(waters, ad_map, self._water_map, choices=['OW', 'HD', 'Lp'])
 
         # Second to N hydration shell!!
         i = 1
@@ -268,7 +267,7 @@ class Waterkit():
                 self.map_layers.append(ad_map.copy())
                 self.water_layers.append(waters)
 
-                self._complete_map(waters, ad_map, self._water_map, choices=['OW', 'HD', 'Lp'])
+                self._update_map(waters, ad_map, self._water_map, choices=['OW', 'HD', 'Lp'])
 
                 previous_waters = waters
             else:

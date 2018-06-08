@@ -36,31 +36,38 @@ class Molecule():
                 # Really, there is no implicit hydrogen
                 x.ForceImplH()
 
-    def get_coordinates(self, atom_id=None):
+    def get_coordinates(self, atom_ids=None):
         """
         Return coordinates of all atoms or a certain atom
         We do it like this because OBMol.GetCoordinates isn't working
         ... and it never will (https://github.com/openbabel/openbabel/issues/1367)
         """
-        if atom_id is not None:
-            ob_atom = self._OBMol.GetAtomById(atom_id)
-            coordinate = [ob_atom.GetX(), ob_atom.GetY(), ob_atom.GetZ()]
+        if atom_ids is not None:
+            if not isinstance(atom_ids, (list, tuple)):
+                atom_ids = [atom_ids]
         else:
-            coordinate = [[x.GetX(), x.GetY(), x.GetZ()] for x in ob.OBMolAtomIter(self._OBMol)]
+            atom_ids = range(0, self._OBMol.NumAtoms())
 
-        return np.atleast_2d(np.array(coordinate))
+        ob_atoms = [self._OBMol.GetAtomById(i) for i in atom_ids]
+        coordinates = [[x.GetX(), x.GetY(), x.GetZ()] for x in ob_atoms]
+        coordinates = np.atleast_2d(np.array(coordinates))
 
-    def get_atom_types(self, atom_id=None):
+        return coordinates
+
+    def get_atom_types(self, atom_ids=None):
         """
         Return atom types of all atoms or a certain atom
         """
-        if atom_id is not None:
-            ob_atom = self._OBMol.GetAtomById(atom_id)
-            atom_type = [ob_atom.GetType()]
+        if atom_ids is not None:
+            if not isinstance(atom_ids, (list, tuple)):
+                atom_ids = [atom_ids]
         else:
-            atom_type = [x.GetType() for x in ob.OBMolAtomIter(self._OBMol)]
+            atom_ids = range(0, self._OBMol.NumAtoms())
 
-        return atom_type
+        ob_atoms = [self._OBMol.GetAtomById(i) for i in atom_ids]
+        atom_types = [x.GetType() for x in ob_atoms]
+
+        return atom_types
 
     def get_atom(self, i):
         """

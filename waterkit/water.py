@@ -54,6 +54,15 @@ class Water(Molecule):
         """
         Return the energy of the water molecule
         """
+        if atom_id is None:
+            n_atoms = self._OBMol.NumAtoms()
+            # Spherical water is only one atom, the oxygen
+            if n_atoms == 1:
+                atom_id = 0
+            # TIP5P water is 5 atoms, we ignore the oxygen
+            elif n_atoms == 5:
+                atom_id = [1, 2, 3, 4]
+
         coordinates = self.get_coordinates(atom_id)
         atom_types = self.get_atom_types(atom_id)
 
