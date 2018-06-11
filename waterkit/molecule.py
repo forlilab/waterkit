@@ -37,6 +37,31 @@ class Molecule():
                 # Really, there is no implicit hydrogen
                 x.ForceImplH()
 
+    def get_atom(self, i):
+        """
+        Return the OBAtom i
+        """
+        return self._OBMol.GetAtom(i)
+
+    def get_atoms_in_map(self, ad_map=None):
+        """
+        Returns a list of index of all the atoms in the map
+        """
+        idx = []
+
+        # If we don't provide an AutoDock Map, we return all the atoms
+        if ad_map is None:
+            idx = [ob_atom.GetIdx() for ob_atom in ob.OBMolAtomIter(self._OBMol)]
+            return idx
+        else:
+            for ob_atom in ob.OBMolAtomIter(self._OBMol):
+                x, y, z = ob_atom.GetX(), ob_atom.GetY(), ob_atom.GetZ()
+
+                if ad_map.is_in_map([x, y, z]):
+                    idx.append(ob_atom.GetIdx())
+
+            return idx
+
     def get_coordinates(self, atom_ids=None):
         """
         Return coordinates of all atoms or a certain atom
@@ -70,36 +95,11 @@ class Molecule():
 
         return atom_types
 
-    def get_atom(self, i):
-        """
-        Return the OBAtom i
-        """
-        return self._OBMol.GetAtom(i)
-
     def get_residue(self, i):
         """
         Return the OBResidue i
         """
         return self._OBMol.GetResidue(i)
-
-    def get_atoms_in_map(self, ad_map=None):
-        """
-        Returns a list of index of all the atoms in the map
-        """
-        idx = []
-
-        # If we don't provide an AutoDock Map, we return all the atoms
-        if ad_map is None:
-            idx = [ob_atom.GetIdx() for ob_atom in ob.OBMolAtomIter(self._OBMol)]
-            return idx
-        else:
-            for ob_atom in ob.OBMolAtomIter(self._OBMol):
-                x, y, z = ob_atom.GetX(), ob_atom.GetY(), ob_atom.GetZ()
-
-                if ad_map.is_in_map([x, y, z]):
-                    idx.append(ob_atom.GetIdx())
-
-            return idx
 
     def get_residues_in_map(self, ad_map=None):
         """
