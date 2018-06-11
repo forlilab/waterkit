@@ -6,6 +6,7 @@
 # Class for water
 #
 
+from collections import namedtuple
 
 import numpy as np
 import openbabel as ob
@@ -121,8 +122,15 @@ class Water(Molecule):
             self.add_atom(atom, atom_type=atom_type, atom_num=1, bond=(1, i, 1))
             i += 1
 
-    def get_hb_anchors(self):
-        """ Get the ID and atom type of all available atoms """
+    def guess_hydrogen_bond_anchors(self, waterfield):
+        """ Guess all the hydrogen bond anchors in the
+        TIP5P water molecule. We don't need the waterfield here. """
+        self.hydrogen_bond_anchors = {}
+        hb_anchor = namedtuple('hydrogen_bond_anchor', 'name type vectors')
+
+        # Get all the available hb types
+        atom_types = waterfield.get_atom_types()
+
         if self._anchor_type == 'acceptor':
             atom_ids = [3, 4, 5]
             names = ['H_O_004', 'O_L_000', 'O_L_000']
@@ -130,7 +138,16 @@ class Water(Molecule):
             atom_ids = [2, 3, 5]
             names = ['H_O_004', 'H_O_004', 'O_L_000']
 
-        return names, atom_ids
+        for name, idx in zip(names, atom_ids):
+            atom_type = atom_types[name]
+
+            if atom_type.hb_type == 1:
+                hb_type = 'donor'
+            elif atom_type.hb_type == 2:
+                hb_type = 'acceptor'
+
+            vectors = self._get_hb_vectors(idx-1, atom_type.hyb, atom_type.n_water, atom_type.hb_length)
+            self.hydrogen_bond_anchors[idx] = hb_anchor(name, hb_type, vectors)
 
     def rotate_water(self, ref_id=1, angle=0.):
         """

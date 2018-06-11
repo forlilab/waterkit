@@ -7,6 +7,7 @@
 #
 
 import os
+from collections import namedtuple
 
 import numpy as np
 import openbabel as ob
@@ -216,39 +217,44 @@ class Molecule():
 
         return coords
 
-    def get_hb_anchors(self, waterfield, ad_map=None):
-        """ Return all the anchors available on a molecule
-        based on the water forcefield.
-        """
-        atom_ids = []
-        names = []
+    def guess_hydrogen_bond_anchors(self, waterfield, ad_map=None):
+        """ Guess all the hydrogen bonds anchors (donor/acceptor)
+        in the molecule based on the hydrogen bond forcefield """
+        self.hydrogen_bond_anchors = {}
+        hb_anchor = namedtuple('hydrogen_bond_anchor', 'name type vectors')
 
-        # Get all the atoms in the map
-        idx_map = self.get_atoms_in_map(ad_map)
-        # Get all the water types from the waterfield
+        # Get all the atom ids in the molecule
+        atom_ids = self.get_atoms_in_map(ad_map)
+        # Get all the available hb types
         atom_types = waterfield.get_atom_types()
-        # In order to keep track which one was alredy typed or not
+        # Keep track of all the visited atom
         visited = [False] * (self._OBMol.NumAtoms() + 1)
 
         for name in atom_types.keys()[::-1]:
             atom_type = atom_types[name]
             matches = waterfield.get_matches(name, self)
 
+            if atom_type.hb_type == 1:
+                hb_type = 'donor'
+            elif atom_type.hb_type == 2:
+                hb_type = 'acceptor'
+            else:
+                hb_type = None
+
             for match in matches:
                 idx = match[0]
 
-                if atom_type.hb_type == 0 and not visited[idx]:
+                if hb_type is None and not visited[idx]:
                     visited[idx] = True
 
-                if idx in idx_map and not visited[idx]:
+                if idx in atom_ids and not visited[idx]:
                     visited[idx] = True
 
-                    atom_ids.append(idx)
-                    names.append(name)
+                    # Calculate the vectors on the anchor
+                    vectors = self._get_hb_vectors(idx-1, atom_type.hyb, atom_type.n_water, atom_type.hb_length)
+                    self.hydrogen_bond_anchors[idx] = hb_anchor(name, hb_type, vectors)
 
-        return names, atom_ids
-
-    def get_hb_vectors(self, idx, hyb, n_hbond, hb_length):
+    def _get_hb_vectors(self, idx, hyb, n_hbond, hb_length):
         """ Return all the hydrogen bond vectors the atom idx """
         vectors = []
 

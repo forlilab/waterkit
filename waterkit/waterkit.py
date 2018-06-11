@@ -27,21 +27,19 @@ class Waterkit():
         self.water_layers = []
         self.map_layers = []
 
-    def _place_optimal_water(self, molecule, atom_type, idx):
+    def _place_optimal_water(self, molecule):
         """Place one or multiple water molecules in the ideal position
         above an acceptor or donor atom
         """
-        # It is not the same index
-        idx -= 1
         waters = []
-        hb_type = 'donor' if atom_type.hb_type == 1 else 'acceptor'
 
-        # Get origin atom
-        anchor_xyz = molecule.get_coordinates(idx)[0]
-        vectors = molecule.get_hb_vectors(idx, atom_type.hyb, atom_type.n_water, atom_type.hb_length)
-
-        for vector in vectors:
-            waters.append(Water(vector, 'OW', anchor_xyz, hb_type))
+        try:
+            for idx, anchor in molecule.hydrogen_bond_anchors.iteritems():
+                anchor_xyz = molecule.get_coordinates(idx-1)[0]
+                for vector in anchor.vectors:
+                    waters.append(Water(vector, 'OW', anchor_xyz, anchor.type))
+        except AttributeError:
+            print "Warning: There is no hydrogen bond anchors guessed"
 
         return waters
 
@@ -57,7 +55,7 @@ class Waterkit():
             map_types = list(set(map_types) & set(choices))
 
         for water in waters:
-            o, h1, h2 = water.get_coordinates(atom_ids=[0, 1, 2])
+            o, h1, h2 = water.get_coordinates([0, 1, 2])
 
             # Create the grid around the protein water molecule
             ix, iy, iz = ad_map._cartesian_to_index(o)
@@ -114,10 +112,6 @@ class Waterkit():
         """Hydrate the molecule by adding successive layers
         of water molecules until the box is complety full
         """
-        waters = []
-        dict_prot_water = {}
-        n_waters = 0
-
         # Combine OA and HO maps to create the water map
         ad_map.combine('OW', ['OA', 'OD'], how='best')
         self._water_map.combine('OW', ['OA', 'OD'], how='best')
@@ -125,30 +119,24 @@ class Waterkit():
         # Initialize the water netwrok optimizer
         n = Water_network(distance=2.9, angle=145, cutoff=0)
 
-        # First hydration shell!!
-        names, atom_ids = molecule.get_hb_anchors(self._waterfield, ad_map)
-
-        for name, idx in zip(names, atom_ids):
-            atom_type = self._waterfield.get_atom_types(name)
-
-            try:
-                tmp_waters = self._place_optimal_water(molecule, atom_type, idx)
-                waters.extend(tmp_waters)
-
-                # #### FOR HYDROXYL OPTIMIZATION #####
-                # Save the relation between prot and water
-                for tmp_water in tmp_waters:
-                    if idx in dict_prot_water:
-                        dict_prot_water[idx].extend([n_waters])
-                    else:
-                        dict_prot_water[idx] = [n_waters]
-
-                    n_waters += 1
-            except:
-                print 'Error: Couldn\'t put water(s) on %s using %s atom type' % (idx, name)
-                continue
+        # Place the first hydration shell on the protein
+        molecule.guess_hydrogen_bond_anchors(self._waterfield, ad_map)
+        waters = self._place_optimal_water(molecule)
 
         # #### FOR HYDROXYL OPTIMIZATION #####
+        dict_prot_water = {}
+        n_waters = 0
+
+        # Save the relation between prot and water
+        for idx, anchor in molecule.hydrogen_bond_anchors.iteritems():
+            for _ in range(anchor.vectors.shape[0]):
+                if idx in dict_prot_water:
+                    dict_prot_water[idx].extend([n_waters])
+                else:
+                    dict_prot_water[idx] = [n_waters]
+
+                n_waters += 1
+
         # Find all the hydroxyl
         ob_smarts = ob.OBSmartsPattern()
         success = ob_smarts.Init('[!#1][!#1][#8;X2;v2;H1][#1]')
@@ -171,7 +159,7 @@ class Waterkit():
                     if atom_id in dict_prot_water:
                         hydroxyl_waters.extend([waters[i] for i in dict_prot_water[atom_id]])
 
-                hydroxyl_energy = np.array([w.get_energy(ad_map) for w in tmp_waters])
+                hydroxyl_energy = np.array([w.get_energy(ad_map) for w in hydroxyl_waters])
                 # Keep only negative energies
                 hydroxyl_energy[hydroxyl_energy > 0] = 0
                 best_energy += np.sum(hydroxyl_energy)
@@ -250,11 +238,8 @@ class Waterkit():
 
             # Second hydration shell!!
             for water in previous_waters:
-                names, atom_ids = water.get_hb_anchors()
-
-                for name, idx in zip(names, atom_ids):
-                    atom_type = self._waterfield.get_atom_types(name)
-                    waters.extend(self._place_optimal_water(water, atom_type, idx))
+                water.guess_hydrogen_bond_anchors(self._waterfield)
+                waters.extend(self._place_optimal_water(water))
 
             # Optimize water placement
             waters = n.optimize(waters, ad_map)
