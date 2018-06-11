@@ -11,6 +11,7 @@ from collections import namedtuple
 
 import numpy as np
 import openbabel as ob
+from scipy import spatial
 
 import utils
 
@@ -36,6 +37,9 @@ class Molecule():
                 x.SetImplicitValence(x.GetValence())
                 # Really, there is no implicit hydrogen
                 x.ForceImplH()
+
+        # Build KDTree for the molecule
+        self._build_kdtree()
 
     def get_atom(self, i):
         """
@@ -144,6 +148,16 @@ class Molecule():
             return True
 
         return False
+
+    def _build_kdtree(self):
+        """ Build the KDTree of all the atoms in the molecule
+        for quick nearest-neighbor lookup """
+        self._kdtree = spatial.KDTree(self.get_coordinates())
+
+    def get_closest_atoms(self, x, radius):
+        """ Retrieve indices of the closest atoms around x 
+        at a certain radius """
+        return self._kdtree.query_ball_point(x, radius)
 
     def _push_atom_to_end(self, lst, atomic_nums):
         """
