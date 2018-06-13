@@ -264,9 +264,12 @@ class Molecule():
                 if idx in atom_ids and not visited[idx]:
                     visited[idx] = True
 
-                    # Calculate the vectors on the anchor
-                    vectors = self._get_hb_vectors(idx-1, atom_type.hyb, atom_type.n_water, atom_type.hb_length)
-                    self.hydrogen_bond_anchors[idx] = hb_anchor(name, hb_type, vectors)
+                    try:
+                        # Calculate the vectors on the anchor
+                        vectors = self._get_hb_vectors(idx-1, atom_type.hyb, atom_type.n_water, atom_type.hb_length)
+                        self.hydrogen_bond_anchors[idx] = hb_anchor(name, hb_type, vectors)
+                    except:
+                        print "Warning: Could not determine hydrogen bond vectors on atom %s of type %s." % (idx, name)
 
     def _get_hb_vectors(self, idx, hyb, n_hbond, hb_length):
         """ Return all the hydrogen bond vectors the atom idx """
