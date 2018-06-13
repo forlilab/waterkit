@@ -18,8 +18,8 @@ from molecule import Molecule
 class Water(Molecule):
 
     def __init__(self, oxygen_xyz, oxygen_type, anchor_xyz, anchor_type):
-        # Create ob molecule and add oxygen atom
         self._OBMol = ob.OBMol()
+        # Add the oxygen atom
         self.add_atom(oxygen_xyz, atom_type=oxygen_type, atom_num=8)
 
         # Store all the informations about the anchoring
@@ -149,22 +149,27 @@ class Water(Molecule):
             vectors = self._get_hb_vectors(idx-1, atom_type.hyb, atom_type.n_water, atom_type.hb_length)
             self.hydrogen_bond_anchors[idx] = hb_anchor(name, hb_type, vectors)
 
-    def rotate_water(self, ref_id=1, angle=0.):
+    def translate(self, vector):
+        """ Translate the water molecule by a vector """
+        water_xyz = self.get_coordinates() + vector
+        for atom_id, coord_xyz in enumerate(water_xyz):
+            self.update_coordinates(coord_xyz, atom_id)
+
+    def rotate(self, angle, ref_id=1):
         """
         Rotate water molecule along the axis Oxygen and a choosen atom (H or Lp)
         """
-        coord_water = self.get_coordinates()
+        water_xyz = self.get_coordinates()
 
-        # Get the oxygen and the ref atom for the rotation axis
-        coord_oxygen = coord_water[0]
-        coord_ref = coord_water[ref_id]
+        # Get the rotation between the oxygen and the atom ref
+        oxygen_xyz = water_xyz[0]
+        ref_xyz = water_xyz[ref_id]
+        r = oxygen_xyz + utils.normalize(utils.vector(ref_xyz, oxygen_xyz))
 
-        r = coord_oxygen + utils.normalize(utils.vector(coord_ref, coord_oxygen))
-
-        # Ref of all the atom we want to move, minus the ref
-        atom_ids = list(range(1, coord_water.shape[0]))
+        # Remove the atom ref from the list of atoms we want to rotate
+        atom_ids = list(range(1, water_xyz.shape[0]))
         atom_ids.remove(ref_id)
 
         for atom_id in atom_ids:
-            a = utils.rotate_point(coord_water[atom_id], coord_oxygen, r, np.radians(angle))
-            self.update_coordinates(a, atom_id)
+            coord_xyz = utils.rotate_point(water_xyz[atom_id], oxygen_xyz, r, np.radians(angle))
+            self.update_coordinates(coord_xyz, atom_id)
