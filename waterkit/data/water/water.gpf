@@ -14,4 +14,4 @@ map water.OD.map
 elecmap water.e.map
 dsolvmap water.d.map
 dielectric -0.1465
-nbp_r_eps 2.8 0.315 12 10 OD OA
+nbp_r_eps 2.8 5.000 12 10 OD OA
