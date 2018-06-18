@@ -6,6 +6,7 @@
 # Class for molecule
 #
 
+import copy
 import os
 from collections import namedtuple
 
@@ -152,12 +153,15 @@ class Molecule():
     def _build_kdtree(self):
         """ Build the KDTree of all the atoms in the molecule
         for quick nearest-neighbor lookup """
-        self._kdtree = spatial.KDTree(self.get_coordinates())
+        self._kdtree = spatial.cKDTree(self.get_coordinates())
 
     def get_closest_atoms(self, x, radius):
         """ Retrieve indices of the closest atoms around x 
         at a certain radius """
         return self._kdtree.query_ball_point(x, radius)
+
+    def copy(self):
+        return copy.deepcopy(self)
 
     def _push_atom_to_end(self, lst, atomic_nums):
         """
@@ -267,7 +271,7 @@ class Molecule():
                     try:
                         # Calculate the vectors on the anchor
                         vectors = self._get_hb_vectors(idx-1, atom_type.hyb, atom_type.n_water, atom_type.hb_length)
-                        self.hydrogen_bond_anchors[idx] = hb_anchor(name, hb_type, vectors)
+                        self.hydrogen_bond_anchors[idx-1] = hb_anchor(name, hb_type, vectors)
                     except:
                         print "Warning: Could not determine hydrogen bond vectors on atom %s of type %s." % (idx, name)
 
