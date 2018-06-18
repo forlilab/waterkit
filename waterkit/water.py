@@ -147,13 +147,14 @@ class Water(Molecule):
                 hb_type = 'acceptor'
 
             vectors = self._get_hb_vectors(idx-1, atom_type.hyb, atom_type.n_water, atom_type.hb_length)
-            self.hydrogen_bond_anchors[idx] = hb_anchor(name, hb_type, vectors)
+            self.hydrogen_bond_anchors[idx-1] = hb_anchor(name, hb_type, vectors)
 
     def translate(self, vector):
         """ Translate the water molecule by a vector """
         water_xyz = self.get_coordinates() + vector
         for atom_id, coord_xyz in enumerate(water_xyz):
             self.update_coordinates(coord_xyz, atom_id)
+        #self._OBMol.Translate(vector)
 
     def rotate(self, angle, ref_id=1):
         """
