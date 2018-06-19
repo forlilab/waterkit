@@ -235,6 +235,32 @@ class Molecule():
 
         return coords
 
+    def guess_rotatable_bonds(self, ad_map=None):
+        """ Guess all the rotatable bonds in the molecule
+        based the rotatable forcefield """
+        unique = []
+        self.rotatable_bonds = {}
+        rotatable_bond = namedtuple('rotatable_bond', 'name')
+
+        # Get all the atom ids in the molecule
+        atom_ids = self.get_atoms_in_map(ad_map)
+
+        # Find all the hydroxyl
+        ob_smarts = ob.OBSmartsPattern()
+        success = ob_smarts.Init('[#1][#8;X2;v2;H1][!#1][!#1]')
+        ob_smarts.Match(self._OBMol)
+        matches = list(ob_smarts.GetUMapList())
+
+        for match in matches:
+            """ We check if the SMART pattern wasn't match twice on
+            the same rotatable bonds, like hydroxyl in tyrosine. The
+            GetUMapList function doesn't work on that specific case
+            """
+            if set(match[0:2]).intersection(atom_ids) and not match[0] in unique:
+                key = tuple([idx - 1 for idx in match])
+                self.rotatable_bonds[key] = rotatable_bond('hydroxyl')
+                unique.append(match[0])
+
     def guess_hydrogen_bond_anchors(self, waterfield, ad_map=None):
         """ Guess all the hydrogen bonds anchors (donor/acceptor)
         in the molecule based on the hydrogen bond forcefield """
