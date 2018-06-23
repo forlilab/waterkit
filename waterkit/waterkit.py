@@ -19,12 +19,18 @@ class Waterkit():
         self._water_map = water_map
         self._waterfield = waterfield
 
+        # Combine OA and OD to create OW
+        self._water_map.combine('OW', ['OA', 'OD'], how='best')
+
     def hydrate(self, molecule, ad_map, n_layer=0):
         """ Hydrate the molecule by adding successive layers
         of water molecules until the box is complety full
         """
+        # Guess all hydrogen bond anchors and rotatble bonds
         molecule.guess_hydrogen_bond_anchors(self._waterfield)
         molecule.guess_rotatable_bonds()
+        # Combine OA and OD to create OW
+        ad_map.combine('OW', ['OA', 'OD'], how='best')
 
         w = WaterBox(molecule, ad_map, self._water_map, self._waterfield)
 

@@ -60,10 +60,6 @@ def main():
     waterfield = Waterfield(waterfield_file)
     water_map = Map(water_map_file)
 
-    # Combine OA and HO maps to create the water map
-    ad_map.combine('OW', ['OA', 'OD'], how='best')
-    water_map.combine('OW', ['OA', 'OD'], how='best')
-
     # Go waterkit!!
     k = Waterkit(waterfield, water_map)
     k.hydrate(molecule, ad_map, n_layer=n_layer)
