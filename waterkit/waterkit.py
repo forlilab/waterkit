@@ -9,11 +9,13 @@
 from string import ascii_uppercase
 
 from water_box import WaterBox
+from optimize import WaterNetwork
 
 
 class Waterkit():
 
     def __init__(self, waterfield=None, water_map=None):
+        self.water_boxes = []
         self._water_map = water_map
         self._waterfield = waterfield
 
@@ -41,8 +43,7 @@ class Waterkit():
 
             i += 1
 
-        self.shells = [list(w._molecules[(w._molecules['active'] == True) & (w._molecules['shell'] == i)]['molecule']) for i in range(1, w.get_number_of_shells()+1)]
-        self.maps = w._maps
+        self.water_boxes.append(w)
 
     def write_shells(self, prefix='water'):
         """ Write layers of water in a PDBQT file """
@@ -50,7 +51,10 @@ class Waterkit():
         ernergy = 1.0
         line = "ATOM  %5d  %-3s HOH%2s%4d    %8.3f%8.3f%8.3f  1.00%5.2f    %6.3f %2s\n"
 
-        for shell, chain in zip(self.shells, ascii_uppercase):
+        shell_id = self.water_boxes[0].get_number_of_shells()
+        waters = [self.water_boxes[0].get_molecules_in_shell(i, True) for i in range(1, shell_id+1)]
+
+        for shell, chain in zip(waters, ascii_uppercase):
             i, j = 1, 1
 
             fname = '%s_%s.pdbqt' % (prefix, chain)
@@ -78,5 +82,5 @@ class Waterkit():
 
     def write_maps(self, prefix, map_types=None):
         """ Write maps for each layer of water molecules """
-        for water_map, chain in zip(self.maps, ascii_uppercase):
+        for water_map, chain in zip(self.water_boxes[0].maps, ascii_uppercase):
             water_map.to_map(map_types, '%s_%s' % (prefix, chain))
