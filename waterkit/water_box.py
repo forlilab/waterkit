@@ -284,9 +284,8 @@ class WaterBox():
             self.add_molecules(waters, connections)
             # Add informations about the new shell
             self.add_informations(info, 'shells')
-            # Update the last map OW, HD and Lp
-            choices = ['OW', 'HD', 'Lp']
-            self._update_map(waters, ad_map, self._water_map, choices=choices)
+            # Update the last map OW
+            self._update_map(waters, ad_map, self._water_map, choices=['OW'])
             self.add_map(ad_map)
 
             return True
