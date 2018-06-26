@@ -272,7 +272,7 @@ class WaterBox():
     def build_next_shell(self):
         """ Build the next hydration shell """
         shell_id = self.get_number_of_shells()
-        molecules = self.get_molecules_in_shell(shell_id, active_only=True)
+        molecules = self.get_molecules_in_shell(shell_id)
         ad_map = self.get_map(shell_id, copy=True)
 
         waters, connections = self._place_optimal_water(molecules, ad_map)
@@ -286,8 +286,10 @@ class WaterBox():
             # Add informations about the new shell
             for key in df.keys():
                 self.add_informations(df[key], key)
-            # Update the last map OW
-            self._update_map(waters, ad_map, self._water_map, choices=['OW'])
+
+            # Get only active waters and update the last map OW
+            active_waters = self.get_molecules_in_shell(shell_id + 1)
+            self._update_map(active_waters, ad_map, self._water_map, choices=['OW'])
             self.add_map(ad_map)
 
             return True
