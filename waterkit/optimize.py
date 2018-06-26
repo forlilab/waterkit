@@ -210,12 +210,32 @@ class WaterNetwork():
         # Retrieve the coordinates of all the anchors
         for _, row in closest_atom_ids.iterrows():
             molecule = self._water_box.molecules[row['molecule_i']]
+
+            # Get anchors ids
             anchor_ids = molecule.hydrogen_bond_anchors.keys()
             closest_anchor_ids = list(set([row['atom_i']]).intersection(anchor_ids))
 
+            # Get rotatable bonds ids
+            try:
+                rotatable_bond_ids = molecule.rotatable_bonds.keys()
+            except:
+                rotatable_bond_ids = []
+
             for idx in closest_anchor_ids:
-                v = molecule.hydrogen_bond_anchors[idx].vectors
-                a = np.tile(np.array(molecule.get_coordinates(idx)), (v.shape[0], 1))
+                xyz = molecule.get_coordinates(idx)
+
+                if [idx for i in rotatable_bond_ids if idx in i]:
+                    """ If the vectors are on a rotatable bond 
+                    we change them in order to be always pointing to
+                    the water molecule (perfect HB). In fact the vector
+                    is now the coordinate of the oxygen atom. And we
+                    keep only one vector, we don't want to count it twice"""
+                    v = water_xyz[0]
+                    a = xyz
+                else:
+                    # Otherwise, get all the vectors on this anchor
+                    v = molecule.hydrogen_bond_anchors[idx].vectors
+                    a = np.tile(xyz, (v.shape[0], 1))
 
                 anchors_xyz.append(a)
                 vectors_xyz.append(v)
