@@ -20,9 +20,10 @@ from optimize import WaterNetwork
 class WaterBox():
 
     def __init__(self, receptor, ad_map, water_map, waterfield):
-        self.molecules = []
-        self.maps = [ad_map.copy()]
-        # All the molecules/connections info are stored into dataframes
+        self.molecules = {}
+        self.maps = []
+
+        # All the connections/info are stored into dataframes
         columns = ['molecule_i', 'atom_i', 'molecule_j', 'atom_j']
         self._connections = pd.DataFrame(columns=columns)
         columns = ['active', 'shell_id']
@@ -35,10 +36,33 @@ class WaterBox():
         columns = ['molecule_i', 'atom_i']
         self._kdtree_relations = pd.DataFrame(columns=columns)
 
-        # Add the receptor to the molecules dataframe
+        # Add the receptor/map to the waterbox
         self.add_molecules(receptor)
+        self.add_map(ad_map)
+        # Add informations about the receptor
         data = pd.DataFrame([[True, 0]], columns=['active', 'shell_id'])
-        self.update_informations(data)
+        self.add_informations(data)
+
+    def add_molecules(self, molecules, connections=None, add_KDTree=True):
+        """ Add a new molecule to the waterbox """
+        if not isinstance(molecules, collections.Iterable):
+            molecules = [molecules]
+
+        try:
+            last_key = np.max(self.molecules.keys())
+        except:
+            # We initliaze at -1, make first molecule at index 0
+            last_key = -1
+
+        # Add molecules to the dictionary
+        new_keys = range(last_key + 1, len(molecules) + last_key + 1)
+        d = {key: molecule for key, molecule in zip(new_keys, molecules)}
+        self.molecules.update(d)
+
+        if connections is not None:
+            self._add_connections(connections)
+        if add_KDTree:
+            self._add_molecules_to_kdtree(molecules)
 
     def _add_connections(self, connections):
         """ Add connections between molecules """
@@ -94,22 +118,6 @@ class WaterBox():
             pass
         self._kdtree = spatial.cKDTree(data)
 
-    def add_molecules(self, molecules, connections=None, add_KDTree=True):
-        """ Add a new molecule to the dataframe """
-        if not isinstance(molecules, collections.Iterable):
-            molecules = [molecules]
-
-        self.molecules.extend(molecules)
-
-        if connections is not None:
-            self._add_connections(connections)
-        if add_KDTree:
-            self._add_molecules_to_kdtree(molecules)
-
-    def add_map(self, map):
-        """ Append a map to the existing list of maps """
-        return self.maps.append(map)
-
     def get_molecules_in_shell(self, shell_ids=None, active_only=True):
         """ Get all the molecule in shell """
         if shell_ids is not None:
@@ -126,10 +134,9 @@ class WaterBox():
 
         return molecules
 
-    def get_number_of_shells(self):
-        """ Get the total number of shells """
-        # df['column'].max() faster than np.max(df['column'])
-        return self._informations['shell_id'].max()
+    def add_map(self, map):
+        """ Append a map to the existing list of maps """
+        return self.maps.append(map)
 
     def get_map(self, shell_id, copy=False):
         """ Get a map for a particular shell """
@@ -159,10 +166,15 @@ class WaterBox():
 
         return df
 
-    def update_informations(self, data):
+    def add_informations(self, data):
         """ Append DF to the existing information DF """
         self._informations = self._informations.append(data)
         self._informations.reset_index(drop=True, inplace=True)
+
+    def get_number_of_shells(self):
+        """ Get the total number of shells """
+        # df['column'].max() faster than np.max(df['column'])
+        return self._informations['shell_id'].max()
 
     def _place_optimal_water(self, molecules, ad_map=None):
         """ Place one or multiple water molecules 
@@ -271,8 +283,8 @@ class WaterBox():
         if len(waters):
             # And add all the waters
             self.add_molecules(waters, connections)
-            # Update the informations
-            self.update_informations(info)
+            # Add informations about the new shell
+            self.add_informations(info)
             # Update the last map OW, HD and Lp
             choices = ['OW', 'HD', 'Lp']
             self._update_map(waters, ad_map, self._water_map, choices=choices)
