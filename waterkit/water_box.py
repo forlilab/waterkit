@@ -22,26 +22,25 @@ class WaterBox():
     def __init__(self, receptor, ad_map, water_map, waterfield):
         self.molecules = {}
         self.maps = []
-
-        # All the connections/info are stored into dataframes
-        columns = ['molecule_i', 'atom_i', 'molecule_j', 'atom_j']
-        self._connections = pd.DataFrame(columns=columns)
-        columns = ['active', 'shell_id']
-        self._informations = pd.DataFrame(columns=columns)
-        # Forcefield
+        self.df = {}
+        self._kdtree = None
         self._water_map = water_map
         self._waterfield = waterfield
-        # KDTree
-        self._kdtree = None
+
+        # All the informations are stored into a dict of df
+        columns = ['molecule_i', 'atom_i', 'molecule_j', 'atom_j']
+        self.df['connections'] = pd.DataFrame(columns=columns)
+        columns = ['active', 'shell_id', 'energy', 'cluster_id']
+        self.df['shells'] = pd.DataFrame(columns=columns)
         columns = ['molecule_i', 'atom_i']
-        self._kdtree_relations = pd.DataFrame(columns=columns)
+        self.df['kdtree_relations'] = pd.DataFrame(columns=columns)
 
         # Add the receptor/map to the waterbox
         self.add_molecules(receptor)
         self.add_map(ad_map)
         # Add informations about the receptor
         data = pd.DataFrame([[True, 0]], columns=['active', 'shell_id'])
-        self.add_informations(data)
+        self.add_informations(data, 'shells')
 
     def add_molecules(self, molecules, connections=None, add_KDTree=True):
         """ Add a new molecule to the waterbox """
@@ -67,7 +66,7 @@ class WaterBox():
     def _add_connections(self, connections):
         """ Add connections between molecules """
         try:
-            last_connections = self._connections.tail(1)
+            last_connections = self.df['connections'].tail(1)
             last_molecule_i = last_connections['molecule_i'].values[0]
             last_molecule_j = last_connections['molecule_j'].values[0]
         except:
@@ -76,9 +75,7 @@ class WaterBox():
 
         connections['molecule_i'] += last_molecule_i + 1
         connections['molecule_j'] += last_molecule_j + 1
-
-        self._connections = self._connections.append(connections)
-        self._connections.reset_index(drop=True, inplace=True)
+        self.add_informations(connections, 'connections')
 
     def _add_molecules_to_kdtree(self, molecules):
         """ Build or update the cKDTree of all the atoms in
@@ -88,7 +85,7 @@ class WaterBox():
             molecules = [molecules]
 
         try:
-            last_kdtree_relations = self._kdtree_relations.tail(1)
+            last_kdtree_relations = self.df['kdtree_relations'].tail(1)
             last_molecule_i = last_kdtree_relations['molecule_i'].values[0]
         except:
             # We initliaze at -1, make first molecule at index 0
@@ -107,8 +104,7 @@ class WaterBox():
         columns = ['molecule_i', 'atom_i']
         relations = np.vstack(relations)
         relations = pd.DataFrame(relations, columns=columns)
-        self._kdtree_relations = self._kdtree_relations.append(relations)
-        self._kdtree_relations.reset_index(drop=True, inplace=True)
+        self.add_informations(relations, 'kdtree_relations')
 
         # Update the KDTree
         data = np.vstack(data)
@@ -123,9 +119,9 @@ class WaterBox():
         if shell_ids is not None:
             if not isinstance(shell_ids, collections.Iterable):
                 shell_ids = [shell_ids]
-            df = self._informations[self._informations['shell_id'].isin(shell_ids)]
+            df = self.df['shells'][self.df['shells']['shell_id'].isin(shell_ids)]
         else:
-            df = self._informations
+            df = self.df['shells']
 
         if active_only:
             df = df[df['active'] == True]
@@ -153,7 +149,7 @@ class WaterBox():
         """ Retrieve indices of the closest atoms around x 
         at a certain radius """
         index = self._kdtree.query_ball_point(x, radius)
-        df = self._kdtree_relations.loc[index]
+        df = self.df['kdtree_relations'].loc[index]
 
         if exclude is not None:
             if not isinstance(exclude, collections.Iterable):
@@ -161,20 +157,23 @@ class WaterBox():
             df = df[-df['molecule_i'].isin(exclude)]
 
         if active_only:
-            index = self._informations[self._informations['active'] == True].index
+            index = self.df['shells'][self.df['shells']['active'] == True].index
             df = df[df['molecule_i'].isin(index)]
 
         return df
 
-    def add_informations(self, data):
+    def add_informations(self, data, where):
         """ Append DF to the existing information DF """
-        self._informations = self._informations.append(data)
-        self._informations.reset_index(drop=True, inplace=True)
+        try:
+            self.df[where] = self.df[where].append(data)
+            self.df[where].reset_index(drop=True, inplace=True)
+        except:
+            print "Error: Cannot add informations to %s dataframe." % where
 
     def get_number_of_shells(self):
         """ Get the total number of shells """
         # df['column'].max() faster than np.max(df['column'])
-        return self._informations['shell_id'].max()
+        return self.df['shells']['shell_id'].max()
 
     def _place_optimal_water(self, molecules, ad_map=None):
         """ Place one or multiple water molecules 
@@ -284,7 +283,7 @@ class WaterBox():
             # And add all the waters
             self.add_molecules(waters, connections)
             # Add informations about the new shell
-            self.add_informations(info)
+            self.add_informations(info, 'shells')
             # Update the last map OW, HD and Lp
             choices = ['OW', 'HD', 'Lp']
             self._update_map(waters, ad_map, self._water_map, choices=choices)
