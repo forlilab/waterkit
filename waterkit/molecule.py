@@ -147,9 +147,6 @@ class Molecule():
 
         return False
 
-    def copy(self):
-        return copy.deepcopy(self)
-
     def _push_atom_to_end(self, lst, atomic_nums):
         """
         Return a list of OBAtom with all the atom type selected at the end
