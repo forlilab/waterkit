@@ -55,7 +55,7 @@ class Waterkit():
         """ Write layers of water in a PDBQT file """
         i, j = 1, 1
         ernergy = 1.0
-        line = "ATOM  %5d  %-3s HOH%2s%4d    %8.3f%8.3f%8.3f  1.00%5.2f    %6.3f %2s\n"
+        line = "ATOM  %5d  %-3s HOH%2s%4d    %8.3f%8.3f%8.3f%6.2f 1.00    %6.3f %2s\n"
 
         shell_id = self.water_boxes[0].get_number_of_shells()
         waters = [self.water_boxes[0].get_molecules_in_shell(i, True) for i in range(1, shell_id+1)]
