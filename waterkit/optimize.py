@@ -228,6 +228,7 @@ class WaterNetwork():
         best_angle = 0
         current_rotation = 0.
         best_energy = self._calc_water_energy_pairwise(water_xyz, anchors_xyz, vectors_xyz)
+        energy_profile = [best_energy]
 
         # Rotate the water molecule and get its energy
         for angle in angles:
@@ -236,6 +237,7 @@ class WaterNetwork():
 
             current_energy = self._calc_water_energy_pairwise(water_xyz, anchors_xyz, vectors_xyz)
             current_rotation += angle
+            energy_profile.append(current_energy)
 
             if current_energy < best_energy:
                 best_angle = current_rotation
@@ -245,11 +247,13 @@ class WaterNetwork():
         # But also we have to consider how much we rotated the water molecule before
         best_angle = (360. - current_rotation) + best_angle
         water.rotate(best_angle, ref_id=ref_id)
+        energy_profile = np.array(energy_profile)
 
-        return best_energy
+        return best_angle, energy_profile
 
     def optimize_shell(self, waters, connections, distance=2.9, angle=145, cutoff=0):
         """ Optimize position of water molecules """
+        df = {}
         rotation = 10
         cluster_distance = 2.
 
@@ -261,7 +265,9 @@ class WaterNetwork():
             # Start first by optimizing the water on rotatable bonds
             self._optimize_rotatable_waters(receptor, waters, connections, ad_map, rotation)
 
+        angles = []
         energies = []
+        profiles = []
         to_be_removed = []
 
         # And now we optimize all water individually
@@ -275,10 +281,14 @@ class WaterNetwork():
                     # ... and we build the TIP5
                     water.build_tip5p()
                     # ... and optimize the rotation
-                    energy = self._optimize_rotation_pairwise(water, rotation)
+                    angle, profile = self._optimize_rotation_pairwise(water, rotation)
+                    # Use the energy from the OW map
+                    energy = water.get_energy(ad_map, 0)
 
                     if energy <= cutoff:
                         energies.append(energy)
+                        profiles.append(profile)
+                        angles.append(angle)
                         water.energy = energy
 
                     else:
@@ -304,12 +314,17 @@ class WaterNetwork():
             # We return an empty water, connections and info
             return ([], [], [])
 
-        columns = ['active', 'shell_id', 'energy', 'cluster_id']
-        data = [(False, shell_id + 1, energy, cluster) for energy, cluster in zip(energies, clusters)]
-        info = pd.DataFrame(data, columns=columns)
+        columns = ['active', 'shell_id', 'energy', 'angle', 'cluster_id']
+        data = [(False, shell_id + 1, energy, angle, cluster) for energy, angle, cluster in zip(energies, angles, clusters)]
+        df_energy = pd.DataFrame(data, columns=columns)
         
         # Activate only the best one in each cluster
-        index = info.groupby('cluster_id', sort=False)['energy'].idxmin()
-        info.loc[index, 'active'] = True
+        index = df_energy.groupby('cluster_id', sort=False)['energy'].idxmin()
+        df_energy.loc[index, 'active'] = True
+        df['shells'] = df_energy
 
-        return (waters, connections, info)
+        # Add profiles
+        df_profile = pd.DataFrame(profiles)
+        df['profiles'] = df_profile 
+
+        return (waters, connections, df)

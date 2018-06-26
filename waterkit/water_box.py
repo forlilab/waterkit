@@ -30,10 +30,11 @@ class WaterBox():
         # All the informations are stored into a dict of df
         columns = ['molecule_i', 'atom_i', 'molecule_j', 'atom_j']
         self.df['connections'] = pd.DataFrame(columns=columns)
-        columns = ['active', 'shell_id', 'energy', 'cluster_id']
+        columns = ['active', 'shell_id', 'energy', 'angle', 'cluster_id']
         self.df['shells'] = pd.DataFrame(columns=columns)
         columns = ['molecule_i', 'atom_i']
         self.df['kdtree_relations'] = pd.DataFrame(columns=columns)
+        self.df['profiles'] = pd.DataFrame()
 
         # Add the receptor/map to the waterbox
         self.add_molecules(receptor)
@@ -277,13 +278,14 @@ class WaterBox():
         waters, connections = self._place_optimal_water(molecules, ad_map)
 
         n = WaterNetwork(self)
-        waters, connections, info = n.optimize_shell(waters, connections)
+        waters, connections, df = n.optimize_shell(waters, connections)
 
         if len(waters):
             # And add all the waters
             self.add_molecules(waters, connections)
             # Add informations about the new shell
-            self.add_informations(info, 'shells')
+            for key in df.keys():
+                self.add_informations(df[key], key)
             # Update the last map OW
             self._update_map(waters, ad_map, self._water_map, choices=['OW'])
             self.add_map(ad_map)
