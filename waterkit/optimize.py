@@ -142,6 +142,8 @@ class WaterNetwork():
                 # ... update with the new one
                 water.translate(utils.vector(water.get_coordinates(0), coord_sphere[t]))
 
+                return np.min(energy_sphere)
+
     def _optimize_rotation(self, water, ad_map, rotation=10):
         """ Optimize the rotation of a TIP5P water molecule """
         if water._anchor_type == 'donor':
@@ -173,22 +175,27 @@ class WaterNetwork():
         best_angle = (360. - current_rotation) + best_angle
         water.rotate(best_angle, ref_id=ref_id)
 
-    def _calc_water_energy_pairwise(self, water_xyz, anchors_xyz, vectors_xyz):
+    def _calc_water_energy_pairwise(self, water_xyz, anchors_xyz, vectors_xyz, anchors_types):
         energy = 0.
 
         for i, xyz in enumerate(water_xyz[1:]):
             if i <= 1:
-                ref_xyz = xyz
+                ref_xyz = xyz # use hydrogen for distance
+                water_type = 'donor'
             else:
-                ref_xyz = water_xyz[0]
+                ref_xyz = water_xyz[0] # use oxygen for distance
+                water_type = 'acceptor'
 
-            for anchor_xyz, vector_xyz in zip(anchors_xyz, vectors_xyz):
-                beta_1 = utils.get_angle(xyz, anchor_xyz, vector_xyz, False)[0]
-                beta_2 = utils.get_angle(xyz + utils.vector(water_xyz[0], xyz), xyz, anchor_xyz, False)[0]
-                score_a = self._calc_angle([beta_1, beta_2])
-                r = utils.get_euclidean_distance(ref_xyz, np.array([anchor_xyz]))[0]
-                score_d = self._calc_distance(r, 55332.873, 18393.199)
-                energy += score_a * score_d
+            for anchor_xyz, vector_xyz, anchor_type in zip(anchors_xyz, vectors_xyz, anchors_types):
+                """ water and anchor types have to be opposite types
+                in order to have an hydrogen bond between them """
+                if water_type != anchor_type:
+                    beta_1 = utils.get_angle(xyz, anchor_xyz, vector_xyz, False)[0]
+                    beta_2 = utils.get_angle(xyz + utils.vector(water_xyz[0], xyz), xyz, anchor_xyz, False)[0]
+                    score_a = self._calc_angle([beta_1, beta_2])
+                    r = utils.get_euclidean_distance(ref_xyz, np.array([anchor_xyz]))[0]
+                    score_d = self._calc_distance(r, 55332.873, 18393.199)
+                    energy += score_a * score_d
 
         return energy
 
@@ -206,6 +213,7 @@ class WaterNetwork():
         anchors_xyz = []
         vectors_xyz = []
         anchors_ids = []
+        anchors_types = []
 
         # Retrieve the coordinates of all the anchors
         for _, row in closest_atom_ids.iterrows():
@@ -223,6 +231,7 @@ class WaterNetwork():
 
             for idx in closest_anchor_ids:
                 xyz = molecule.get_coordinates(idx)
+                anchor_type = molecule.hydrogen_bond_anchors[idx].type
 
                 if [idx for i in rotatable_bond_ids if idx in i]:
                     """ If the vectors are on a rotatable bond 
@@ -239,7 +248,8 @@ class WaterNetwork():
 
                 anchors_xyz.append(a)
                 vectors_xyz.append(v)
-                anchors_ids.extend([idx]*v.shape[0])
+                anchors_ids.extend([idx] * v.shape[0])
+                anchors_types.extend([anchor_type] * v.shape[0])
 
         anchors_xyz = np.vstack(anchors_xyz)
         vectors_xyz = np.vstack(vectors_xyz)
@@ -247,7 +257,7 @@ class WaterNetwork():
         angles = [rotation] * (np.int(np.floor((360 / rotation))) - 1)
         best_angle = 0
         current_rotation = 0.
-        best_energy = self._calc_water_energy_pairwise(water_xyz, anchors_xyz, vectors_xyz)
+        best_energy = self._calc_water_energy_pairwise(water_xyz, anchors_xyz, vectors_xyz, anchors_types)
         energy_profile = [best_energy]
 
         # Rotate the water molecule and get its energy
@@ -255,7 +265,7 @@ class WaterNetwork():
             water.rotate(angle, ref_id=ref_id)
             water_xyz = water.get_coordinates()
 
-            current_energy = self._calc_water_energy_pairwise(water_xyz, anchors_xyz, vectors_xyz)
+            current_energy = self._calc_water_energy_pairwise(water_xyz, anchors_xyz, vectors_xyz, anchors_types)
             current_rotation += angle
             energy_profile.append(current_energy)
 
