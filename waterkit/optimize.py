@@ -325,26 +325,36 @@ class WaterNetwork():
         connections.drop(index, inplace=True)
         connections['molecule_j'] = range(0, len(waters)) # Renumber the water molecules
 
-        if len(waters) > 1:
-            # Identify clusters of waters
-            clusters = self._cluster_waters(waters, distance=cluster_distance)
-        elif len(waters) == 1:
-            clusters = [1]
-        else:
-            # We return an empty water, connections and info
-            return ([], [], [])
+        # Add water shell informations
+        columns = ['shell_id', 'energy', 'angle']
+        data = [(shell_id + 1, energy, angle) for energy, angle in zip(energies, angles)]
+        df_shell = pd.DataFrame(data, columns=columns)
+        df['shells'] = df_shell
 
-        columns = ['active', 'shell_id', 'energy', 'angle', 'cluster_id']
-        data = [(False, shell_id + 1, energy, angle, cluster) for energy, angle, cluster in zip(energies, angles, clusters)]
-        df_energy = pd.DataFrame(data, columns=columns)
-        
-        # Activate only the best one in each cluster
-        index = df_energy.groupby('cluster_id', sort=False)['energy'].idxmin()
-        df_energy.loc[index, 'active'] = True
-        df['shells'] = df_energy
-
-        # Add profiles
+        # Add water profiles
         df_profile = pd.DataFrame(profiles)
-        df['profiles'] = df_profile 
+        df['profiles'] = df_profile
 
         return (waters, connections, df)
+
+    def select_waters(self, waters, df, how='best'):
+        """ Select water molecules from the shell """
+        clusters = []
+        cluster_distance = 2.0
+
+        # All water molecules are inactive by default
+        df['active'] = False
+
+        if how == 'best':
+            if len(waters) > 1:
+                # Identify clusters of waters
+                clusters = self._cluster_waters(waters, distance=cluster_distance)
+            elif len(waters) == 1:
+                clusters = [1]
+
+            df['cluster_id'] = clusters
+            # Activate only the best one in each cluster
+            index = df.groupby('cluster_id', sort=False)['energy'].idxmin()
+            df.loc[index, 'active'] = True
+
+        return df

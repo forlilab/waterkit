@@ -30,7 +30,7 @@ class WaterBox():
         # All the informations are stored into a dict of df
         columns = ['molecule_i', 'atom_i', 'molecule_j', 'atom_j']
         self.df['connections'] = pd.DataFrame(columns=columns)
-        columns = ['active', 'shell_id', 'energy', 'angle', 'cluster_id']
+        columns = ['active', 'shell_id']
         self.df['shells'] = pd.DataFrame(columns=columns)
         columns = ['molecule_i', 'atom_i']
         self.df['kdtree_relations'] = pd.DataFrame(columns=columns)
@@ -283,6 +283,9 @@ class WaterBox():
         if len(waters):
             # And add all the waters
             self.add_molecules(waters, connections)
+
+            # Select water molecules and update shell informations
+            df['shells'] = n.select_waters(waters, df['shells'], how='best')
             # Add informations about the new shell
             for key in df.keys():
                 self.add_informations(df[key], key)
