@@ -305,24 +305,21 @@ class WaterNetwork():
             if ad_map.is_in_map(water.get_coordinates(0)[0]):
                 # Optimize the position of the spherical water
                 self._optimize_position(water, ad_map, distance, angle)
+                # Use the energy from the OW map
+                energy = water.get_energy(ad_map, 0)
 
                 # Before going further we check the energy
-                if water.get_energy(ad_map) <= cutoff:
+                if energy <= cutoff:
                     # ... and we build the TIP5
                     water.build_tip5p()
                     # ... and optimize the rotation
                     angle, profile = self._optimize_rotation_pairwise(water, rotation)
-                    # Use the energy from the OW map
-                    energy = water.get_energy(ad_map, 0)
 
-                    if energy <= cutoff:
-                        energies.append(energy)
-                        profiles.append(profile)
-                        angles.append(angle)
-                        water.energy = energy
+                    energies.append(energy)
+                    #profiles.append(profile)
+                    angles.append(angle)
+                    water.energy = energy
 
-                    else:
-                        to_be_removed.append(i)
                 else:
                     to_be_removed.append(i)
             else:
