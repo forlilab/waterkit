@@ -9,6 +9,7 @@
 
 import numpy as np
 
+np.random.seed(0)
 
 def vector(a, b):
     """
