@@ -206,8 +206,8 @@ class WaterNetwork():
         else:
             ref_id = 1
 
-        # Get all the neighborhood atoms
         water_xyz = water.get_coordinates()
+        # Get all the neighborhood atoms (active molecules)
         closest_atom_ids = self._water_box.get_closest_atoms(water_xyz[0], 3.4)
 
         anchors_xyz = []
@@ -306,19 +306,19 @@ class WaterNetwork():
                 # Optimize the position of the spherical water
                 self._optimize_position(water, ad_map, distance, angle)
                 # Use the energy from the OW map
-                energy = water.get_energy(ad_map, 0)
+                water_energy = water.get_energy(ad_map, 0)
 
                 # Before going further we check the energy
-                if energy <= cutoff:
+                if water_energy <= cutoff:
                     # ... and we build the TIP5
                     water.build_tip5p()
                     # ... and optimize the rotation
-                    angle, profile = self._optimize_rotation_pairwise(water, rotation)
+                    water_angle, water_profile = self._optimize_rotation_pairwise(water, rotation)
 
-                    energies.append(energy)
-                    #profiles.append(profile)
-                    angles.append(angle)
-                    water.energy = energy
+                    energies.append(water_energy)
+                    #profiles.append(water_profile)
+                    angles.append(water_angle)
+                    water.energy = water_energy
 
                 else:
                     to_be_removed.append(i)
@@ -363,5 +363,8 @@ class WaterNetwork():
             # Activate only the best one in each cluster
             index = df.groupby('cluster_id', sort=False)['energy'].idxmin()
             df.loc[index, 'active'] = True
+
+        elif how == 'all':
+            df['active'] = True
 
         return df
