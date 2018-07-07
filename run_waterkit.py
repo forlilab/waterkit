@@ -66,7 +66,8 @@ def main():
 
     # Write output files
     k.write_shells(output_prefix)
-    k.write_maps(output_prefix, ['HD', 'Lp', 'OW'])
+    k.write_shells(output_prefix, False)
+    k.write_maps(output_prefix, ['OW'])
 
 if __name__ == '__main__':
     main()
