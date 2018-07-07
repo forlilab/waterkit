@@ -37,13 +37,11 @@ gridfld protein_maps.fld
 spacing 0.375
 disorder_h 
 receptor_types A N NA C OA SA HD
-ligand_types OA HD Lp OD
+ligand_types OA OD
 receptor protein.pdbqt          
 gridcenter 0.0 0.0 0.0      
 smooth 0.5                           
 map protein_OA.map
-map protein_HD.map
-map protein_Lp.map
 map protein_OD.map
 elecmap protein_e.map
 dsolvmap protein_d.map
