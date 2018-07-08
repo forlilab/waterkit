@@ -11,6 +11,7 @@ from MDAnalysis import Universe
 
 
 def cmd_lineparser():
+    """ Function to parse argument command line """
     parser = argparse.ArgumentParser(description='grid parameters')
     parser.add_argument("-i", "--mol", dest="mol_file", required=True,
                         action="store", help="molecule file")
@@ -27,6 +28,8 @@ def cmd_lineparser():
 
 
 def read_residues_csv_file(csv_file):
+    """ Function to read the csv file, one
+    residue per line with format <resid,segid> """
     residues = []
 
     with open(csv_file) as f:
@@ -43,7 +46,7 @@ def read_residues_csv_file(csv_file):
 
 
 def get_npts(box, center, spacing, buffer_space=0):
-
+    """ Function to compute the number of grid points """
     box = box.T
     
     if np.abs(box[0][0] - center[0]) >= np.abs(box[0][1] - center[0]):
