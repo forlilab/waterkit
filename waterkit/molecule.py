@@ -280,8 +280,8 @@ class Molecule():
 
                     try:
                         # Calculate the vectors on the anchor
-                        vectors = self._get_hb_vectors(idx-1, atom_type.hyb, atom_type.n_water, atom_type.hb_length)
-                        self.hydrogen_bond_anchors[idx-1] = hb_anchor(name, hb_type, vectors)
+                        vectors = self._get_hb_vectors(idx - 1, atom_type.hyb, atom_type.n_water, atom_type.hb_length)
+                        self.hydrogen_bond_anchors[idx - 1] = hb_anchor(name, hb_type, vectors)
                     except:
                         print "Warning: Could not determine hydrogen bond vectors on atom %s of type %s." % (idx, name)
 
@@ -373,7 +373,7 @@ class Molecule():
                 r = anchor_xyz + utils.get_perpendicular_vector(v)
 
                 # And we place a pseudo atom (will be the first water molecule)
-                p = utils.rotate_point(neighbor1_xyz, anchor_xyz, r, np.radians(109.47))
+                p = utils.rotate_point(neighbor1_xyz, anchor_xyz, r, np.radians(109.471))
                 # The next rotation axis will be the vector along the neighbor atom and the origin atom
                 r = anchor_xyz + utils.normalize(utils.vector(neighbor1_xyz, anchor_xyz))
                 angles = [0, -np.radians(120), np.radians(120)]
