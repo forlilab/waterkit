@@ -390,6 +390,24 @@ class Molecule():
 
         return vectors
 
+    def guess_crystallographic_waters(self, ad_map=None):
+        """ Find all the crystallographic water present in the molecule. """
+        self.crystallographic_waters = {}
+        crystallographic_water = namedtuple('crystallographic_water', 'name')
+
+        # Get all the atom ids in the molecule
+        atom_ids = self.get_atoms_in_map(ad_map)
+
+        # Find all the crystallographic waters
+        ob_smarts = ob.OBSmartsPattern()
+        success = ob_smarts.Init('[#8;D0]')
+        ob_smarts.Match(self._OBMol)
+        matches = list(ob_smarts.GetUMapList())
+
+        for match in matches:
+            key = match[0] - 1
+            self.crystallographic_waters[key] = crystallographic_water('water')
+
     def to_file(self, fname, fformat):
         """
         Write OBMolecule to a file
@@ -397,3 +415,28 @@ class Molecule():
         obconv = ob.OBConversion()
         obconv.SetOutFormat(fformat)
         obconv.WriteFile(self._OBMol, fname)
+
+    def export_hb_vectors(self, fname):
+        """ Export all the hb vectors to PDB file. """
+        pdb_line = "ATOM  %5d  %-3s ANC%2s%4d    %8.3f%8.3f%8.3f%6.2f 1.00    %6.3f %2s\n"
+
+        try:
+            i = 1
+            str_out = ""
+
+            for key in sorted(self.hydrogen_bond_anchors):
+                anchor = self.hydrogen_bond_anchors[key]
+
+                vectors = anchor.vectors
+                atom_type = anchor.type[0].upper()
+
+                for vector in vectors:
+                    x, y, z = vector
+                    str_out += pdb_line % (i, atom_type, 'A', key, x, y, z, 1, 1, atom_type)
+                    i += 1
+        except:
+            print "Error: There is no hydrogen bond anchors."
+            return None
+
+        with open(fname, 'w') as w:
+            w.write(str_out)
