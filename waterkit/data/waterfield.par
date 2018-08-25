@@ -1,6 +1,18 @@
 #
 # Water Forcefield 0.1.1
 #
+# - Atom types
+# - hb_type = {0: inactive, 1: donor, 2: acceptor} 
+# - strength = ask Diogo
+# - hyb = atom hybridization {1: sp1, 2: sp2, 3: sp3}
+# - #water = number of water molecules
+# - hb_distance = distance between acceptor/donor (H) atom and water molecule
+# - SMARTS pattern
+#
+#    Atom     hb_type     #water
+#    Type         strength  hb_distance
+#                       hyb.    SMARTS pattern
+#    -------  -   ----- - - --- --------------------------------
 
 # Hydrogen
 ## H
@@ -34,7 +46,7 @@ ATOM H_S_002  1   0.700 1 1 1.8 [#1;X1][#16;X2;v2;H1][a] # Ar-SH (benzenethiol-l
 
 # Oxygen
 ## O
-ATOM O_000     2   0.000 2 2 2.8 [#8] # all oxygens
+ATOM O_000     2   0.000 2 2 2.8 [#8]~[*] # all oxygens
 ATOM O_001     2   0.900 2 2 2.8 [#8;X1;v2]=[#6;X3;v4][*] # in acetone / ester(sp2) / aldehyde
 ATOM O_002     2   0.900 2 2 2.8 [#8;X1;v2]=[#6;X3;v4]([#6])[#6,#1] # in acetone / aldehyde
 ATOM O_003     2   0.900 2 2 2.8 [#8;X1;v2]=[#6;X3;v4]([a]) # acetophenone
