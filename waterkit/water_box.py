@@ -166,7 +166,7 @@ class WaterBox():
     def add_informations(self, data, where):
         """ Append DF to the existing information DF """
         try:
-            self.df[where] = self.df[where].append(data)
+            self.df[where] = self.df[where].append(data, sort=False)
             self.df[where].reset_index(drop=True, inplace=True)
         except:
             print "Error: Cannot add informations to %s dataframe." % where
