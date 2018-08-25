@@ -194,7 +194,7 @@ class WaterBox():
                 for vector in anchor.vectors:
                     # We store the water and the connection
                     waters.append(Water(vector, 'OW', anchor_xyz, anchor.type))
-                    data.append((i, j, len(waters)-1, None))
+                    data.append((i, j, len(waters) - 1, None))
 
         # Convert list of tuples into dataframe
         columns = ['molecule_i', 'atom_i', 'molecule_j', 'atom_j']
