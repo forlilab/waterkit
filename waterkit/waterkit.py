@@ -43,7 +43,12 @@ class Waterkit():
             else:
                 break
 
-            if i == n_layer:
+            """Stop after building n_layer or when the number of
+            layers is equal to 26. In the PDB format, the segid
+            is encoded with only one caracter, so the maximum number
+            of layers is 26, which corresponds to the letter Z.
+            """
+            if i == n_layer or i == 26:
                 break
 
             i += 1
