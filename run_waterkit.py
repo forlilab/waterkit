@@ -57,8 +57,6 @@ def main():
     if water_fld_file is None:
         water_fld_file = os.path.join(d, 'data/water/maps.fld')
 
-    print water_fld_file
-
     waterfield = Waterfield(waterfield_file)
     water_map = Map.from_fld(water_fld_file)
 
