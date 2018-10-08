@@ -18,67 +18,109 @@ import utils
 
 class Map():
 
-    def __init__(self, fld_file):
+    def __init__(self, map_files=None, labels=None):
+        """Create Map object by reading either fld file or map file."""
+        maps = {}
+        prv_grid_information = None
 
-        # Read the fld_file
-        self._center, self._spacing, self._npts, self._maps = self._read_fld(fld_file)
+        if map_files is not None and labels is not None:
+            if not isinstance(map_files, (list, tuple)):
+                map_files = [map_files]
+            if not isinstance(labels, (list, tuple)):
+                labels = [labels]
 
-        # Compute min and max coordinates
-        # Half of each side
-        l = (self._spacing * self._npts) / 2.
-        # Minimum and maximum coordinates
-        self._xmin, self._ymin, self._zmin = self._center - l
-        self._xmax, self._ymax, self._zmax = self._center + l
-        # Generate the cartesian grid
-        self._grid = self._generate_cartesian()
+            assert (len(map_files) == len(labels)), 'map files and labels must have the same number of elements'
 
-        # Get the relative folder path from fld_file
+            # Get information (center, spacing, nelements) from each grid
+            # and make sure they are all identical
+            for map_file, label in zip(map_files, labels):
+                grid_information = self._get_grid_information_from_map(map_file)
+
+                if prv_grid_information is not None:
+                    if not cmp(prv_grid_information, grid_information):
+                        raise Exception('grid %s is different from the previous one.' % label)
+
+                    prv_grid_information = grid_information
+
+                maps[label] = map_file
+
+            self._maps = {}
+            self._maps_interpn = {}
+            self._spacing = grid_information['spacing']
+            self._npts = grid_information['nelements']
+            self._center = grid_information['center']
+
+            # Compute min and max coordinates
+            # Half of each side
+            l = (self._spacing * self._npts) / 2.
+            # Minimum and maximum coordinates
+            self._xmin, self._ymin, self._zmin = self._center - l
+            self._xmax, self._ymax, self._zmax = self._center + l
+            # Generate the cartesian grid
+            self._grid = self._generate_cartesian()
+
+            # Read all the affinity maps
+            for label, map_file in maps.items():
+                affinity_map = self._read_affinity_map(map_file)
+
+                self._maps[label] = affinity_map
+                self._maps_interpn[label] = self._generate_affinity_map_interpn(affinity_map)
+
+    def __str__(self):
+        """Print basic information about the maps"""
+        try:
+            info = 'SPACING %s\n' % self._spacing
+            info += 'NELEMENTS %s\n' % ' '.join(self._npts.astype(str))
+            info += 'CENTER %s\n' % ' '.join(self._center.astype(str))
+            info += 'MAPS %s\n' % ' '.join(self._maps.iterkeys())
+        except AttributeError:
+            info = 'AutoDock Map object is not defined.'
+
+        return info
+
+    @classmethod
+    def from_fld(cls, fld_file):
+        """Read fld file."""
+        map_files = []
+        labels = []
+
         path = os.path.dirname(fld_file)
         # If there is nothing, it means we are in the current directory
         if path == '':
             path = '.'
 
-        self._maps_interpn = {}
-        # Read all the affinity maps
-        for map_type, map_file in self._maps.items():
-            affinity_map = self._read_affinity_map('%s/%s' % (path, map_file))
-
-            self._maps[map_type] = affinity_map
-            self._maps_interpn[map_type] = self._generate_affinity_map_interpn(affinity_map)
-
-    def __str__(self):
-        info = 'SPACING %s\n' % self._spacing
-        info += 'NELEMENTS %s\n' % ' '.join(self._npts.astype(str))
-        info += 'CENTER %s\n' % ' '.join(self._center.astype(str))
-        info += 'MAPS %s\n' % ' '.join(self._maps.iterkeys())
-        return info
-
-    def _read_fld(self, fld_file):
-        """
-        Read the fld file and extract spacing, npts, center and the name of all the maps
-        """
-        labels = []
-        map_files = []
-        npts = []
-
         with open(fld_file) as f:
             for line in f:
-
-                if re.search('^#SPACING', line):
-                    spacing = np.float(line.split(' ')[1])
-                elif re.search('^dim', line):
-                    npts.append(line.split('=')[1].split('#')[0].strip())
-                elif re.search('^#CENTER', line):
-                    center = np.array(line.split(' ')[1:4], dtype=np.float)
-                elif re.search('^label=', line):
+                if re.search('^label=', line):
                     labels.append(line.split('=')[1].split('#')[0].split('-')[0].strip())
                 elif re.search('^variable', line):
-                    map_files.append(line.split(' ')[2].split('=')[1].split('/')[-1])
+                    map_files.append(path + os.sep + line.split(' ')[2].split('=')[1].split('/')[-1])
 
-        npts = np.array(npts, dtype=np.int)
-        maps = {label: map_file for label, map_file in zip(labels, map_files)}
+        if map_files and labels:
+            return cls(map_files, labels)
 
-        return center, spacing, npts, maps
+    def _get_grid_information_from_map(self, map_file):
+        """Read grid information in the map file"""
+        grid_information = {'spacing': None,
+                            'nelements': None,
+                            'center': None}
+
+        with open(map_file) as f:
+            for line in f:
+                if re.search('^SPACING', line):
+                    grid_information['spacing'] = np.float(line.split(' ')[1])
+                elif re.search('^NELEMENTS', line):
+                    nelements = np.array(line.split(' ')[1:4], dtype=np.int)
+                    # Transform even numbers to the nearest odd integer
+                    nelements = nelements // 2 * 2 + 1
+                    grid_information['nelements'] = nelements
+                elif re.search('CENTER', line):
+                    grid_information['center'] = np.array(line.split(' ')[1:4], dtype=np.float)
+                elif re.search('^[0-9]', line):
+                    # If the line starts with a number, we stop
+                    break
+
+        return grid_information
 
     def _read_affinity_map(self, map_file):
         """
@@ -169,6 +211,18 @@ class Map():
         # all_in = np.logical_and(np.logical_and(x_in, y_in), z_in)
 
         return all_in
+
+    def is_close_to_edge(self, xyz, distance):
+        """ Check if the points xyz is at X distance of the edge of the box """
+        xyz = np.atleast_2d(xyz)
+        x, y, z = xyz[:, 0], xyz[:, 1], xyz[:, 2]
+
+        x_close = np.logical_or(np.abs(self._xmin - x) <= distance, np.abs(self._xmax - x) <= distance)
+        y_close = np.logical_or(np.abs(self._ymin - y) <= distance, np.abs(self._ymax - y) <= distance)
+        z_close = np.logical_or(np.abs(self._zmin - z) <= distance, np.abs(self._zmax - z) <= distance)
+        close_to = np.any((x_close, y_close, z_close), axis=0)
+
+        return close_to
 
     def get_energy(self, xyz, atom_type, method='linear'):
         """
@@ -308,9 +362,9 @@ class Map():
         # We don't want to store the whole grid
         new_grid = tuple((np.unique(grid[:, 0]), np.unique(grid[:, 1]), np.unique(grid[:, 2])))
 
-        self.update_grid(new_grid)
+        self._update_grid(new_grid)
 
-    def update_grid(self, new_grid):
+    def _update_grid(self, new_grid):
         """
         Update the grid and all the information derived (center, map_interpn..)
         """
