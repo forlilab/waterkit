@@ -52,7 +52,7 @@ class Map():
 
             # Compute min and max coordinates
             # Half of each side
-            l = (self._spacing * self._npts) / 2.
+            l = (self._spacing * (self._npts - 1)) / 2.
             # Minimum and maximum coordinates
             self._xmin, self._ymin, self._zmin = self._center - l
             self._xmax, self._ymax, self._zmax = self._center + l
