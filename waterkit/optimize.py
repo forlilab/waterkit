@@ -364,6 +364,27 @@ class WaterNetwork():
             index = df.groupby('cluster_id', sort=False)['energy'].idxmin()
             df.loc[index, 'active'] = True
 
+            cluster_unique, cluster_counts = np.unique(clusters, return_counts=True)
+            cluster_ids = cluster_unique[np.argwhere(cluster_counts > 3)].flatten()
+
+            for cluster_id in cluster_ids:
+                to_kept = []
+                waters_ids = df[df['cluster_id'] == cluster_id].index.values
+
+                while waters_ids.size > 0:
+                    best_water_id = df.loc[waters_ids]['energy'].idxmin()
+
+                    best_water_xyz = waters[best_water_id].get_coordinates(0)
+                    waters_xyz = np.array([waters[water_id].get_coordinates(0)[0] for water_id in waters_ids])
+                    d = utils.get_euclidean_distance(best_water_xyz, waters_xyz)
+
+                    to_kept.append(best_water_id)
+                    to_be_removed = np.argwhere(d < 2.4).flatten()
+                    waters_ids = np.delete(waters_ids, to_be_removed)
+
+                for index in to_kept[1:]:
+                    df.loc[index, 'active'] = True
+
         elif how == 'all':
             df['active'] = True
 
