@@ -46,11 +46,11 @@ map protein_OD.map
 elecmap protein_e.map
 dsolvmap protein_d.map
 dielectric -0.1465
-nbp_r_eps 2.8 5.0 12 10 OD OA
-nbp_r_eps 2.8 5.0 12 10 OD NA
-nbp_r_eps 2.8 5.0 12 10 OD SA
-nbp_r_eps 2.8 5.0 12 10 OD NS
-nbp_r_eps 2.8 5.0 12 10 OD OS
+nbp_r_eps 2.8 0.6 12 10 OD OA
+nbp_r_eps 2.8 0.6 12 10 OD NA
+nbp_r_eps 2.8 0.6 12 10 OD SA
+nbp_r_eps 2.8 0.6 12 10 OD NS
+nbp_r_eps 2.8 0.6 12 10 OD OS
 ```
 
 Depending of your system, you would have at least to modify the grid parameters (```npts```, ```gridcenter```) and the receptor atom types list (```receptor_types```). The ```disorder_h``` and ```nbp_r_eps``` options are mandatory in order to optimize the hydroxyl position and to place the spherical water (OD) around acceptor atoms (OA). An example of GPF file (```protein_grid.gpf```) as well as the AutoDock parameters (```AD4_parameters.dat```) are provided. Those files are located in the ```data``` waterkit module's directory.
