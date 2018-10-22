@@ -208,7 +208,7 @@ class WaterNetwork():
 
         water_xyz = water.get_coordinates()
         # Get all the neighborhood atoms (active molecules)
-        closest_atom_ids = self._water_box.get_closest_atoms(water_xyz[0], 3.4)
+        closest_atom_ids = self._water_box.closest_atoms(water_xyz[0], 3.4)
 
         anchors_xyz = []
         vectors_xyz = []
@@ -281,45 +281,49 @@ class WaterNetwork():
 
         return best_angle, energy_profile
 
-    def optimize_shell(self, waters, connections, distance=2.9, angle=145, cutoff=0):
-        """ Optimize position of water molecules """
+    def optimize_waters(self, waters, connections=None, distance=2.9, angle=145, cutoff=0, rotation=10,  
+                        opt_position=True, opt_rotation=True, opt_disordered=True):
+        """Optimize position of water molecules."""
         df = {}
-        rotation = 10
-        cluster_distance = 2.
-
-        shell_id = self._water_box.get_number_of_shells()
-        ad_map = self._water_box.get_map(shell_id, False)
-
-        if shell_id == 0:
-            receptor = self._water_box.get_molecules_in_shell(0)[0]
-            # Start first by optimizing the water on rotatable bonds
-            self._optimize_rotatable_waters(receptor, waters, connections, ad_map, rotation)
-
-        angles = []
-        energies = []
+        data = []
         profiles = []
         to_be_removed = []
+
+        shell_id = self._water_box.number_of_shells(ignore_xray=True)
+        ad_map = self._water_box.get_map(shell_id, False)
+
+        if opt_disordered and connections is not None:
+            receptor = self._water_box.molecules_in_shell(0)[0]
+            # Start first by optimizing the water on rotatable bonds
+            self._optimize_rotatable_waters(receptor, waters, connections, ad_map, rotation)
 
         # And now we optimize all water individually
         for i, water in enumerate(waters):
             if ad_map.is_in_map(water.get_coordinates(0)[0]):
-                # Optimize the position of the spherical water
-                self._optimize_position(water, ad_map, distance, angle)
+                if opt_position:
+                    # Optimize the position of the spherical water
+                    self._optimize_position(water, ad_map, distance, angle)
+                
                 # Use the energy from the OW map
                 water_energy = water.get_energy(ad_map, 0)
 
                 # Before going further we check the energy
                 if water_energy <= cutoff:
                     # ... and we build the TIP5
+                    # Should be outside this function
                     water.build_tip5p()
-                    # ... and optimize the rotation
-                    water_angle, water_profile = self._optimize_rotation_pairwise(water, rotation)
+                    
+                    water_angle = None
+                    #water_profile = None
 
-                    energies.append(water_energy)
-                    #profiles.append(water_profile)
-                    angles.append(water_angle)
+                    if opt_rotation:
+                        # ... and optimize the rotation
+                        water_angle, water_profile = self._optimize_rotation_pairwise(water, rotation)
+                        #profiles.append(water_profile)
+
+                    # Doublon, all the information should be stored in waterbox df
                     water.energy = water_energy
-
+                    data.append((shell_id + 1, water_energy, water_angle))
                 else:
                     to_be_removed.append(i)
             else:
@@ -327,30 +331,37 @@ class WaterNetwork():
 
         # Keep only the good waters
         waters = [water for i, water in enumerate(waters) if not i in to_be_removed]
-        # ...and also the connections
-        index = connections.loc[connections['molecule_j'].isin(to_be_removed)].index
-        connections.drop(index, inplace=True)
-        connections['molecule_j'] = range(0, len(waters)) # Renumber the water molecules
+
+        # Keep connections of the good waters
+        if connections is not None:
+            index = connections.loc[connections['molecule_j'].isin(to_be_removed)].index
+            connections.drop(index, inplace=True)
+            # Renumber the water molecules
+            connections['molecule_j'] = range(0, len(waters))
+            df['connections'] = connections
 
         # Add water shell informations
         columns = ['shell_id', 'energy', 'angle']
-        data = [(shell_id + 1, energy, angle) for energy, angle in zip(energies, angles)]
         df_shell = pd.DataFrame(data, columns=columns)
         df['shells'] = df_shell
 
         # Add water profiles
-        df_profile = pd.DataFrame(profiles)
-        df['profiles'] = df_profile
+        if opt_rotation:
+            df_profile = pd.DataFrame(profiles)
+            df['profiles'] = df_profile
 
-        return (waters, connections, df)
+        return (waters, df)
 
-    def select_waters(self, waters, df, how='best'):
-        """ Select water molecules from the shell """
+    def activate_molecules_in_shell(self, shell_id, how='best'):
+        """Activate waters in the shell."""
         clusters = []
         cluster_distance = 2.0
 
-        # All water molecules are inactive by default
-        df['active'] = False
+        waters = self._water_box.molecules_in_shell(shell_id, active_only=False)
+        df = self._water_box.molecule_informations_in_shell(shell_id)
+
+        # The dataframe and the waters list must have the same index
+        df.reset_index(drop=True, inplace=True)
 
         if how == 'best':
             if len(waters) > 1:
@@ -360,32 +371,47 @@ class WaterNetwork():
                 clusters = [1]
 
             df['cluster_id'] = clusters
-            # Activate only the best one in each cluster
-            index = df.groupby('cluster_id', sort=False)['energy'].idxmin()
-            df.loc[index, 'active'] = True
 
-            cluster_unique, cluster_counts = np.unique(clusters, return_counts=True)
-            cluster_ids = cluster_unique[np.argwhere(cluster_counts > 3)].flatten()
+            for i, cluster in df.groupby('cluster_id', sort=False):
+                to_activate = []
 
-            for cluster_id in cluster_ids:
-                to_kept = []
-                waters_ids = df[df['cluster_id'] == cluster_id].index.values
+                cluster = cluster.copy()
 
-                while waters_ids.size > 0:
-                    best_water_id = df.loc[waters_ids]['energy'].idxmin()
+                """1. We identify the best water molecule in the cluster, by
+                taking first X-ray water molecules, if not the best water molecule
+                in term of energy. 
+                2. Calculate the distance with the best(s) and all the
+                other water molecules. The water molecules too close are removed 
+                and are kept only the ones further than 2.4 A. 
+                3. We removed the best and the water that are clashing from the dataframe.
+                4. We continue until there is nothing left in the dataframe."""
+                while cluster.shape[0] > 0:
+                    to_drop = []
 
-                    best_water_xyz = waters[best_water_id].get_coordinates(0)
-                    waters_xyz = np.array([waters[water_id].get_coordinates(0)[0] for water_id in waters_ids])
-                    d = utils.get_euclidean_distance(best_water_xyz, waters_xyz)
+                    if True in cluster['xray'].values:
+                        best_water_ids = cluster[cluster['xray'] == True].index.values
+                    else:
+                        best_water_ids = [cluster['energy'].idxmin()]
 
-                    to_kept.append(best_water_id)
-                    to_be_removed = np.argwhere(d < 2.4).flatten()
-                    waters_ids = np.delete(waters_ids, to_be_removed)
+                    water_ids = cluster.index.difference(best_water_ids).values
 
-                for index in to_kept[1:]:
-                    df.loc[index, 'active'] = True
+                    if water_ids.size > 0:
+                        waters_xyz = np.array([waters[x].get_coordinates(0)[0] for x in water_ids])
+
+                        for best_water_id in best_water_ids:
+                            best_water_xyz = waters[best_water_id].get_coordinates(0)
+                            d = utils.get_euclidean_distance(best_water_xyz, waters_xyz)
+                            to_drop.extend(water_ids[np.argwhere(d < 2.4)].flatten())
+
+                    to_activate.extend(best_water_ids)
+                    cluster.drop(best_water_ids, inplace=True)
+                    cluster.drop(to_drop, inplace=True)
+
+                # The best water identified are activated
+                df.loc[to_activate, 'active'] = True
 
         elif how == 'all':
             df['active'] = True
 
-        return df
+        # We update the information to able to build the next hydration shell
+        self._water_box.update_informations_in_shell(df['active'].values, shell_id, 'active')

@@ -22,7 +22,7 @@ class Waterkit():
         # Combine OA and OD to create OW
         self._water_map.combine('OW', ['OA', 'OD'], how='best')
 
-    def hydrate(self, receptor, ad_map, n_layer=0):
+    def hydrate(self, receptor, ad_map, waters=None, n_layer=0):
         """ Hydrate the molecule by adding successive layers
         of water molecules until the box is complety full
         """
@@ -31,7 +31,10 @@ class Waterkit():
         # Combine OA and OD to create OW
         ad_map.combine('OW', ['OA', 'OD'], how='best')
 
-        w = WaterBox(receptor, ad_map, self._water_map, self._waterfield)
+        w = WaterBox(self._water_map, self._waterfield)
+        w.add_receptor(receptor, ad_map)
+        if waters is not None:
+            w.add_crystallographic_waters(waters)
 
         i = 1
         while True:
@@ -55,8 +58,6 @@ class Waterkit():
 
         self.water_boxes.append(w)
 
-    #def analysis(self):
-
     def write_shells(self, prefix='water', only_active=True):
         """ Write layers of water in a PDBQT file """
         i, j = 1, 1
@@ -67,8 +68,8 @@ class Waterkit():
         if not only_active:
             active = '_all'
 
-        shell_id = self.water_boxes[0].get_number_of_shells()
-        waters = [self.water_boxes[0].get_molecules_in_shell(i, only_active) for i in range(1, shell_id+1)]
+        shell_id = self.water_boxes[0].number_of_shells()
+        waters = [self.water_boxes[0].molecules_in_shell(i, only_active) for i in range(1, shell_id+1)]
 
         for shell, chain in zip(waters, ascii_uppercase):
             i, j = 1, 1

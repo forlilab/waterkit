@@ -6,6 +6,7 @@
 # Class for water
 #
 
+import os
 from collections import namedtuple
 
 import numpy as np
@@ -17,17 +18,39 @@ from molecule import Molecule
 
 class Water(Molecule):
 
-    def __init__(self, oxygen_xyz, oxygen_type, anchor_xyz, anchor_type):
+    def __init__(self, oxygen_xyz, oxygen_type='OW', anchor_xyz=None, vector_xyz=None, anchor_type=None):
         self._OBMol = ob.OBMol()
         # Add the oxygen atom
         self.add_atom(oxygen_xyz, atom_type=oxygen_type, atom_num=8)
-
         # Store all the informations about the anchoring
-        anchor_vector = anchor_xyz + utils.normalize(utils.vector(oxygen_xyz, anchor_xyz))
-        self._anchor = np.array([anchor_xyz, anchor_vector])
-        self._anchor_type = anchor_type
+        if all(v is not None for v in [anchor_xyz, vector_xyz, anchor_type]):
+            self.set_anchor(anchor_xyz, vector_xyz, anchor_type)
 
         self._previous = None
+
+    @classmethod
+    def from_file(cls, fname, oxygen_type='OW'):
+        """Create list of Water object from a PDB file."""
+        waters = []
+
+        # Get name and file extension
+        name, file_extension = os.path.splitext(fname)
+
+        if file_extension == '.pdbqt':
+            file_extension = 'pdb'
+
+        # Read PDB file
+        obconv = ob.OBConversion()
+        obconv.SetInFormat(file_extension)
+        OBMol = ob.OBMol()
+        obconv.ReadFile(OBMol, fname)
+
+        for x in ob.OBMolAtomIter(OBMol):
+            if x.IsOxygen():
+                oxygen_xyz = np.array([x.GetX(), x.GetY(), x.GetZ()])
+                waters.append(cls(oxygen_xyz, oxygen_type))
+
+        return waters
 
     def add_atom(self, atom_xyz, atom_type='OA', atom_num=1, bond=None):
         """
@@ -43,6 +66,17 @@ class Water(Molecule):
 
         if bond is not None and self._OBMol.NumAtoms() >= 1:
             self._OBMol.AddBond(bond[0], bond[1], bond[2])
+
+    def set_anchor(self, anchor_xyz, vector_xyz, anchor_type):
+        """Add information about the anchoring."""
+        # IDEA: This info should be accessible with attributes hba, hbv and type
+        anchor_vector = anchor_xyz + utils.normalize(utils.vector(vector_xyz, anchor_xyz))
+        self._anchor = np.array([anchor_xyz, anchor_vector])
+        self._anchor_type = anchor_type
+
+    def is_water(self):
+        """Tell if it is a water or not."""
+        return True
 
     def update_coordinates(self, atom_xyz, atom_id):
         """
@@ -126,7 +160,7 @@ class Water(Molecule):
         """ Guess all the hydrogen bond anchors in the
         TIP5P water molecule. We don't need the waterfield here. """
         self.hydrogen_bond_anchors = {}
-        hb_anchor = namedtuple('hydrogen_bond_anchor', 'name type vectors')
+        hb_anchor = namedtuple('hydrogen_bond_anchor', 'id name type vectors')
 
         # Get all the available hb types
         atom_types = waterfield.get_atom_types()
@@ -147,7 +181,7 @@ class Water(Molecule):
                 hb_type = 'acceptor'
 
             vectors = self._get_hb_vectors(idx-1, atom_type.hyb, atom_type.n_water, atom_type.hb_length)
-            self.hydrogen_bond_anchors[idx-1] = hb_anchor(name, hb_type, vectors)
+            self.hydrogen_bond_anchors[idx-1] = hb_anchor(idx - 1, name, hb_type, vectors)
 
     def translate(self, vector):
         """ Translate the water molecule by a vector """

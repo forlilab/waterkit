@@ -19,29 +19,41 @@ from optimize import WaterNetwork
 
 class WaterBox():
 
-    def __init__(self, receptor, ad_map, water_map, waterfield):
+    def __init__(self, water_map, waterfield):
         self.molecules = {}
         self.maps = []
         self.df = {}
         self._kdtree = None
         self._water_map = water_map
         self._waterfield = waterfield
+        self._shells_built = 0
 
         # All the informations are stored into a dict of df
         columns = ['molecule_i', 'atom_i', 'molecule_j', 'atom_j']
         self.df['connections'] = pd.DataFrame(columns=columns)
-        columns = ['active', 'shell_id']
+        columns = ['shell_id', 'active', 'xray']
         self.df['shells'] = pd.DataFrame(columns=columns)
         columns = ['molecule_i', 'atom_i']
         self.df['kdtree_relations'] = pd.DataFrame(columns=columns)
         self.df['profiles'] = pd.DataFrame()
 
-        # Add the receptor/map to the waterbox
-        self.add_molecules(receptor)
-        self.add_map(ad_map)
-        # Add informations about the receptor
-        data = pd.DataFrame([[True, 0]], columns=['active', 'shell_id'])
-        self.add_informations(data, 'shells')
+    def add_receptor(self, receptor, ad_map):
+        """Add the receptor and the corresponding ad_map to the waterbox."""
+        if not 0 in self.molecules:
+            receptor.guess_hydrogen_bond_anchors(self._waterfield, ad_map)
+            receptor.guess_rotatable_bonds()
+
+            # Add the receptor/map to the waterbox
+            self.add_molecules(receptor)
+            self.add_map(ad_map)
+            # Add informations about the receptor
+            data = pd.DataFrame([[0, True, None]], columns=['shell_id', 'active', 'xray'])
+            self.add_informations(data, 'shells')
+
+            return True
+        else:
+            # The receptor was already added to the waterbox
+            return False
 
     def add_molecules(self, molecules, connections=None, add_KDTree=True):
         """ Add a new molecule to the waterbox """
@@ -115,7 +127,7 @@ class WaterBox():
             pass
         self._kdtree = spatial.cKDTree(data)
 
-    def get_molecules_in_shell(self, shell_ids=None, active_only=True):
+    def molecules_in_shell(self, shell_ids=None, active_only=True, xray_only=False):
         """ Get all the molecule in shell """
         if shell_ids is not None:
             if not isinstance(shell_ids, collections.Iterable):
@@ -126,6 +138,9 @@ class WaterBox():
 
         if active_only:
             df = df[df['active'] == True]
+
+        if xray_only:
+            df = df[df['xray'] == True]
 
         molecules = [self.molecules[i] for i in df.index.tolist()]
 
@@ -146,7 +161,7 @@ class WaterBox():
         except:
             print "Error: There is no map %s" % shell_id
 
-    def get_closest_atoms(self, x, radius, exclude=None, active_only=True):
+    def closest_atoms(self, x, radius, exclude=None, active_only=True):
         """ Retrieve indices of the closest atoms around x 
         at a certain radius """
         index = self._kdtree.query_ball_point(x, radius)
@@ -171,12 +186,60 @@ class WaterBox():
         except:
             print "Error: Cannot add informations to %s dataframe." % where
 
-    def get_number_of_shells(self):
-        """ Get the total number of shells """
-        # df['column'].max() faster than np.max(df['column'])
-        return self.df['shells']['shell_id'].max()
+    def molecule_informations_in_shell(self, shell_id):
+        """Get information of shell."""
+        df = self.df['shells']
+        # Return a copy to avoid a SettingWithCopyWarning flag
+        return df.loc[df['shell_id'] == shell_id].copy()
 
-    def _place_optimal_water(self, molecules, ad_map=None):
+    def update_informations_in_shell(self, data, shell_id, key):
+        """Update shell information."""
+        index = self.df['shells']['shell_id'] == shell_id
+        self.df['shells'].loc[index, key] = data
+
+    def number_of_shells(self, ignore_xray=False):
+        """Total number of shells in the WaterBox."""
+        shells = self.df['shells']
+        
+        if ignore_xray:
+            shells = shells.loc[shells['xray'] != True]
+
+        # df['column'].max() faster than np.max(df['column'])
+        return shells['shell_id'].max()
+
+    def closest_hydrogen_bond_anchor(self, xyz, radius, exclude=None, active_only=True):
+        """Find the closest hydrogen bond anchors."""
+        best_hba = None
+        best_hbv_id = None
+        best_hbv_distance = 999.
+
+        df = self.closest_atoms(xyz, radius, exclude, active_only)
+
+        for index, row in df.iterrows():
+            try:
+                hba = self.molecules[row['molecule_i']].hydrogen_bond_anchors[row['atom_i']]
+                hba_xyz = self.molecules[row['molecule_i']].get_coordinates(row['atom_i'])
+
+                hba_distance = utils.get_euclidean_distance(xyz, hba_xyz)[0]
+                hbv_distances = utils.get_euclidean_distance(xyz, hba.vectors)
+                hbv_min_distance = np.min(hbv_distances)
+                hbv_min_id = np.argmin(hbv_distances)
+
+                # We add 1 A to interpolate the distance to the heavy atom
+                if hba.type == 'donor':
+                    hba_distance += 1.
+
+                # Select the closest HBV and make sure that the heavy atom is close enough
+                if hbv_min_distance < best_hbv_distance and hba_distance <= radius:
+                    best_hba = hba
+                    best_hbv_id = hbv_min_id
+                    best_hbv_distance = hbv_min_distance
+            except KeyError:
+                continue
+
+        return best_hba, best_hbv_id
+
+    def place_optimal_waters(self, molecules, ad_map=None):
         """ Place one or multiple water molecules 
         in the ideal position above an acceptor or donor atom
         """
@@ -189,11 +252,11 @@ class WaterBox():
             except:
                 molecule.guess_hydrogen_bond_anchors(self._waterfield)
 
-            for j, anchor in molecule.hydrogen_bond_anchors.iteritems():
+            for j, hba in molecule.hydrogen_bond_anchors.iteritems():
                 anchor_xyz = molecule.get_coordinates(j)[0]
-                for vector in anchor.vectors:
+                for vector_xyz in hba.vectors:
                     # We store the water and the connection
-                    waters.append(Water(vector, 'OW', anchor_xyz, anchor.type))
+                    waters.append(Water(vector_xyz, 'OW', anchor_xyz, vector_xyz, hba.type))
                     data.append((i, j, len(waters) - 1, None))
 
         # Convert list of tuples into dataframe
@@ -270,31 +333,95 @@ class WaterBox():
             ad_map._maps_interpn[map_type] = ad_map._generate_affinity_map_interpn(ad_map._maps[map_type])
 
     def build_next_shell(self):
-        """ Build the next hydration shell """
-        shell_id = self.get_number_of_shells()
-        molecules = self.get_molecules_in_shell(shell_id)
+        """Build the next hydration shell."""
+        shell_id = self.number_of_shells(ignore_xray=True)
+        molecules = self.molecules_in_shell(shell_id)
         ad_map = self.get_map(shell_id, copy=True)
-
-        waters, connections = self._place_optimal_water(molecules, ad_map)
-
         n = WaterNetwork(self)
-        waters, connections, df = n.optimize_shell(waters, connections)
+
+        if shell_id == 0:
+            opt_disordered = True
+        else:
+            opt_disordered = False
+
+        waters, connections = self.place_optimal_waters(molecules, ad_map)
+        waters, df = n.optimize_waters(waters, connections, opt_disordered=opt_disordered)
 
         if len(waters):
             # And add all the waters
-            self.add_molecules(waters, connections)
+            self.add_molecules(waters, df['connections'])
 
-            # Select water molecules and update shell informations
-            df['shells'] = n.select_waters(waters, df['shells'], how='best')
+            # Tag as non-Xray waters (for the clustering)
+            df['shells']['xray'] = False
+            df['shells']['active'] = False
+
             # Add informations about the new shell
             for key in df.keys():
                 self.add_informations(df[key], key)
 
+            # Select water molecules and update shell informations
+            n.activate_molecules_in_shell(shell_id + 1, how='best')
+
             # Get only active waters and update the last map OW
-            active_waters = self.get_molecules_in_shell(shell_id + 1)
+            active_waters = self.molecules_in_shell(shell_id + 1)
             self._update_map(active_waters, ad_map, self._water_map, choices=['OW'])
             self.add_map(ad_map)
 
             return True
         else:
+            return False
+
+    def add_crystallographic_waters(self, waters):
+        """Add crystallographic waters to the waterbox."""
+        i = 0
+        connections = []
+        waters_kept = []
+        n = WaterNetwork(self)
+
+        if 0 in self.molecules:
+            ad_map = self.get_map(0)
+
+            for water in waters:
+                xyz = water.get_coordinates()[0]
+
+                # We attach the xray water to the closest HBA acceptor/donor
+                if ad_map.is_in_map(xyz):
+                    hba, hbv_id = self.closest_hydrogen_bond_anchor(xyz, radius=3.5)
+
+                    # Test if there a HBA around, otherwise it is not a first shell water
+                    if hba is not None:
+                        hba_xyz = self.molecules[0].get_coordinates(hba.id)[0]
+                        water.set_anchor(hba_xyz, hba.vectors[hbv_id], hba.type)
+
+                        connections.append((0, hba.id, i, None))
+                        waters_kept.append(water)
+
+                        i += 1
+                    else:
+                        # For the moment, ignore n-shell water
+                        continue
+
+            # We just optimize the orientation
+            waters_kept, df = n.optimize_waters(waters_kept, cutoff=np.inf, 
+                                                opt_position=False, opt_disordered=False)
+
+            # Guess HBA to be able to put waters on them
+            [water.guess_hydrogen_bond_anchors(self._waterfield) for water in waters_kept]
+
+            # Add X-Ray water molecule to the water box
+            columns = ['molecule_i', 'atom_i', 'molecule_j', 'atom_j']
+            connections = pd.DataFrame(connections, columns=columns)
+            self.add_molecules(waters_kept, connections)
+
+            # Tag all water molecules as X-Ray (for the clustering)
+            df['shells']['xray'] = True
+            df['shells']['active'] = False
+
+            # Add informations about the new shell
+            for key in df.keys():
+                self.add_informations(df[key], key)
+
+            return True
+        else:
+            # The receptor wasn't initialized yet.
             return False
