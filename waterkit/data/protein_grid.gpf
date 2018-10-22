@@ -15,8 +15,8 @@ map protein_OD.map
 elecmap protein_e.map
 dsolvmap protein_d.map
 dielectric -0.1465
-nbp_r_eps 2.8 5.0 12 10 OD OA
-nbp_r_eps 2.8 5.0 12 10 OD NA
-nbp_r_eps 2.8 5.0 12 10 OD SA
-nbp_r_eps 2.8 5.0 12 10 OD NS
-nbp_r_eps 2.8 5.0 12 10 OD OS
+nbp_r_eps 2.8 0.6 12 10 OD OA
+nbp_r_eps 2.8 0.6 12 10 OD NA
+nbp_r_eps 2.8 0.6 12 10 OD SA
+nbp_r_eps 2.8 0.6 12 10 OD NS
+nbp_r_eps 2.8 0.6 12 10 OD OS
