@@ -39,6 +39,10 @@ class Molecule():
                 # Really, there is no implicit hydrogen
                 x.ForceImplH()
 
+    def is_water(self):
+        """Tell if it is a water or not."""
+        return False
+
     def get_atom(self, i):
         """
         Return the OBAtom i
@@ -249,7 +253,7 @@ class Molecule():
         """ Guess all the hydrogen bonds anchors (donor/acceptor)
         in the molecule based on the hydrogen bond forcefield """
         self.hydrogen_bond_anchors = {}
-        hb_anchor = namedtuple('hydrogen_bond_anchor', 'name type vectors')
+        hb_anchor = namedtuple('hydrogen_bond_anchor', 'id name type vectors')
 
         # Get all the atom ids in the molecule
         atom_ids = self.get_atoms_in_map(ad_map)
@@ -281,7 +285,7 @@ class Molecule():
                     try:
                         # Calculate the vectors on the anchor
                         vectors = self._get_hb_vectors(idx - 1, atom_type.hyb, atom_type.n_water, atom_type.hb_length)
-                        self.hydrogen_bond_anchors[idx - 1] = hb_anchor(name, hb_type, vectors)
+                        self.hydrogen_bond_anchors[idx - 1] = hb_anchor(idx - 1, name, hb_type, vectors)
                     except:
                         print "Warning: Could not determine hydrogen bond vectors on atom %s of type %s." % (idx, name)
 
