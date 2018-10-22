@@ -2,7 +2,7 @@
 #
 # AutoDock Atomic Affinity and Electrostatic Grids
 #
-# Created by /home/entropia/autogrid4_disorderedH 4.2.7.x.2017-10-25.
+# Created by autogrid4.
 #
 #SPACING 0.100
 #NELEMENTS 78 78 78
@@ -25,8 +25,8 @@ label=HD-affinity	# component label for variable 1
 label=OA-affinity	# component label for variable 2
 label=Lp-affinity	# component label for variable 3
 label=OD-affinity	# component label for variable 4
-label=Electrostatics	# component label for variable 5
-label=Desolvation	# component label for variable 6
+label=Electrostatics	# component label for variable 4
+label=Desolvation	# component label for variable 5
 #
 # location of affinity grid files and how to read them
 #
