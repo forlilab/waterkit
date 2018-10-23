@@ -27,6 +27,8 @@ class Water(Molecule):
             self.set_anchor(anchor_xyz, vector_xyz, anchor_type)
 
         self._previous = None
+        self.hydrogen_bond_anchors = None
+        self.rotatable_bonds = None
 
     @classmethod
     def from_file(cls, fname, oxygen_type='OW'):

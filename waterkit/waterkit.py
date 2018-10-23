@@ -6,9 +6,13 @@
 # The core of the WaterKit program
 #
 
+import os
+import imp
 from string import ascii_uppercase
 
+from autodock_map import Map
 from water_box import WaterBox
+from waterfield import Waterfield
 from optimize import WaterNetwork
 
 
@@ -19,6 +23,16 @@ class Waterkit():
         self._water_map = water_map
         self._waterfield = waterfield
 
+        if self._waterfield is None:
+            d = imp.find_module('waterkit')[1]
+            waterfield_file = os.path.join(d, 'data/waterfield.par')
+            self._waterfield = Waterfield(waterfield_file)
+
+        if self._water_map is None:
+            d = imp.find_module('waterkit')[1]
+            water_fld_file = os.path.join(d, 'data/water/maps.fld')
+            self._water_map = Map.from_fld(water_fld_file)
+
         # Combine OA and OD to create OW
         self._water_map.combine('OW', ['OA', 'OD'], how='best')
 
@@ -26,13 +40,12 @@ class Waterkit():
         """ Hydrate the molecule by adding successive layers
         of water molecules until the box is complety full
         """
-        # Guess all rotatable bonds on the receptor
-        receptor.guess_rotatable_bonds()
         # Combine OA and OD to create OW
         ad_map.combine('OW', ['OA', 'OD'], how='best')
 
-        w = WaterBox(self._water_map, self._waterfield)
+        w = WaterBox(self._waterfield, self._water_map)
         w.add_receptor(receptor, ad_map)
+
         if waters is not None:
             w.add_crystallographic_waters(waters)
 

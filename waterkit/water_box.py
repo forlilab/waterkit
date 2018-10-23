@@ -19,14 +19,13 @@ from optimize import WaterNetwork
 
 class WaterBox():
 
-    def __init__(self, water_map, waterfield):
+    def __init__(self, waterfield, water_map=None):
         self.molecules = {}
         self.maps = []
         self.df = {}
         self._kdtree = None
-        self._water_map = water_map
         self._waterfield = waterfield
-        self._shells_built = 0
+        self._water_map = water_map
 
         # All the informations are stored into a dict of df
         columns = ['molecule_i', 'atom_i', 'molecule_j', 'atom_j']
@@ -40,8 +39,12 @@ class WaterBox():
     def add_receptor(self, receptor, ad_map):
         """Add the receptor and the corresponding ad_map to the waterbox."""
         if not 0 in self.molecules:
-            receptor.guess_hydrogen_bond_anchors(self._waterfield, ad_map)
-            receptor.guess_rotatable_bonds()
+            # Find all the HBA and disordered atoms if necessary
+            if receptor.hydrogen_bond_anchors is None:
+                receptor.guess_hydrogen_bond_anchors(self._waterfield, ad_map)
+
+            if receptor.rotatable_bonds is None:
+                receptor.guess_rotatable_bonds()
 
             # Add the receptor/map to the waterbox
             self.add_molecules(receptor)
@@ -158,8 +161,8 @@ class WaterBox():
                 return ad_map.copy()
             else:
                 return ad_map
-        except:
-            print "Error: There is no map %s" % shell_id
+        except KeyError:
+            return None
 
     def closest_atoms(self, x, radius, exclude=None, active_only=True):
         """ Retrieve indices of the closest atoms around x 
@@ -247,10 +250,11 @@ class WaterBox():
         data = []
 
         for i, molecule in enumerate(molecules):
-            try:
-                molecule.guess_hydrogen_bond_anchors(self._waterfield, ad_map)
-            except:
-                molecule.guess_hydrogen_bond_anchors(self._waterfield)
+            if molecule.hydrogen_bond_anchors is None:
+                try:
+                    molecule.guess_hydrogen_bond_anchors(self._waterfield, ad_map)
+                except:
+                    molecule.guess_hydrogen_bond_anchors(self._waterfield)
 
             for j, hba in molecule.hydrogen_bond_anchors.iteritems():
                 anchor_xyz = molecule.get_coordinates(j)[0]
@@ -339,6 +343,10 @@ class WaterBox():
         ad_map = self.get_map(shell_id, copy=True)
         n = WaterNetwork(self)
 
+        # Test if we have all the material to continue
+        assert len(molecules) > 0, "There is molecule(s) in the shell %s" % shell_id
+        assert ad_map is not None, "There is no map for shell %s" % shell_id
+
         if shell_id == 0:
             opt_disordered = True
         else:
@@ -362,10 +370,11 @@ class WaterBox():
             # Select water molecules and update shell informations
             n.activate_molecules_in_shell(shell_id + 1, how='best')
 
-            # Get only active waters and update the last map OW
-            active_waters = self.molecules_in_shell(shell_id + 1)
-            self._update_map(active_waters, ad_map, self._water_map, choices=['OW'])
-            self.add_map(ad_map)
+            if self._water_map is not None:
+                # Get only active waters and update the last map OW
+                active_waters = self.molecules_in_shell(shell_id + 1)
+                self._update_map(active_waters, ad_map, self._water_map, choices=['OW'])
+                self.add_map(ad_map)
 
             return True
         else:

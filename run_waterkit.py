@@ -7,16 +7,12 @@
 #
 
 import argparse
-import imp
-import os
-import sys
 
 from waterkit import utils
 from waterkit.waterkit import Waterkit
 from waterkit.autodock_map import Map
 from waterkit.molecule import Molecule
 from waterkit.water import Water
-from waterkit.waterfield import Waterfield
 
 
 def cmd_lineparser():
@@ -31,11 +27,6 @@ def cmd_lineparser():
                         action="store", help="number of layer to add")
     parser.add_argument("-o", "--output", dest="output_prefix", default='water',
                         action="store", help="prefix add to output files")
-    parser.add_argument("-f", "--waterfield", dest="waterfield_file",
-                        default=None, action="store", help="waterfield file")
-    parser.add_argument("-w", "--watermap", dest="water_fld_file",
-                        default=None, action="store",
-                        help="water autodock map file")
     return parser.parse_args()
 
 
@@ -45,9 +36,7 @@ def main():
     fld_file = args.fld_file
     wat_file = args.wat_file
     n_layer = args.n_layer
-    waterfield_file = args.waterfield_file
     output_prefix = args.output_prefix
-    water_fld_file = args.water_fld_file
 
     # Read PDBQT/MOL2 file, Waterfield file and AutoDock grid map
     molecule = Molecule(mol_file)
@@ -58,19 +47,8 @@ def main():
     else:
         waters = None
 
-    d = imp.find_module('waterkit')[1]
-
-    if waterfield_file is None:
-        waterfield_file = os.path.join(d, 'data/waterfield.par')
-
-    if water_fld_file is None:
-        water_fld_file = os.path.join(d, 'data/water/maps.fld')
-
-    waterfield = Waterfield(waterfield_file)
-    water_map = Map.from_fld(water_fld_file)
-
     # Go waterkit!!
-    k = Waterkit(waterfield, water_map)
+    k = Waterkit()
     k.hydrate(molecule, ad_map, waters, n_layer)
 
     # Write output files
