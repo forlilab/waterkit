@@ -23,10 +23,6 @@ conda install openbabel
 ```bash
 pythonsh prepare_receptor4.py -r protein.pdb -C -o protein.pdbqt
 ```
-2. ... and now to mol2 format using OpenBabel
-```bash
-obabel protein.pdbqt -omol2 protein.mol2
-```
 
 ### Grid calculation with autogrid4
 1. Create Grid Protein File (GPF)
@@ -64,7 +60,7 @@ autogrid4 -p protein_grid.gpf -l protein_grid.glg
 
 1. Run WaterKit:
 ```bash
-python run_waterkit.py -i protein.mol2 -m protein_maps.fld -o waters
+python run_waterkit.py -i protein.pdbqt -m protein_maps.fld -o waters
 ```
 
 2. ???
