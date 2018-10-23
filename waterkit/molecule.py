@@ -22,11 +22,9 @@ class Molecule():
     def __init__(self, fname):
         # Get name and file extension
         self.name, file_extension = os.path.splitext(fname)
-
         # Read PDBQT file
         obconv = ob.OBConversion()
         obconv.SetInFormat(file_extension)
-
         self._OBMol = ob.OBMol()
         obconv.ReadFile(self._OBMol, fname)
 
@@ -38,6 +36,9 @@ class Molecule():
                 x.SetImplicitValence(x.GetValence())
                 # Really, there is no implicit hydrogen
                 x.ForceImplH()
+
+        self.hydrogen_bond_anchors = None
+        self.rotatable_bonds = None
 
     def is_water(self):
         """Tell if it is a water or not."""
@@ -393,24 +394,6 @@ class Molecule():
         vectors = np.array(vectors)
 
         return vectors
-
-    def guess_crystallographic_waters(self, ad_map=None):
-        """ Find all the crystallographic water present in the molecule. """
-        self.crystallographic_waters = {}
-        crystallographic_water = namedtuple('crystallographic_water', 'name')
-
-        # Get all the atom ids in the molecule
-        atom_ids = self.get_atoms_in_map(ad_map)
-
-        # Find all the crystallographic waters
-        ob_smarts = ob.OBSmartsPattern()
-        success = ob_smarts.Init('[#8;D0]')
-        ob_smarts.Match(self._OBMol)
-        matches = list(ob_smarts.GetUMapList())
-
-        for match in matches:
-            key = match[0] - 1
-            self.crystallographic_waters[key] = crystallographic_water('water')
 
     def to_file(self, fname, fformat):
         """
