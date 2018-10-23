@@ -19,7 +19,7 @@ conda install openbabel
 ## Documentation
 
 ### Receptor preparation
-1. Conversion to PDBQT using AutoDock Tools
+Conversion to PDBQT using AutoDock Tools
 ```bash
 pythonsh prepare_receptor4.py -r protein.pdb -C -o protein.pdbqt
 ```
