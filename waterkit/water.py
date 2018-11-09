@@ -110,6 +110,9 @@ class Water(Molecule):
 
         return energy[0]
 
+    def partial_charges(self, atom_ids=None):
+        return [-0.411]
+
     def build_tip5p(self):
         """
         Construct hydrogen atoms (H) and lone-pairs (Lp)

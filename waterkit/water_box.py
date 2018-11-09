@@ -164,10 +164,10 @@ class WaterBox():
         except KeyError:
             return None
 
-    def closest_atoms(self, x, radius, exclude=None, active_only=True):
+    def closest_atoms(self, xyz, radius, exclude=None, active_only=True):
         """ Retrieve indices of the closest atoms around x 
         at a certain radius """
-        index = self._kdtree.query_ball_point(x, radius)
+        index = self._kdtree.query_ball_point(xyz, radius)
         df = self.df['kdtree_relations'].loc[index]
 
         if exclude is not None:
@@ -179,6 +179,23 @@ class WaterBox():
             index = self.df['shells'][self.df['shells']['active'] == True].index
             df = df[df['molecule_i'].isin(index)]
 
+        return df
+
+    def atom_informations(self, df):
+        """Get atom informations (xyz, q, type)."""
+        columns = ['xyz', 'q', 'type']
+        data = []
+
+        se = df.groupby('molecule_i')['atom_i'].apply(list)
+
+        for index, value in se.iteritems():
+            coordinates = self.molecules[index].get_coordinates(value)
+            partial_charges = self.molecules[index].partial_charges(value)
+            atom_types = self.molecules[index].get_atom_types(value)
+
+            data.extend([(c, p, t) for c, p, t in zip(coordinates, partial_charges, atom_types)])
+
+        df = pd.DataFrame(data=data, columns=columns)
         return df
 
     def add_informations(self, data, where):
