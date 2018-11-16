@@ -26,6 +26,22 @@ class WaterOptimizer():
         # Boltzmann constant (kcal/mol)
         self._kb = 0.0019872041
 
+    def _cluster(self, waters, distance=2., method='single'):
+        """ Cluster water molecule based on their position using hierarchical clustering """
+        coordinates = np.array([w.get_coordinates([0])[0] for w in waters])
+
+        # Clustering
+        Z = linkage(coordinates, method=method, metric='euclidean')
+        clusters = fcluster(Z, distance, criterion='distance')
+        return clusters
+
+    def _boltzmann_choice(self, energies):
+        """Choose state i based on boltzmann probability."""
+        d = np.exp(-energies / self._kb * self._temperature)
+        p = d / np.sum(d)
+        i = np.random.choice(d.shape[0], p=p)
+        return i
+
     def _smooth_distance(self, r, rij):
         smooth = 0.5
 
@@ -52,12 +68,29 @@ class WaterOptimizer():
 
         return score
 
-    def _boltzmann_choice(self, energies):
-        """Choose state i based on boltzmann probability."""
-        d = np.exp(-energies / self._kb * self._temperature)
-        p = d / np.sum(d)
-        i = np.random.choice(d.shape[0], p=p)
-        return i
+    def _energy_pairwise(self, water_xyz, anchors_xyz, vectors_xyz, anchors_types):
+        energy = 0.
+
+        for i, xyz in enumerate(water_xyz[1:]):
+            if i <= 1:
+                ref_xyz = xyz # use hydrogen for distance
+                water_type = 'donor'
+            else:
+                ref_xyz = water_xyz[0] # use oxygen for distance
+                water_type = 'acceptor'
+
+            for anchor_xyz, vector_xyz, anchor_type in zip(anchors_xyz, vectors_xyz, anchors_types):
+                """ water and anchor types have to be opposite types
+                in order to have an hydrogen bond between them """
+                if water_type != anchor_type:
+                    beta_1 = utils.get_angle(xyz, anchor_xyz, vector_xyz, False)[0]
+                    beta_2 = utils.get_angle(xyz + utils.vector(water_xyz[0], xyz), xyz, anchor_xyz, False)[0]
+                    score_a = self._hydrogen_bond_angle([beta_1, beta_2])
+                    r = utils.get_euclidean_distance(ref_xyz, np.array([anchor_xyz]))[0]
+                    score_d = self._hydrogen_bond_distance(r, 55332.873, 18393.199)
+                    energy += score_a * score_d
+
+        return energy
 
     def _optimize_disordered_waters(self, receptor, waters, connections, ad_map):
         """Optimize water molecules on rotatable bonds."""
@@ -163,7 +196,7 @@ class WaterOptimizer():
         energy_sphere = ad_map.get_energy(coord_sphere, atom_type=oxygen_type)
 
         # Energy of the spherical water
-        energy = ad_map.get_energy(water.get_coordinates(0), atom_type=oxygen_type)
+        energy_water = water.get_energy(ad_map, 0)
 
         if energy_sphere.size:
             if self._how = 'best':
@@ -176,47 +209,27 @@ class WaterOptimizer():
 
             return energy_sphere[i]
 
-        return energy
+        return energy_water
 
-    def _energy_pairwise(self, water_xyz, anchors_xyz, vectors_xyz, anchors_types):
-        energy = 0.
+    def _optimize_orientation(self, water):
+        """Optimize the orientation of the water molecule."""
+        anchors_xyz = []
+        vectors_xyz = []
+        anchors_ids = []
+        anchors_types = []
+        energies = []
+        angles = []
 
-        for i, xyz in enumerate(water_xyz[1:]):
-            if i <= 1:
-                ref_xyz = xyz # use hydrogen for distance
-                water_type = 'donor'
-            else:
-                ref_xyz = water_xyz[0] # use oxygen for distance
-                water_type = 'acceptor'
-
-            for anchor_xyz, vector_xyz, anchor_type in zip(anchors_xyz, vectors_xyz, anchors_types):
-                """ water and anchor types have to be opposite types
-                in order to have an hydrogen bond between them """
-                if water_type != anchor_type:
-                    beta_1 = utils.get_angle(xyz, anchor_xyz, vector_xyz, False)[0]
-                    beta_2 = utils.get_angle(xyz + utils.vector(water_xyz[0], xyz), xyz, anchor_xyz, False)[0]
-                    score_a = self._hydrogen_bond_angle([beta_1, beta_2])
-                    r = utils.get_euclidean_distance(ref_xyz, np.array([anchor_xyz]))[0]
-                    score_d = self._hydrogen_bond_distance(r, 55332.873, 18393.199)
-                    energy += score_a * score_d
-
-        return energy
-
-    def _optimize_rotation_pairwise(self, water):
-        """ Rescore all the water molecules with pairwise interactions """
         if water._anchor_type == 'donor':
             ref_id = 3
         else:
             ref_id = 1
 
         water_xyz = water.get_coordinates()
+        # Number of rotation necessary to do a full spin
+        n_rotation = np.int(np.floor((360 / self._rotation))) - 1
         # Get all the neighborhood atoms (active molecules)
         closest_atom_ids = self._water_box.closest_atoms(water_xyz[0], 3.4)
-
-        anchors_xyz = []
-        vectors_xyz = []
-        anchors_ids = []
-        anchors_types = []
 
         # Retrieve the coordinates of all the anchors
         for _, row in closest_atom_ids.iterrows():
@@ -233,7 +246,7 @@ class WaterOptimizer():
                 rotatable_bond_ids = []
 
             for idx in closest_anchor_ids:
-                xyz = molecule.get_coordinates(idx)
+                anchor_xyz = molecule.get_coordinates(idx)
                 anchor_type = molecule.hydrogen_bond_anchors[idx].type
 
                 if [idx for i in rotatable_bond_ids if idx in i]:
@@ -243,11 +256,11 @@ class WaterOptimizer():
                     is now the coordinate of the oxygen atom. And we
                     keep only one vector, we don't want to count it twice"""
                     v = water_xyz[0]
-                    a = xyz
+                    a = anchor_xyz
                 else:
                     # Otherwise, get all the vectors on this anchor
                     v = molecule.hydrogen_bond_anchors[idx].vectors
-                    a = np.tile(xyz, (v.shape[0], 1))
+                    a = np.tile(anchor_xyz, (v.shape[0], 1))
 
                 anchors_xyz.append(a)
                 vectors_xyz.append(v)
@@ -257,41 +270,33 @@ class WaterOptimizer():
         anchors_xyz = np.vstack(anchors_xyz)
         vectors_xyz = np.vstack(vectors_xyz)
 
-        angles = [self._rotation] * (np.int(np.floor((360 / self._rotation))) - 1)
-        best_angle = 0
-        current_rotation = 0.
-        best_energy = self._energy_pairwise(water_xyz, anchors_xyz, vectors_xyz, anchors_types)
-        energy_profile = [best_energy]
+        # Get the energy of the current orientation
+        energy_water = self._energy_pairwise(water_xyz, anchors_xyz, vectors_xyz, anchors_types)
+        energies.append(energy_water)
+        # Set the current to 0, there is no angle reference
+        current_angle = 0.
+        angles.append(current_angle)
 
         # Rotate the water molecule and get its energy
-        for angle in angles:
-            water.rotate(angle, ref_id=ref_id)
+        for i in range(n_rotation):
+            water.rotate(self._rotation, ref_id=ref_id)
             water_xyz = water.get_coordinates()
 
-            current_energy = self._energy_pairwise(water_xyz, anchors_xyz, vectors_xyz, anchors_types)
-            current_rotation += angle
-            energy_profile.append(current_energy)
+            # Get energy and update the current angle (increment rotation)
+            energies.append(self._energy_pairwise(water_xyz, anchors_xyz, vectors_xyz, anchors_types))
+            current_rotation += self._rotation
 
-            if current_energy < best_energy:
-                best_angle = current_rotation
-                best_energy = current_energy
+        if self._how == 'best':
+            i = np.argmin(energies)
+        elif self._how == ' boltzmann':
+            i = self._boltzmann_choice(energies)
 
         # Once we checked all the angles, we rotate the water molecule to the best angle
         # But also we have to consider how much we rotated the water molecule before
-        best_angle = (360. - current_rotation) + best_angle
+        best_angle = (360. - current_rotation) + angles[i]
         water.rotate(best_angle, ref_id=ref_id)
-        energy_profile = np.array(energy_profile)
 
-        return best_angle, energy_profile
-
-    def _cluster(self, waters, distance=2., method='single'):
-        """ Cluster water molecule based on their position using hierarchical clustering """
-        coordinates = np.array([w.get_coordinates([0])[0] for w in waters])
-
-        # Clustering
-        Z = linkage(coordinates, method=method, metric='euclidean')
-        clusters = fcluster(Z, distance, criterion='distance')
-        return clusters
+        return energies[i]
 
     def optimize(self, waters, connections=None, opt_position=True, opt_rotation=True, opt_disordered=True):
         """Optimize position of water molecules."""
@@ -305,36 +310,33 @@ class WaterOptimizer():
 
         if opt_disordered and connections is not None:
             receptor = self._water_box.molecules_in_shell(0)[0]
-            # Start first by optimizing the water on rotatable bonds
-            self._optimize_rotatable_waters(receptor, waters, connections, ad_map)
+            # Start first by optimizing the disordered water molecules
+            self._optimize_disordered_waters(receptor, waters, connections, ad_map)
 
         # And now we optimize all water individually
         for i, water in enumerate(waters):
             if ad_map.is_in_map(water.get_coordinates(0)[0]):
+                # Optimize the position of the spherical water
                 if opt_position:
-                    # Optimize the position of the spherical water
-                    self._optimize_position(water, ad_map)
-                
-                # Use the energy from the OW map
-                water_energy = water.get_energy(ad_map, 0)
+                    energy_position = self._optimize_position(water, ad_map)
+                else:
+                    energy_position = water.get_energy(ad_map, 0)
 
                 # Before going further we check the energy
-                if water_energy <= self._energy_cutoff:
-                    # ... and we build the TIP5
-                    # Should be outside this function
+                if energy_position <= self._energy_cutoff:
+                    # Build the TIP5
+                    # TODO: Should be outside this function
                     water.build_tip5p()
-                    
-                    water_angle = None
-                    #water_profile = None
 
+                    # Optimize the rotation
                     if opt_rotation:
-                        # ... and optimize the rotation
-                        water_angle, water_profile = self._optimize_rotation_pairwise(water)
-                        #profiles.append(water_profile)
+                        energy_orientation = self._optimize_orientation(water)
+                    else:
+                        energy_orientation = None
 
-                    # Doublon, all the information should be stored in waterbox df
-                    water.energy = water_energy
-                    data.append((shell_id + 1, water_energy, water_angle))
+                    # TODO: Doublon, all the information should be stored in waterbox df
+                    water.energy = energy_position
+                    data.append((shell_id + 1, energy_position, energy_orientation))
                 else:
                     to_be_removed.append(i)
             else:
@@ -342,7 +344,6 @@ class WaterOptimizer():
 
         # Keep only the good waters
         waters = [water for i, water in enumerate(waters) if not i in to_be_removed]
-
         # Keep connections of the good waters
         if connections is not None:
             index = connections.loc[connections['molecule_j'].isin(to_be_removed)].index
@@ -352,14 +353,9 @@ class WaterOptimizer():
             df['connections'] = connections
 
         # Add water shell informations
-        columns = ['shell_id', 'energy', 'angle']
+        columns = ['shell_id', 'energy_position', 'energy_orientation']
         df_shell = pd.DataFrame(data, columns=columns)
         df['shells'] = df_shell
-
-        # Add water profiles
-        if opt_rotation:
-            df_profile = pd.DataFrame(profiles)
-            df['profiles'] = df_profile
 
         return (waters, df)
 
