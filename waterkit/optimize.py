@@ -61,6 +61,7 @@ class WaterOptimizer():
 
     def _optimize_disordered_waters(self, receptor, waters, connections, ad_map):
         """Optimize water molecules on rotatable bonds."""
+        disordered_energies = []
         rotatable_bonds = receptor.rotatable_bonds
 
         # Number of rotation necessary to do a full spin
@@ -83,7 +84,7 @@ class WaterOptimizer():
             energy_waters = np.array([w.get_energy(ad_map) for w in rot_waters])
             energy_waters[energy_waters > 0] = 0
             energies.append(np.sum(energy_waters))
-            # Angle of the disordered group
+            # Current angle of the disordered group
             current_angle = np.radians(receptor._OBMol.GetTorsion(match[3]+1, match[2]+1, match[1]+1, match[0]+1))
             angles.append(current_angle)
 
@@ -120,6 +121,8 @@ class WaterOptimizer():
             elif self._how == 'boltzmann':
                 i = self._boltzmann_choice(energies)
 
+            disordered_energies.append(energies[i])
+
             # Calculate the best angle, based on how much we rotated
             best_angle = np.radians((360. - np.degrees(current_angle)) + np.degrees(angles[i]))
             # Update coordinates to the choosen state
@@ -132,40 +135,48 @@ class WaterOptimizer():
                 anchor[0] = utils.rotate_point(anchor[0], p1, p2, best_angle)
                 anchor[1] = utils.rotate_point(anchor[1], p1, p2, best_angle)
 
+        return disordered_energies
+
     def _optimize_position(self, water, ad_map):
-        """ Optimize the position of the oxygen atom. The movement of the
-        atom is contrained by the distance and the angle with the anchor
+        """Optimize the position of the spherical water molecule. 
+
+        The movement of the water is contrained by the distance and 
+        the angle with the anchor.
         """
         oxygen_type = water.get_atom_types([0])[0]
         distance = self._distance
 
-        # If the anchor type is donor, we have to reduce the
-        # radius by 1 angstrom. Because hydrogen!
+        """If the anchor type is donor, we have to reduce the
+        radius by 1 angstrom. Because the hydrogen atom is closer
+        to the water molecule than the heavy atom."""
         if water._anchor_type == 'donor':
             distance -= 1.
 
-        # Get all the point around the anchor (sphere)
+        """This is how we select the allowed positions:
+        1. Get all the point on the grid around the anchor (sphere)
+        2. Compute angles between all the coordinates and the anchor
+        3. Select coordinates with an angle superior to the choosen angle
+        4. Get their energy"""
         coord_sphere = ad_map.get_neighbor_points(water._anchor[0], 0., distance)
-        # Compute angles between all the coordinates and the anchor
         angle_sphere = utils.get_angle(coord_sphere, water._anchor[0], water._anchor[1])
-        # Select coordinates with an angle superior to the choosen angle
         coord_sphere = coord_sphere[angle_sphere >= self._angle]
-        # Get energy of all the allowed coordinates (distance + angle)
         energy_sphere = ad_map.get_energy(coord_sphere, atom_type=oxygen_type)
-        # ... and get energy of the oxygen
-        energy_oxygen = ad_map.get_energy(water.get_coordinates(0), atom_type=oxygen_type)
+
+        # Energy of the spherical water
+        energy = ad_map.get_energy(water.get_coordinates(0), atom_type=oxygen_type)
 
         if energy_sphere.size:
-            # And if we find something better, we update the coordinate
-            if np.min(energy_sphere) < energy_oxygen:
-                t = energy_sphere.argmin()
+            if self._how = 'best':
+                i = energy_sphere.argmin()
+            elif self._how = 'boltzmann':
+                i = self._boltzmann_choice(energy_sphere)
 
-                # Save the old coordinate
-                water._previous = water.get_coordinates()
-                # ... update with the new one
-                water.translate(utils.vector(water.get_coordinates(0), coord_sphere[t]))
+            # Update the coordinates
+            water.translate(utils.vector(water.get_coordinates(0), coord_sphere[i]))
 
-                return np.min(energy_sphere)
+            return energy_sphere[i]
+
+        return energy
 
     def _energy_pairwise(self, water_xyz, anchors_xyz, vectors_xyz, anchors_types):
         energy = 0.
