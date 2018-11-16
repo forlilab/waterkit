@@ -37,7 +37,8 @@ class WaterOptimizer():
 
     def _boltzmann_choice(self, energies):
         """Choose state i based on boltzmann probability."""
-        d = np.exp(-energies / self._kb * self._temperature)
+        energies = np.array(energies)
+        d = np.exp(-energies / (self._kb * self._temperature))
         p = d / np.sum(d)
         i = np.random.choice(d.shape[0], p=p)
         return i
@@ -105,6 +106,7 @@ class WaterOptimizer():
         for match, value in rotatable_bonds.iteritems():
             energies = []
             angles = []
+            rot_waters = []
 
             # Get index of all the waters attached
             # to a disordered group by looking at the connections
@@ -147,6 +149,7 @@ class WaterOptimizer():
                 energy_waters[energy_waters > 0] = 0
                 energies.append(np.sum(energy_waters))
                 current_angle += rotation
+                angles.append(current_angle)
 
             # Choose the best or the best-boltzmann state
             if self._how == 'best':
@@ -199,9 +202,9 @@ class WaterOptimizer():
         energy_water = water.get_energy(ad_map, 0)
 
         if energy_sphere.size:
-            if self._how = 'best':
+            if self._how == 'best':
                 i = energy_sphere.argmin()
-            elif self._how = 'boltzmann':
+            elif self._how == 'boltzmann':
                 i = self._boltzmann_choice(energy_sphere)
 
             # Update the coordinates
@@ -284,7 +287,8 @@ class WaterOptimizer():
 
             # Get energy and update the current angle (increment rotation)
             energies.append(self._energy_pairwise(water_xyz, anchors_xyz, vectors_xyz, anchors_types))
-            current_rotation += self._rotation
+            current_angle += self._rotation
+            angles.append(current_angle)
 
         if self._how == 'best':
             i = np.argmin(energies)
@@ -293,7 +297,7 @@ class WaterOptimizer():
 
         # Once we checked all the angles, we rotate the water molecule to the best angle
         # But also we have to consider how much we rotated the water molecule before
-        best_angle = (360. - current_rotation) + angles[i]
+        best_angle = (360. - current_angle) + angles[i]
         water.rotate(best_angle, ref_id=ref_id)
 
         return energies[i]
@@ -313,7 +317,9 @@ class WaterOptimizer():
             # Start first by optimizing the disordered water molecules
             self._optimize_disordered_waters(receptor, waters, connections, ad_map)
 
-        # And now we optimize all water individually
+        """And now we optimize all water individually. All the
+        water molecules are outside the box or with a positive
+        energy are considered as bad and are removed."""
         for i, water in enumerate(waters):
             if ad_map.is_in_map(water.get_coordinates(0)[0]):
                 # Optimize the position of the spherical water
@@ -362,7 +368,8 @@ class WaterOptimizer():
     def activate_molecules_in_shell(self, shell_id):
         """Activate waters in the shell."""
         clusters = []
-        cluster_distance = 2.0
+        cluster_distance = 2.7
+        minimal_distance = 2.5
 
         waters = self._water_box.molecules_in_shell(shell_id, active_only=False)
         df = self._water_box.molecule_informations_in_shell(shell_id)
@@ -370,7 +377,7 @@ class WaterOptimizer():
         # The dataframe and the waters list must have the same index
         df.reset_index(drop=True, inplace=True)
 
-        if how == 'best':
+        if self._how == 'best' or self._how == 'boltzmann':
             if len(waters) > 1:
                 # Identify clusters of waters
                 clusters = self._cluster(waters, distance=cluster_distance)
@@ -384,9 +391,10 @@ class WaterOptimizer():
 
                 cluster = cluster.copy()
 
-                """1. We identify the best water molecule in the cluster, by
-                taking first X-ray water molecules, if not the best water molecule
-                in term of energy. 
+                """This is how we cluster water molecules:
+                1. We identify the best or the bolzmann-best water molecule in the 
+                cluster, by taking first X-ray water molecules, if not the best 
+                water molecule in term of energy. 
                 2. Calculate the distance with the best(s) and all the
                 other water molecules. The water molecules too close are removed 
                 and are kept only the ones further than 2.4 A. 
@@ -398,7 +406,11 @@ class WaterOptimizer():
                     if True in cluster['xray'].values:
                         best_water_ids = cluster[cluster['xray'] == True].index.values
                     else:
-                        best_water_ids = [cluster['energy'].idxmin()]
+                        if self._how == 'best':
+                            best_water_ids = [cluster['energy_position'].idxmin()]
+                        elif self._how == 'boltzmann':
+                            i = self._boltzmann_choice(cluster['energy_position'].values)
+                            best_water_ids = [cluster.index.values[i]]
 
                     water_ids = cluster.index.difference(best_water_ids).values
 
@@ -408,7 +420,7 @@ class WaterOptimizer():
                         for best_water_id in best_water_ids:
                             best_water_xyz = waters[best_water_id].get_coordinates(0)
                             d = utils.get_euclidean_distance(best_water_xyz, waters_xyz)
-                            to_drop.extend(water_ids[np.argwhere(d < 2.4)].flatten())
+                            to_drop.extend(water_ids[np.argwhere(d < minimal_distance)].flatten())
 
                     to_activate.extend(best_water_ids)
                     cluster.drop(best_water_ids, inplace=True)
