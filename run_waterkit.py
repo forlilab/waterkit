@@ -39,7 +39,7 @@ def main():
     output_prefix = args.output_prefix
 
     # Read PDBQT/MOL2 file, Waterfield file and AutoDock grid map
-    molecule = Molecule(mol_file)
+    molecule = Molecule.from_file(mol_file)
     ad_map = Map.from_fld(fld_file)
 
     if wat_file is not None:
@@ -49,7 +49,7 @@ def main():
 
     # Go waterkit!!
     k = Waterkit()
-    k.hydrate(molecule, ad_map, waters, n_layer)
+    k.hydrate(molecule, ad_map, waters, n_layer, how='boltzmann')
 
     # Write output files
     k.write_shells(output_prefix)

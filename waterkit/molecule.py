@@ -19,15 +19,10 @@ import utils
 
 class Molecule():
 
-    def __init__(self, fname):
-        # Get name and file extension
-        self.name, file_extension = os.path.splitext(fname)
-        # Read PDBQT file
-        obconv = ob.OBConversion()
-        obconv.SetInFormat(file_extension)
-        self._OBMol = ob.OBMol()
-        obconv.ReadFile(self._OBMol, fname)
-
+    def __init__(self, OBMol):
+        """Initialize a Molecule object."""
+        # Explicitly create a new copy of the OBMol
+        self._OBMol = ob.OBMol(OBMol)
         # Remove all implicit hydrogens because OpenBabel
         # is doing chemical perception, and we want to read the
         # molecule as is.
@@ -39,6 +34,38 @@ class Molecule():
 
         self.hydrogen_bond_anchors = None
         self.rotatable_bonds = None
+
+    def __copy__(self):
+        """Create a copy of Molecule object."""
+        cls = self.__class__
+        # Initialize a dumb Molecule
+        result = cls(self._OBMol)
+        for k, v in self.__dict__.items():
+            if not k == '_OBMol':
+                setattr(result, k, copy.copy(v))
+        return result
+
+    def __deepcopy__(self, memo):
+        """Create a deep copy of Molecule object."""
+        cls = self.__class__
+        result = cls(self._OBMol)
+        memo[id(self)] = result
+        for k, v in self.__dict__.items():
+            if not k == '_OBMol':
+                setattr(result, k, copy.deepcopy(v, memo))
+        return result
+
+    @classmethod
+    def from_file(cls, fname):
+        """Create Molecule object from a PDB file."""
+        # Get name and file extension
+        name, file_extension = os.path.splitext(fname)
+        # Read PDB file
+        obconv = ob.OBConversion()
+        obconv.SetInFormat(file_extension)
+        OBMol = ob.OBMol()
+        obconv.ReadFile(OBMol, fname)
+        return cls(OBMol)
 
     def is_water(self):
         """Tell if it is a water or not."""

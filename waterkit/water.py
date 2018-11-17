@@ -6,6 +6,7 @@
 # Class for water
 #
 
+import copy
 import os
 from collections import namedtuple
 
@@ -29,6 +30,28 @@ class Water(Molecule):
         self._previous = None
         self.hydrogen_bond_anchors = None
         self.rotatable_bonds = None
+
+    def __copy__(self):
+        """Create a copy of Water object."""
+        cls = self.__class__
+        # Initialize a dumb Water
+        result = cls([0, 0, 0])
+        result.__dict__.update(self.__dict__)
+        # Explicitly create a new copy of the OBMol
+        result._OBMol = ob.OBMol(self._OBMol)
+        return result
+
+    def __deepcopy__(self, memo):
+        """Create a deep copy of Water object."""
+        cls = self.__class__
+        result = cls([0, 0, 0])
+        memo[id(self)] = result
+        for k, v in self.__dict__.items():
+            if not k == '_OBMol':
+                setattr(result, k, copy.deepcopy(v, memo))
+        # Explicitly create a new copy of the OBMol
+        result._OBMol = ob.OBMol(self._OBMol)
+        return result
 
     @classmethod
     def from_file(cls, fname, oxygen_type='OW'):
