@@ -203,65 +203,10 @@ class AutoDockForceField():
             total_desolv += self.weights['desolv'].values[0] * desolv
             total += total_hb + total_vdw + total_elec + total_desolv
 
-        print "Total: ", total
-        print "HB: ", total_hb
-        print "VDW: ", total_vdw
-        print "ELEC: ", total_elec
-        print "DESOLV: ", total_desolv
-
         if details:
             return (total, total_hb, total_vdw, total_elec, total_desolv)
         else:
             return total
-
-    def intermolecular_energy_rf(self, atoms_i, atoms_j, rfs, details=False):
-        """Compute total interaction energy."""
-        total = 0.
-        total_hb = 0.
-        total_vdw = 0.
-        total_elec = 0.
-        total_desolv = 0.
-
-        for index_i, row_i in atoms_i.iterrows():
-            hb = 0.
-            vdw = 0.
-            elec = 0.
-            desolv = 0.
-
-            i = 0
-
-            for index_j, row_j in atoms_j.iterrows():
-                r = utils.get_euclidean_distance(np.array(row_i['xyz']), np.array([row_j['xyz']]))
-                pairwise = self.pairwise.loc[(index_i, index_j)]
-
-                vdw += self.van_der_waals(r, pairwise['vdw_rij'], pairwise['A'], pairwise['B']) * rfs[i]
-                hb += self.hydrogen_bond(r, pairwise['hb_rij'], pairwise['C'], pairwise['D']) * rfs[i]
-                elec += self.electrostatic(r, row_i['q'], row_j['q'])
-                desolv += self.desolvation(r, row_i['q'], row_j['q'],
-                                           self.atom_par.loc[index_i]['solpar'],
-                                           self.atom_par.loc[index_j]['solpar'],
-                                           self.atom_par.loc[index_i]['vol'],
-                                           self.atom_par.loc[index_j]['vol'])
-
-                i += 1
-
-            total_hb += self.weights['hbond'].values[0] * hb
-            total_elec += self.weights['estat'].values[0] * elec
-            total_vdw += self.weights['vdW'].values[0] * vdw
-            total_desolv += self.weights['desolv'].values[0] * desolv
-            total += total_hb + total_vdw + total_elec + total_desolv
-
-        print "Total: ", total
-        print "HB: ", total_hb
-        print "VDW: ", total_vdw
-        print "ELEC: ", total_elec
-        print "DESOLV: ", total_desolv
-
-        if details:
-            return (total, total_hb, total_vdw, total_elec, total_desolv)
-        else:
-            return total
-
 
 def cmd_lineparser():
     parser = argparse.ArgumentParser(description='waterkit')
