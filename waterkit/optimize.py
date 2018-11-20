@@ -6,15 +6,18 @@
 # Class for water network optimizer
 #
 
+import warnings
+
 import numpy as np
 import pandas as pd
 from scipy.cluster.hierarchy import linkage, fcluster
 
 import utils
 
+
 class WaterOptimizer():
 
-    def __init__(self, water_box, how='best', distance=2.9, angle=145, rotation=10,
+    def __init__(self, water_box, how='best', distance=3.4, angle=145, rotation=10,
                  energy_cutoff=0, temperature=298.15):
         self._water_box = water_box
         self._how = how
@@ -25,6 +28,8 @@ class WaterOptimizer():
         self._energy_cutoff = energy_cutoff
         # Boltzmann constant (kcal/mol)
         self._kb = 0.0019872041
+        # Optimal distance between O and H
+        self._opt_distance = 1.9
 
     def _cluster(self, waters, distance=2., method='single'):
         """ Cluster water molecule based on their position using hierarchical clustering """
@@ -39,7 +44,10 @@ class WaterOptimizer():
         """Choose state i based on boltzmann probability."""
         energies = np.array(energies)
         d = np.exp(-energies / (self._kb * self._temperature))
-        p = d / np.sum(d)
+        # We ignore divide by zero warning
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            p = d / np.sum(d)
         i = np.random.choice(d.shape[0], p=p)
         return i
 
@@ -54,7 +62,7 @@ class WaterOptimizer():
             return r + .5 * smooth
 
     def _hydrogen_bond_distance(self, r, a, c):
-        rs = self._smooth_distance(r, 1.9)
+        rs = self._smooth_distance(r, self._opt_distance)
         return ((a/(rs**12)) - (c/(rs**10)))
 
     def _hydrogen_bond_angle(self, angles):
