@@ -7,6 +7,7 @@
 #
 
 import collections
+import copy
 
 import numpy as np
 import pandas as pd
@@ -14,7 +15,7 @@ from scipy import spatial
 
 import utils
 from water import Water
-from optimize import WaterNetwork
+from optimize import WaterOptimizer
 
 
 class WaterBox():
@@ -35,6 +36,10 @@ class WaterBox():
         columns = ['molecule_i', 'atom_i']
         self.df['kdtree_relations'] = pd.DataFrame(columns=columns)
         self.df['profiles'] = pd.DataFrame()
+
+    def copy(self):
+        """Return deepcopy of WaterBox."""
+        return copy.deepcopy(self)
 
     def add_receptor(self, receptor, ad_map):
         """Add the receptor and the corresponding ad_map to the waterbox."""
@@ -336,12 +341,12 @@ class WaterBox():
         for map_type in map_types:
             ad_map._maps_interpn[map_type] = ad_map._generate_affinity_map_interpn(ad_map._maps[map_type])
 
-    def build_next_shell(self):
+    def build_next_shell(self, how='best'):
         """Build the next hydration shell."""
         shell_id = self.number_of_shells(ignore_xray=True)
         molecules = self.molecules_in_shell(shell_id)
         ad_map = self.get_map(shell_id, copy=True)
-        n = WaterNetwork(self)
+        n = WaterOptimizer(self, how)
 
         # Test if we have all the material to continue
         assert len(molecules) > 0, "There is molecule(s) in the shell %s" % shell_id
@@ -353,7 +358,7 @@ class WaterBox():
             opt_disordered = False
 
         waters, connections = self.place_optimal_waters(molecules, ad_map)
-        waters, df = n.optimize_waters(waters, connections, opt_disordered=opt_disordered)
+        waters, df = n.optimize(waters, connections, opt_disordered=opt_disordered)
 
         if len(waters):
             # And add all the waters
@@ -368,7 +373,7 @@ class WaterBox():
                 self.add_informations(df[key], key)
 
             # Select water molecules and update shell informations
-            n.activate_molecules_in_shell(shell_id + 1, how='best')
+            n.activate_molecules_in_shell(shell_id + 1)
 
             if self._water_map is not None:
                 # Get only active waters and update the last map OW
@@ -380,12 +385,12 @@ class WaterBox():
         else:
             return False
 
-    def add_crystallographic_waters(self, waters):
+    def add_crystallographic_waters(self, waters, how='best'):
         """Add crystallographic waters to the waterbox."""
         i = 0
         connections = []
         waters_kept = []
-        n = WaterNetwork(self)
+        n = WaterOptimizer(self, how, energy_cutoff=np.inf)
 
         if 0 in self.molecules:
             ad_map = self.get_map(0)
@@ -411,8 +416,7 @@ class WaterBox():
                         continue
 
             # We just optimize the orientation
-            waters_kept, df = n.optimize_waters(waters_kept, cutoff=np.inf, 
-                                                opt_position=False, opt_disordered=False)
+            waters_kept, df = n.optimize(waters_kept, opt_position=False, opt_disordered=False)
 
             # Guess HBA to be able to put waters on them
             [water.guess_hydrogen_bond_anchors(self._waterfield) for water in waters_kept]
