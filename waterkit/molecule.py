@@ -8,6 +8,7 @@
 
 import copy
 import os
+import re
 from collections import namedtuple
 
 import numpy as np
@@ -31,6 +32,18 @@ class Molecule():
                 x.SetImplicitValence(x.GetValence())
                 # Really, there is no implicit hydrogen
                 x.ForceImplH()
+
+        # OpenBabel do chemical perception to define the type
+        # So we override the types with AutoDock atom types in
+        # in the PDBQT file
+        if file_extension == '.pdbqt':
+            atom_types = self._atom_types_from_pdbqt_file(fname)
+
+            for a, atom_type in zip(ob.OBMolAtomIter(self._OBMol), atom_types):
+                a.SetType(atom_type)
+                # Weird thing appends here...
+                # If I remove a.GetType(), the oxygen type become O3 instead of OA/HO
+                a.GetType()
 
         self.hydrogen_bond_anchors = None
         self.rotatable_bonds = None
@@ -66,6 +79,18 @@ class Molecule():
         OBMol = ob.OBMol()
         obconv.ReadFile(OBMol, fname)
         return cls(OBMol)
+
+    def _atom_types_from_pdbqt_file(self, fname):
+        """Get atom types from PDBQT file."""
+        atom_types = []
+
+        with open(fname) as f:
+            lines = f.readlines()
+            for line in lines:
+                if re.search('^ATOM', line) or re.search('^HETATM', line):
+                    atom_types.append(line[77:79].strip())
+
+        return atom_types
 
     def is_water(self):
         """Tell if it is a water or not."""
@@ -128,6 +153,19 @@ class Molecule():
         atom_types = [x.GetType() for x in ob_atoms]
 
         return atom_types
+
+    def partial_charges(self, atom_ids=None):
+        """Get partial charges."""
+        if atom_ids is not None:
+            if not isinstance(atom_ids, (list, tuple)):
+                atom_ids = [atom_ids]
+        else:
+            atom_ids = range(0, self._OBMol.NumAtoms())
+
+        ob_atoms = [self._OBMol.GetAtomById(i) for i in atom_ids]
+        partial_charges = [x.GetPartialCharge() for x in ob_atoms]
+
+        return partial_charges
 
     def get_residue(self, i):
         """
