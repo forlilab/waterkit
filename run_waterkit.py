@@ -25,6 +25,11 @@ def cmd_lineparser():
                         action="store", help="autodock fld file")
     parser.add_argument("-l", "--layer", dest="n_layer", default=0, type=int,
                         action="store", help="number of layer to add")
+    parser.add_argument("-n", "--sample", dest="n_sample", default=1, type=int,
+                        action="store", help="number of sample")
+    parser.add_argument("-c", "--choice", dest="how", default='boltzmann',
+                        choices=['all', 'best', 'boltzmann'], action="store",
+                        help="how water molecules are choosed")
     parser.add_argument("-o", "--output", dest="output_prefix", default='water',
                         action="store", help="prefix add to output files")
     return parser.parse_args()
@@ -36,6 +41,8 @@ def main():
     fld_file = args.fld_file
     wat_file = args.wat_file
     n_layer = args.n_layer
+    n_sample = args.n_sample
+    how = args.choice
     output_prefix = args.output_prefix
 
     # Read PDBQT/MOL2 file, Waterfield file and AutoDock grid map
@@ -49,7 +56,7 @@ def main():
 
     # Go waterkit!!
     k = Waterkit()
-    k.hydrate(molecule, ad_map, waters, n_layer, how='boltzmann')
+    k.hydrate(molecule, ad_map, waters, n_layer, n_sample, how)
 
     # Write output files
     k.write_shells(output_prefix)
