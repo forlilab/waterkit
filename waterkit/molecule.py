@@ -98,32 +98,19 @@ class Molecule():
         """Tell if it is a water or not."""
         return False
 
-    def get_atom(self, i):
+    def atom(self, i):
         """
         Return the OBAtom i
         """
         return self._OBMol.GetAtom(i)
 
-    def get_atoms_in_map(self, ad_map=None):
+    def residue(self, i):
         """
-        Returns a list of index of all the atoms in the map
+        Return the OBResidue i
         """
-        idx = []
+        return self._OBMol.GetResidue(i)
 
-        # If we don't provide an AutoDock Map, we return all the atoms
-        if ad_map is None:
-            idx = [ob_atom.GetIdx() for ob_atom in ob.OBMolAtomIter(self._OBMol)]
-            return idx
-        else:
-            for ob_atom in ob.OBMolAtomIter(self._OBMol):
-                x, y, z = ob_atom.GetX(), ob_atom.GetY(), ob_atom.GetZ()
-
-                if ad_map.is_in_map([x, y, z]):
-                    idx.append(ob_atom.GetIdx())
-
-            return idx
-
-    def get_coordinates(self, atom_ids=None):
+    def coordinates(self, atom_ids=None):
         """
         Return coordinates of all atoms or a certain atom
         We do it like this because OBMol.GetCoordinates isn't working
@@ -141,7 +128,7 @@ class Molecule():
 
         return coordinates
 
-    def get_atom_types(self, atom_ids=None):
+    def atom_types(self, atom_ids=None):
         """
         Return atom types of all atoms or a certain atom
         """
@@ -169,13 +156,26 @@ class Molecule():
 
         return partial_charges
 
-    def get_residue(self, i):
+    def atoms_in_map(self, ad_map=None):
         """
-        Return the OBResidue i
+        Returns a list of index of all the atoms in the map
         """
-        return self._OBMol.GetResidue(i)
+        idx = []
 
-    def get_residues_in_map(self, ad_map=None):
+        # If we don't provide an AutoDock Map, we return all the atoms
+        if ad_map is None:
+            idx = [ob_atom.GetIdx() for ob_atom in ob.OBMolAtomIter(self._OBMol)]
+            return idx
+        else:
+            for ob_atom in ob.OBMolAtomIter(self._OBMol):
+                x, y, z = ob_atom.GetX(), ob_atom.GetY(), ob_atom.GetZ()
+
+                if ad_map.is_in_map([x, y, z]):
+                    idx.append(ob_atom.GetIdx())
+
+            return idx
+
+    def residues_in_map(self, ad_map=None):
         """
         Return a list of index of all the residues in the map
         """
@@ -202,9 +202,9 @@ class Molecule():
         Check if there is a clash between a coordinate xyz and itself or another molecule
         """
         if molecule is not None:
-            atoms = molecule.get_coordinates()
+            atoms = molecule.coordinates()
         else:
-            atoms = self.get_coordinates()
+            atoms = self.coordinates()
 
         # Compute all distances between atom and all other atoms
         d = utils.get_euclidean_distance(xyz, atoms)
@@ -237,7 +237,7 @@ class Molecule():
 
         return lst
 
-    def get_neighbor_atoms(self, start_index=1, depth=1, hydrogen=True):
+    def neighbor_atoms(self, start_index=1, depth=1, hydrogen=True):
         """
         Return a nested list of all the neighbor OBAtoms by following the bond connectivity
         https://baoilleach.blogspot.com/2008/02/calculate-circular-fingerprints-with.html
@@ -276,14 +276,14 @@ class Molecule():
 
         return neighbors
 
-    def get_neighbor_atom_coordinates(self, id_atom, depth=1, hydrogen=True):
+    def neighbor_atom_coordinates(self, id_atom, depth=1, hydrogen=True):
         """
         Return a nested list of all the coordinates of all the neighbor
         atoms by following the bond connectivity
         """
         coords = []
 
-        atoms = self.get_neighbor_atoms(id_atom, depth, hydrogen)
+        atoms = self.neighbor_atoms(id_atom, depth, hydrogen)
 
         for level in atoms:
             tmp = [[ob_atom.GetX(), ob_atom.GetY(), ob_atom.GetZ()] for ob_atom in level]
@@ -299,7 +299,7 @@ class Molecule():
         rotatable_bond = namedtuple('rotatable_bond', 'name')
 
         # Get all the atom ids in the molecule
-        atom_ids = self.get_atoms_in_map(ad_map)
+        atom_ids = self.atoms_in_map(ad_map)
 
         # Find all the hydroxyl
         ob_smarts = ob.OBSmartsPattern()
@@ -324,7 +324,7 @@ class Molecule():
         hb_anchor = namedtuple('hydrogen_bond_anchor', 'id name type vectors')
 
         # Get all the atom ids in the molecule
-        atom_ids = self.get_atoms_in_map(ad_map)
+        atom_ids = self.atoms_in_map(ad_map)
         # Get all the available hb types
         atom_types = waterfield.get_atom_types()
         # Keep track of all the visited atom
@@ -352,19 +352,19 @@ class Molecule():
 
                     try:
                         # Calculate the vectors on the anchor
-                        vectors = self._get_hb_vectors(idx - 1, atom_type.hyb, atom_type.n_water, atom_type.hb_length)
+                        vectors = self._hb_vectors(idx - 1, atom_type.hyb, atom_type.n_water, atom_type.hb_length)
                         self.hydrogen_bond_anchors[idx - 1] = hb_anchor(idx - 1, name, hb_type, vectors)
                     except:
                         print "Warning: Could not determine hydrogen bond vectors on atom %s of type %s." % (idx, name)
 
-    def _get_hb_vectors(self, idx, hyb, n_hbond, hb_length):
+    def _hb_vectors(self, idx, hyb, n_hbond, hb_length):
         """ Return all the hydrogen bond vectors the atom idx """
         vectors = []
 
         # Get origin atom
-        anchor_xyz = self.get_coordinates(idx)[0]
+        anchor_xyz = self.coordinates(idx)[0]
         # Get coordinates of all the neihbor atoms
-        neighbors_xyz = self.get_neighbor_atom_coordinates(idx, depth=2)
+        neighbors_xyz = self.neighbor_atom_coordinates(idx, depth=2)
         neighbor1_xyz = neighbors_xyz[1][0]
 
         if hyb == 1:

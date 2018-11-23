@@ -110,7 +110,7 @@ class Water(Molecule):
         ob_atom = self._OBMol.GetAtomById(atom_id)
         ob_atom.SetVector(atom_xyz[0], atom_xyz[1], atom_xyz[2])
 
-    def get_energy(self, ad_map, atom_id=None):
+    def energy(self, ad_map, atom_id=None):
         """
         Return the energy of the water molecule
         """
@@ -123,13 +123,13 @@ class Water(Molecule):
             elif n_atoms == 5:
                 atom_id = [1, 2, 3, 4]
 
-        coordinates = self.get_coordinates(atom_id)
-        atom_types = self.get_atom_types(atom_id)
+        coordinates = self.coordinates(atom_id)
+        atom_types = self.atom_types(atom_id)
 
         energy = 0.
 
         for coordinate, atom_type in zip(coordinates, atom_types):
-            energy += ad_map.get_energy(coordinate, atom_type)
+            energy += ad_map.energy(coordinate, atom_type)
 
         return energy[0]
 
@@ -149,7 +149,7 @@ class Water(Molecule):
             d = [0.7, 0.7, 0.9572, 0.9572]
             a = [109.47, 104.52]
 
-        coord_oxygen = self.get_coordinates(0)[0]
+        coord_oxygen = self.coordinates(0)[0]
 
         # Vector between O and the Acceptor/Donor atom
         v = utils.vector(coord_oxygen, self._anchor[0])
@@ -208,12 +208,12 @@ class Water(Molecule):
             elif atom_type.hb_type == 2:
                 hb_type = 'acceptor'
 
-            vectors = self._get_hb_vectors(idx-1, atom_type.hyb, atom_type.n_water, atom_type.hb_length)
+            vectors = self._hb_vectors(idx-1, atom_type.hyb, atom_type.n_water, atom_type.hb_length)
             self.hydrogen_bond_anchors[idx-1] = hb_anchor(idx - 1, name, hb_type, vectors)
 
     def translate(self, vector):
         """ Translate the water molecule by a vector """
-        water_xyz = self.get_coordinates() + vector
+        water_xyz = self.coordinates() + vector
         for atom_id, coord_xyz in enumerate(water_xyz):
             self.update_coordinates(coord_xyz, atom_id)
         #self._OBMol.Translate(vector)
@@ -222,7 +222,7 @@ class Water(Molecule):
         """
         Rotate water molecule along the axis Oxygen and a choosen atom (H or Lp)
         """
-        water_xyz = self.get_coordinates()
+        water_xyz = self.coordinates()
 
         # Get the rotation between the oxygen and the atom ref
         oxygen_xyz = water_xyz[0]

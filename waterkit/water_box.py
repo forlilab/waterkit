@@ -116,7 +116,7 @@ class WaterBox():
         relations = []
 
         for index, molecule in enumerate(molecules):
-            coordinates = molecule.get_coordinates()
+            coordinates = molecule.coordinates()
             mol_i = index + last_molecule_i + 1
             relations.append([[mol_i, i] for i in range(coordinates.shape[0])])
             data.append(coordinates)
@@ -158,7 +158,7 @@ class WaterBox():
         """ Append a map to the existing list of maps """
         return self.maps.append(map)
 
-    def get_map(self, shell_id, copy=False):
+    def map(self, shell_id, copy=False):
         """ Get a map for a particular shell """
         try:
             ad_map = self.maps[shell_id]
@@ -194,9 +194,9 @@ class WaterBox():
         se = df.groupby('molecule_i')['atom_i'].apply(list)
 
         for index, value in se.iteritems():
-            coordinates = self.molecules[index].get_coordinates(value)
+            coordinates = self.molecules[index].coordinates(value)
             partial_charges = self.molecules[index].partial_charges(value)
-            atom_types = self.molecules[index].get_atom_types(value)
+            atom_types = self.molecules[index].atom_types(value)
 
             data.extend([(c, p, t) for c, p, t in zip(coordinates, partial_charges, atom_types)])
 
@@ -243,7 +243,7 @@ class WaterBox():
         for index, row in df.iterrows():
             try:
                 hba = self.molecules[row['molecule_i']].hydrogen_bond_anchors[row['atom_i']]
-                hba_xyz = self.molecules[row['molecule_i']].get_coordinates(row['atom_i'])
+                hba_xyz = self.molecules[row['molecule_i']].coordinates(row['atom_i'])
 
                 hba_distance = utils.get_euclidean_distance(xyz, hba_xyz)[0]
                 hbv_distances = utils.get_euclidean_distance(xyz, hba.vectors)
@@ -279,7 +279,7 @@ class WaterBox():
                     molecule.guess_hydrogen_bond_anchors(self._waterfield)
 
             for j, hba in molecule.hydrogen_bond_anchors.iteritems():
-                anchor_xyz = molecule.get_coordinates(j)[0]
+                anchor_xyz = molecule.coordinates(j)[0]
                 for vector_xyz in hba.vectors:
                     # We store the water and the connection
                     waters.append(Water(vector_xyz, 'OW', anchor_xyz, vector_xyz, hba.type))
@@ -305,7 +305,7 @@ class WaterBox():
             map_types = list(set(map_types) & set(choices))
 
         for water in waters:
-            o, h1, h2 = water.get_coordinates([0, 1, 2])
+            o, h1, h2 = water.coordinates([0, 1, 2])
 
             # Create the grid around the protein water molecule
             ix, iy, iz = ad_map._cartesian_to_index(o)
@@ -342,7 +342,7 @@ class WaterBox():
 
             for map_type in map_types:
                 # Interpolate energy
-                energy = water_map.get_energy(grid, map_type)
+                energy = water_map.energy(grid, map_type)
                 # Replace inf by zero, otherwise we cannot add water energy to the grid
                 energy[energy == np.inf] = 0.
 
@@ -362,7 +362,7 @@ class WaterBox():
         """Build the next hydration shell."""
         shell_id = self.number_of_shells(ignore_xray=True)
         molecules = self.molecules_in_shell(shell_id)
-        ad_map = self.get_map(shell_id, copy=True)
+        ad_map = self.map(shell_id, copy=True)
         n = WaterOptimizer(self, how)
 
         # Test if we have all the material to continue
@@ -410,7 +410,7 @@ class WaterBox():
         n = WaterOptimizer(self, how, energy_cutoff=np.inf)
 
         if 0 in self.molecules:
-            ad_map = self.get_map(0)
+            ad_map = self.map(0)
 
             for water in waters:
                 xyz = water.get_coordinates()[0]
@@ -421,7 +421,7 @@ class WaterBox():
 
                     # Test if there a HBA around, otherwise it is not a first shell water
                     if hba is not None:
-                        hba_xyz = self.molecules[0].get_coordinates(hba.id)[0]
+                        hba_xyz = self.molecules[0].coordinates(hba.id)[0]
                         water.set_anchor(hba_xyz, hba.vectors[hbv_id], hba.type)
 
                         connections.append((0, hba.id, i, None))

@@ -94,7 +94,7 @@ class Waterkit():
 
                 with open(fname, 'w') as w:
                     for water in shell:
-                        c = water.get_coordinates()
+                        c = water.coordinates()
 
                         try:
                             e = water.energy

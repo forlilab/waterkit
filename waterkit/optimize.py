@@ -33,7 +33,7 @@ class WaterOptimizer():
 
     def _cluster(self, waters, distance=2., method='single'):
         """ Cluster water molecule based on their position using hierarchical clustering """
-        coordinates = np.array([w.get_coordinates([0])[0] for w in waters])
+        coordinates = np.array([w.coordinates([0])[0] for w in waters])
 
         # Clustering
         Z = linkage(coordinates, method=method, metric='euclidean')
@@ -124,7 +124,7 @@ class WaterOptimizer():
                     rot_waters.extend([waters[i] for i in index])
 
             # Get energy of the favorable disordered waters
-            energy_waters = np.array([w.get_energy(ad_map) for w in rot_waters])
+            energy_waters = np.array([w.energy(ad_map) for w in rot_waters])
             energy_waters[energy_waters > 0] = 0
             energies.append(np.sum(energy_waters))
             # Current angle of the disordered group
@@ -138,8 +138,8 @@ class WaterOptimizer():
             # print np.array(atom_children)
 
             # Atoms 1 and 2 define the rotation axis
-            p1 = receptor.get_coordinates(match[2])[0]
-            p2 = receptor.get_coordinates(match[1])[0]
+            p1 = receptor.coordinates(match[2])[0]
+            p2 = receptor.coordinates(match[1])[0]
 
             # Scan all the angles
             for i in range(n_rotation):
@@ -148,12 +148,12 @@ class WaterOptimizer():
                 before doing the optimization and only at the end
                 we update the coordinates of the water molecules."""
                 for rot_water in rot_waters:
-                    p0 = rot_water.get_coordinates([0])[0]
+                    p0 = rot_water.coordinates([0])[0]
                     p_new = utils.rotate_point(p0, p1, p2, rotation)
                     rot_water.update_coordinates(p_new, atom_id=0)
 
                 # Get energy and update the current angle (increment rotation)
-                energy_waters = np.array([w.get_energy(ad_map) for w in rot_waters])
+                energy_waters = np.array([w.energy(ad_map) for w in rot_waters])
                 energy_waters[energy_waters > 0] = 0
                 energies.append(np.sum(energy_waters))
                 current_angle += rotation
@@ -171,7 +171,7 @@ class WaterOptimizer():
             best_angle = np.radians((360. - np.degrees(current_angle)) + np.degrees(angles[i]))
             # Update coordinates to the choosen state
             for rot_water in rot_waters:
-                p0 = rot_water.get_coordinates([0])[0]
+                p0 = rot_water.coordinates([0])[0]
                 p_new = utils.rotate_point(p0, p1, p2, best_angle)
                 rot_water.update_coordinates(p_new, atom_id=0)
                 # Update also the anchor point
@@ -187,7 +187,7 @@ class WaterOptimizer():
         The movement of the water is contrained by the distance and 
         the angle with the anchor.
         """
-        oxygen_type = water.get_atom_types([0])[0]
+        oxygen_type = water.atom_types([0])[0]
         distance = self._distance
 
         """If the anchor type is donor, we have to reduce the
@@ -201,13 +201,13 @@ class WaterOptimizer():
         2. Compute angles between all the coordinates and the anchor
         3. Select coordinates with an angle superior to the choosen angle
         4. Get their energy"""
-        coord_sphere = ad_map.get_neighbor_points(water._anchor[0], 0., distance)
+        coord_sphere = ad_map.neighbor_points(water._anchor[0], 0., distance)
         angle_sphere = utils.get_angle(coord_sphere, water._anchor[0], water._anchor[1])
         coord_sphere = coord_sphere[angle_sphere >= self._angle]
-        energy_sphere = ad_map.get_energy(coord_sphere, atom_type=oxygen_type)
+        energy_sphere = ad_map.energy(coord_sphere, atom_type=oxygen_type)
 
         # Energy of the spherical water
-        energy_water = water.get_energy(ad_map, 0)
+        energy_water = water.energy(ad_map, 0)
 
         if energy_sphere.size:
             if self._how == 'best':
@@ -216,7 +216,7 @@ class WaterOptimizer():
                 i = self._boltzmann_choice(energy_sphere)
 
             # Update the coordinates
-            water.translate(utils.vector(water.get_coordinates(0), coord_sphere[i]))
+            water.translate(utils.vector(water.coordinates(0), coord_sphere[i]))
 
             return energy_sphere[i]
 
@@ -236,7 +236,7 @@ class WaterOptimizer():
         else:
             ref_id = 1
 
-        water_xyz = water.get_coordinates()
+        water_xyz = water.coordinates()
         # Number of rotation necessary to do a full spin
         n_rotation = np.int(np.floor((360 / self._rotation))) - 1
         # Get all the neighborhood atoms (active molecules)
@@ -257,7 +257,7 @@ class WaterOptimizer():
                 rotatable_bond_ids = []
 
             for idx in closest_anchor_ids:
-                anchor_xyz = molecule.get_coordinates(idx)
+                anchor_xyz = molecule.coordinates(idx)
                 anchor_type = molecule.hydrogen_bond_anchors[idx].type
 
                 if [idx for i in rotatable_bond_ids if idx in i]:
@@ -291,7 +291,7 @@ class WaterOptimizer():
         # Rotate the water molecule and get its energy
         for i in range(n_rotation):
             water.rotate(self._rotation, ref_id=ref_id)
-            water_xyz = water.get_coordinates()
+            water_xyz = water.coordinates()
 
             # Get energy and update the current angle (increment rotation)
             energies.append(self._energy_pairwise(water_xyz, anchors_xyz, vectors_xyz, anchors_types))
@@ -318,7 +318,7 @@ class WaterOptimizer():
         to_be_removed = []
 
         shell_id = self._water_box.number_of_shells(ignore_xray=True)
-        ad_map = self._water_box.get_map(shell_id, False)
+        ad_map = self._water_box.map(shell_id, False)
 
         if opt_disordered and connections is not None:
             receptor = self._water_box.molecules_in_shell(0)[0]
@@ -329,12 +329,12 @@ class WaterOptimizer():
         water molecules are outside the box or with a positive
         energy are considered as bad and are removed."""
         for i, water in enumerate(waters):
-            if ad_map.is_in_map(water.get_coordinates(0)[0]):
+            if ad_map.is_in_map(water.coordinates(0)[0]):
                 # Optimize the position of the spherical water
                 if opt_position:
                     energy_position = self._optimize_position(water, ad_map)
                 else:
-                    energy_position = water.get_energy(ad_map, 0)
+                    energy_position = water.energy(ad_map, 0)
 
                 # Before going further we check the energy
                 if energy_position <= self._energy_cutoff:
@@ -423,10 +423,10 @@ class WaterOptimizer():
                     water_ids = cluster.index.difference(best_water_ids).values
 
                     if water_ids.size > 0:
-                        waters_xyz = np.array([waters[x].get_coordinates(0)[0] for x in water_ids])
+                        waters_xyz = np.array([waters[x].coordinates(0)[0] for x in water_ids])
 
                         for best_water_id in best_water_ids:
-                            best_water_xyz = waters[best_water_id].get_coordinates(0)
+                            best_water_xyz = waters[best_water_id].coordinates(0)
                             d = utils.get_euclidean_distance(best_water_xyz, waters_xyz)
                             to_drop.extend(water_ids[np.argwhere(d < minimal_distance)].flatten())
 

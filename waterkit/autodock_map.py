@@ -34,7 +34,7 @@ class Map():
             # Get information (center, spacing, nelements) from each grid
             # and make sure they are all identical
             for map_file, label in zip(map_files, labels):
-                grid_information = self._get_grid_information_from_map(map_file)
+                grid_information = self._grid_information_from_map(map_file)
 
                 if prv_grid_information is not None:
                     if not cmp(prv_grid_information, grid_information):
@@ -99,7 +99,7 @@ class Map():
         if map_files and labels:
             return cls(map_files, labels)
 
-    def _get_grid_information_from_map(self, map_file):
+    def _grid_information_from_map(self, map_file):
         """Read grid information in the map file"""
         grid_information = {'spacing': None,
                             'nelements': None,
@@ -224,13 +224,13 @@ class Map():
 
         return close_to
 
-    def get_energy(self, xyz, atom_type, method='linear'):
+    def energy(self, xyz, atom_type, method='linear'):
         """
         Return the energy of each coordinates xyz
         """
         return self._maps_interpn[atom_type](xyz, method=method)
 
-    def get_neighbor_points(self, xyz, min_radius=0, max_radius=5):
+    def neighbor_points(self, xyz, min_radius=0, max_radius=5):
         """
         Return all the coordinates xyz in a certaim radius around a point
         """
@@ -327,7 +327,7 @@ class Map():
                 if same_grid:
                     selected_maps.append(ad_map._maps[selected_type])
                 else:
-                    energy = ad_map.get_energy(grid, selected_type)
+                    energy = ad_map.energy(grid, selected_type)
                     print energy.shape
                     energy = np.reshape(energy, (len(x), len(y), len(z)))
                     # I have to check why I have to do this!
