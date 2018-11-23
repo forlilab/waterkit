@@ -178,3 +178,21 @@ def generate_sphere(center, radius=1, size=100):
     coordinates += center
 
     return coordinates
+
+def sphere_grid_points(center, spacing, radius, min_radius=0):
+    """Generate grid sphere."""
+    # Number of grid points based on the grid spacing
+    n = np.int(np.rint(radius / spacing)) * 2
+    # Transform even numbers to the nearest odd integer
+    n = n // 2 * 2 + 1
+
+    x = np.linspace(center[0] - radius, center[0] + radius, n)
+    y = np.linspace(center[1] - radius, center[1] + radius, n)
+    z = np.linspace(center[2] - radius, center[2] + radius, n)
+    # Generate grid
+    X, Y, Z = np.meshgrid(x, y, z)
+    data = np.vstack((X.ravel(), Y.ravel(), Z.ravel())).T
+    # Compute distance and keep only the ones in the sphere
+    distance = spatial.distance.cdist(data, center.reshape(1, -1)).ravel()
+    points_in_sphere = data[(distance >= min_radius) & (distance <= radius)]
+    return points_in_sphere
