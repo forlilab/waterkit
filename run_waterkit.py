@@ -42,7 +42,7 @@ def main():
     wat_file = args.wat_file
     n_layer = args.n_layer
     n_sample = args.n_sample
-    how = args.choice
+    how = args.how
     output_prefix = args.output_prefix
 
     # Read PDBQT/MOL2 file, Waterfield file and AutoDock grid map

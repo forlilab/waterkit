@@ -33,18 +33,6 @@ class Molecule():
                 # Really, there is no implicit hydrogen
                 x.ForceImplH()
 
-        # OpenBabel do chemical perception to define the type
-        # So we override the types with AutoDock atom types in
-        # in the PDBQT file
-        if file_extension == '.pdbqt':
-            atom_types = self._atom_types_from_pdbqt_file(fname)
-
-            for a, atom_type in zip(ob.OBMolAtomIter(self._OBMol), atom_types):
-                a.SetType(atom_type)
-                # Weird thing appends here...
-                # If I remove a.GetType(), the oxygen type become O3 instead of OA/HO
-                a.GetType()
-
         self.hydrogen_bond_anchors = None
         self.rotatable_bonds = None
 
@@ -78,7 +66,21 @@ class Molecule():
         obconv.SetInFormat(file_extension)
         OBMol = ob.OBMol()
         obconv.ReadFile(OBMol, fname)
-        return cls(OBMol)
+
+        m = cls(OBMol)
+
+        # OpenBabel do chemical perception to define the type
+        # So we override the types with AutoDock atom types
+        # from the PDBQT file
+        if file_extension == '.pdbqt':
+            atom_types = m._atom_types_from_pdbqt_file(fname)
+            for a, atom_type in zip(ob.OBMolAtomIter(m._OBMol), atom_types):
+                a.SetType(atom_type)
+                # Weird thing appends here...
+                # If I remove a.GetType(), the oxygen type become O3 instead of OA/HO
+                a.GetType()
+
+        return m
 
     def _atom_types_from_pdbqt_file(self, fname):
         """Get atom types from PDBQT file."""
