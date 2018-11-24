@@ -124,7 +124,7 @@ class WaterOptimizer():
                     rot_waters.extend([waters[i] for i in index])
 
             # Get energy of the favorable disordered waters
-            energy_waters = np.array([w.energy(ad_map) for w in rot_waters])
+            energy_waters = np.array([ad_map.energy(w.atom_informations()) for w in rot_waters])
             energy_waters[energy_waters > 0] = 0
             energies.append(np.sum(energy_waters))
             # Current angle of the disordered group
@@ -153,7 +153,7 @@ class WaterOptimizer():
                     rot_water.update_coordinates(p_new, atom_id=0)
 
                 # Get energy and update the current angle (increment rotation)
-                energy_waters = np.array([w.energy(ad_map) for w in rot_waters])
+                energy_waters = np.array([ad_map.energy(w.atom_informations()) for w in rot_waters])
                 energy_waters[energy_waters > 0] = 0
                 energies.append(np.sum(energy_waters))
                 current_angle += rotation
@@ -188,26 +188,28 @@ class WaterOptimizer():
         the angle with the anchor.
         """
         oxygen_type = water.atom_types([0])[0]
-        distance = self._distance
+        max_radius = self._distance
+        min_radius = 2.5
 
         """If the anchor type is donor, we have to reduce the
         radius by 1 angstrom. Because the hydrogen atom is closer
         to the water molecule than the heavy atom."""
         if water._anchor_type == 'donor':
-            distance -= 1.
+            min_radius -= 1.
+            max_radius -= 1.
 
         """This is how we select the allowed positions:
         1. Get all the point on the grid around the anchor (sphere)
         2. Compute angles between all the coordinates and the anchor
         3. Select coordinates with an angle superior to the choosen angle
         4. Get their energy"""
-        coord_sphere = ad_map.neighbor_points(water._anchor[0], 0., distance)
+        coord_sphere = ad_map.neighbor_points(water._anchor[0], min_radius, max_radius)
         angle_sphere = utils.get_angle(coord_sphere, water._anchor[0], water._anchor[1])
         coord_sphere = coord_sphere[angle_sphere >= self._angle]
-        energy_sphere = ad_map.energy(coord_sphere, atom_type=oxygen_type)
+        energy_sphere = ad_map.energy_coordinates(coord_sphere, atom_type=oxygen_type)
 
         # Energy of the spherical water
-        energy_water = water.energy(ad_map, 0)
+        energy_water = ad_map.energy(water.atom_informations())
 
         if energy_sphere.size:
             if self._how == 'best':
@@ -318,7 +320,7 @@ class WaterOptimizer():
         to_be_removed = []
 
         shell_id = self._water_box.number_of_shells(ignore_xray=True)
-        ad_map = self._water_box.map(shell_id, False)
+        ad_map = self._water_box.map
 
         if opt_disordered and connections is not None:
             receptor = self._water_box.molecules_in_shell(0)[0]
@@ -334,7 +336,7 @@ class WaterOptimizer():
                 if opt_position:
                     energy_position = self._optimize_position(water, ad_map)
                 else:
-                    energy_position = water.energy(ad_map, 0)
+                    energy_position = ad_map.energy(water.atom_informations())
 
                 # Before going further we check the energy
                 if energy_position <= self._energy_cutoff:
