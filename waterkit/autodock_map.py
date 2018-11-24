@@ -6,6 +6,7 @@
 # Class to manage autodock maps
 #
 
+import collections
 import os
 import re
 import copy
@@ -77,6 +78,9 @@ class Map():
             info = 'AutoDock Map object is not defined.'
 
         return info
+
+    def copy(self):
+        return copy.deepcopy(self)
 
     @classmethod
     def from_fld(cls, fld_file):
@@ -224,11 +228,20 @@ class Map():
 
         return close_to
 
-    def energy(self, xyz, atom_type, method='linear'):
-        """
-        Return the energy of each coordinates xyz
-        """
+    def energy_coordinates(self, xyz, atom_type, method='linear'):
+        """Energy of each coordinates xyz."""
         return self._maps_interpn[atom_type](xyz, method=method)
+
+    def energy(self, df, method='linear'):
+        """Get energy of a molecule from maps."""
+        energy = 0.
+
+        se = df.groupby('type')['xyz'].apply(list)
+
+        for atom_type, xyz in se.iteritems():
+            energy += np.sum(self._maps_interpn[atom_type](xyz, method=method))
+
+        return energy
 
     def neighbor_points(self, xyz, min_radius=0, max_radius=5):
         """
@@ -270,8 +283,26 @@ class Map():
 
         return selected_coordinates
 
-    def copy(self):
-        return copy.deepcopy(self)
+    def apply_operation_on_maps(self, expression, atom_types):
+        """Apply string expression on affinity grids."""
+        if not isinstance(atom_types, collections.Iterable):
+            atom_types = [atom_types]
+
+        if not 'x' in expression:
+            print "Error: operation cannot be applied, x is not defined."
+            return None
+
+        for atom_type in atom_types:
+            try:
+                x = self._maps[atom_type]
+                x = eval(expression)
+
+                # Update map and interpolator
+                self._maps[atom_type] = x
+                self._maps_interpn[atom_type] = self._generate_affinity_map_interpn(self._maps[atom_type])
+            except:
+                print "Warning: This map %s does not exist." % (atom_type)
+                continue
 
     def combine(self, name, atom_types, how='best', ad_map=None):
         """
