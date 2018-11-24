@@ -19,10 +19,10 @@ from molecule import Molecule
 
 class Water(Molecule):
 
-    def __init__(self, oxygen_xyz, oxygen_type='OW', anchor_xyz=None, vector_xyz=None, anchor_type=None):
+    def __init__(self, xyz, atom_type='OW', partial_charge=-0.411, anchor_xyz=None, vector_xyz=None, anchor_type=None):
         self._OBMol = ob.OBMol()
         # Add the oxygen atom
-        self.add_atom(oxygen_xyz, atom_type=oxygen_type, atom_num=8)
+        self.add_atom(xyz, atom_type, partial_charge, atom_num=8)
         # Store all the informations about the anchoring
         if all(v is not None for v in [anchor_xyz, vector_xyz, anchor_type]):
             self.set_anchor(anchor_xyz, vector_xyz, anchor_type)
@@ -54,7 +54,7 @@ class Water(Molecule):
         return result
 
     @classmethod
-    def from_file(cls, fname, oxygen_type='OW'):
+    def from_file(cls, fname, atom_type='OW', partial_charge=-0.411):
         """Create list of Water object from a PDB file."""
         waters = []
 
@@ -72,20 +72,26 @@ class Water(Molecule):
 
         for x in ob.OBMolAtomIter(OBMol):
             if x.IsOxygen():
-                oxygen_xyz = np.array([x.GetX(), x.GetY(), x.GetZ()])
-                waters.append(cls(oxygen_xyz, oxygen_type))
+                xyz = np.array([x.GetX(), x.GetY(), x.GetZ()])
+                waters.append(cls(xyz, atom_type, partial_charge))
 
         return waters
 
-    def add_atom(self, atom_xyz, atom_type='OA', atom_num=1, bond=None):
+    def add_atom(self, xyz, atom_type, partial_charge, atom_num=1, bond=None):
         """
         Add an OBAtom to the molecule
         """
         a = self._OBMol.NewAtom()
-        a.SetVector(atom_xyz[0], atom_xyz[1], atom_xyz[2])
+        a.SetVector(xyz[0], xyz[1], xyz[2])
+        """Weird stuffs happen here... I have to Set, Get 
+        and re-Set the partial charge. Otherwise it does
+        not work correctly."""
+        a.SetPartialCharge(partial_charge)
+        a.GetPartialCharge()
+        a.SetPartialCharge(partial_charge)
         a.SetType(atom_type)
-        # Weird thing appends here...
-        # If I remove a.GetType(), the oxygen type become O3 instead of OA/HO
+        """Also eird thing appends here... If I remove a.GetType(), 
+        the oxygen type become O3 instead of OA/HO."""
         a.GetType()
         a.SetAtomicNum(np.int(atom_num))
 
@@ -110,37 +116,14 @@ class Water(Molecule):
         ob_atom = self._OBMol.GetAtomById(atom_id)
         ob_atom.SetVector(atom_xyz[0], atom_xyz[1], atom_xyz[2])
 
-    def energy(self, ad_map, atom_id=None):
-        """
-        Return the energy of the water molecule
-        """
-        if atom_id is None:
-            n_atoms = self._OBMol.NumAtoms()
-            # Spherical water is only one atom, the oxygen
-            if n_atoms == 1:
-                atom_id = 0
-            # TIP5P water is 5 atoms, we ignore the oxygen
-            elif n_atoms == 5:
-                atom_id = [1, 2, 3, 4]
-
-        coordinates = self.coordinates(atom_id)
-        atom_types = self.atom_types(atom_id)
-
-        energy = 0.
-
-        for coordinate, atom_type in zip(coordinates, atom_types):
-            energy += ad_map.energy(coordinate, atom_type)
-
-        return energy[0]
-
-    def partial_charges(self, atom_ids=None):
-        return [-0.411]
-
     def build_tip5p(self):
         """
         Construct hydrogen atoms (H) and lone-pairs (Lp)
         TIP5P parameters: http://www1.lsbu.ac.uk/water/water_models.html
         """
+        atom_types = ['HD', 'HD', 'Lp', 'Lp']
+        partial_charges = [0.241, 0.241, -0.241, -0.241]
+
         # Order in which we will build H/Lp
         if self._anchor_type == "acceptor":
             d = [0.9572, 0.9572, 0.7, 0.7]
@@ -177,11 +160,9 @@ class Water(Molecule):
         else:
             atoms = [a3, a4, a1, a2]
 
-        atom_types = ['HD', 'HD', 'Lp', 'Lp']
-
         i = 2
-        for atom, atom_type in zip(atoms, atom_types):
-            self.add_atom(atom, atom_type=atom_type, atom_num=1, bond=(1, i, 1))
+        for atom, atom_type, partial_charge in zip(atoms, atom_types, partial_charges):
+            self.add_atom(atom, atom_type, partial_charge, atom_num=1, bond=(1, i, 1))
             i += 1
 
     def guess_hydrogen_bond_anchors(self, waterfield):
