@@ -25,7 +25,7 @@ def cmd_lineparser():
                         action="store", help="autodock fld file")
     parser.add_argument("-l", "--layer", dest="n_layer", default=0, type=int,
                         action="store", help="number of layer to add")
-    parser.add_argument("-n", "--sample", dest="n_sample", default=1, type=int,
+    parser.add_argument("-s", "--sample", dest="n_sample", default=1, type=int,
                         action="store", help="number of sample")
     parser.add_argument("-c", "--choice", dest="how", default='boltzmann',
                         choices=['all', 'best', 'boltzmann'], action="store",
@@ -61,7 +61,6 @@ def main():
     # Write output files
     k.write_shells(output_prefix)
     k.write_shells(output_prefix, False)
-    k.write_maps(output_prefix, ['OW'])
 
 if __name__ == '__main__':
     main()
