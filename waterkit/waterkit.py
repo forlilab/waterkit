@@ -12,42 +12,55 @@ import imp
 from string import ascii_uppercase
 
 from autodock_map import Map
+from forcefield import AutoDockForceField
 from water_box import WaterBox
 from waterfield import Waterfield
 
 
 class Waterkit():
 
-    def __init__(self, waterfield=None, water_map=None):
+    def __init__(self, hb_forcefield=None,  ad4_forcefield=None, water_map=None):
         self.water_boxes = []
+        self._hb_forcefield = hb_forcefield
+        self._ad4_forcefield = ad4_forcefield
         self._water_map = water_map
-        self._waterfield = waterfield
 
-        if self._waterfield is None:
+        """If the user does not provide any of these elements,
+        we take those available per default in waterkit."""
+        if self._hb_forcefield is None:
             d = imp.find_module('waterkit')[1]
-            waterfield_file = os.path.join(d, 'data/waterfield.par')
-            self._waterfield = Waterfield(waterfield_file)
+            hb_forcefield_file = os.path.join(d, 'data/waterfield.par')
+            self._hb_forcefield = Waterfield(hb_forcefield_file)
+
+        if self._ad4_forcefield is None:
+            d = imp.find_module('waterkit')[1]
+            ad4_forcefield_file = os.path.join(d, 'data/AD4_parameters.dat')
+            self._ad4_forcefield = AutoDockForceField(ad4_forcefield_file)
 
         if self._water_map is None:
             d = imp.find_module('waterkit')[1]
             water_fld_file = os.path.join(d, 'data/water/maps.fld')
             self._water_map = Map.from_fld(water_fld_file)
 
-        # Combine OA and OD to create OW
+        # Combine OA, OD and e to create OW
         self._water_map.combine('OW', ['OA', 'OD'], how='best')
+        self._water_map.apply_operation_on_maps('-np.abs(x * 0.241)', ['Electrostatics'])
+        self._water_map.combine('OW', ['OW', 'Electrostatics'], how='add')
 
     def hydrate(self, receptor, ad_map, waters=None, n_layer=0, n_sample=1, how='best'):
         """ Hydrate the molecule with water molecucules.
 
         The receptor is hydrated by adding successive layers
         of water molecules until the box is complety full."""
-        # Combine OA and OD to create OW
+        # Combine OA, OD and e to create OW
         # Warning: this is not the same how as the one passed in input
         ad_map.combine('OW', ['OA', 'OD'], how='best')
+        ad_map.apply_operation_on_maps('-np.abs(x * 0.241)', ['Electrostatics'])
+        ad_map.combine('OW', ['OW', 'Electrostatics'], how='add')
 
         for n in range(0, n_sample):
             #w_copy = copy.deepcopy(w_ori)
-            w_ori = WaterBox(self._waterfield, self._water_map)
+            w_ori = WaterBox(self._hb_forcefield, self._ad4_forcefield, self._water_map)
             w_ori.add_receptor(receptor, ad_map)
 
             if waters is not None:
@@ -112,9 +125,3 @@ class Waterkit():
 
                         i += 1
                         j += 1
-
-    def write_maps(self, prefix, map_types=None):
-        """ Write maps for each layer of water molecules """
-        for n, w in enumerate(self.water_boxes):
-            for water_map, chain in zip(w.maps, ascii_uppercase):
-                water_map.to_map(map_types, '%s_%03d_%s' % (prefix, n, chain))
