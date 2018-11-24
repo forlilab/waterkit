@@ -13,6 +13,7 @@ from collections import namedtuple
 
 import numpy as np
 import openbabel as ob
+import pandas as pd
 from scipy import spatial
 
 import utils
@@ -155,6 +156,19 @@ class Molecule():
         partial_charges = [x.GetPartialCharge() for x in ob_atoms]
 
         return partial_charges
+
+    def atom_informations(self, atom_ids=None):
+        """Get atom informations (xyz, q, type)."""
+        columns = ['xyz', 'q', 'type']
+
+        coordinates = self.coordinates(atom_ids)
+        partial_charges = self.partial_charges(atom_ids)
+        atom_types = self.atom_types(atom_ids)
+
+        data = [(c, p, t) for c, p, t in zip(coordinates, partial_charges, atom_types)]
+        df = pd.DataFrame(data=data, columns=columns)
+
+        return df
 
     def atoms_in_map(self, ad_map=None):
         """
