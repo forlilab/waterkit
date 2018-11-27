@@ -49,7 +49,7 @@ class WaterBox():
         if not 0 in self.molecules:
             # Find all the HBA and disordered atoms if necessary
             if receptor.hydrogen_bond_anchors is None:
-                receptor.guess_hydrogen_bond_anchors(self._hb_forcefield, ad_map)
+                receptor.guess_hydrogen_bond_anchors(self._hb_forcefield)
 
             if receptor.rotatable_bonds is None:
                 receptor.guess_rotatable_bonds()
