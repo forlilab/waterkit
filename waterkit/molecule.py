@@ -170,47 +170,6 @@ class Molecule():
 
         return df
 
-    def atoms_in_map(self, ad_map=None):
-        """
-        Returns a list of index of all the atoms in the map
-        """
-        idx = []
-
-        # If we don't provide an AutoDock Map, we return all the atoms
-        if ad_map is None:
-            idx = [ob_atom.GetIdx() for ob_atom in ob.OBMolAtomIter(self._OBMol)]
-            return idx
-        else:
-            for ob_atom in ob.OBMolAtomIter(self._OBMol):
-                x, y, z = ob_atom.GetX(), ob_atom.GetY(), ob_atom.GetZ()
-
-                if ad_map.is_in_map([x, y, z]):
-                    idx.append(ob_atom.GetIdx())
-
-            return idx
-
-    def residues_in_map(self, ad_map=None):
-        """
-        Return a list of index of all the residues in the map
-        """
-        idx = []
-
-        # If we don't provide an AutoDock Map, we return all the resiudes
-        if ad_map is None:
-            idx = [ob_residue.GetIdx() for ob_residue in ob.OBResidueIter(self._OBMol)]
-            return idx
-        else:
-            for ob_residue in ob.OBResidueIter(self._OBMol):
-                for ob_atom in ob.OBResidueAtomIter(ob_residue):
-                    x, y, z = ob_atom.GetX(), ob_atom.GetY(), ob_atom.GetZ()
-
-                    # If at least one atom (whatever the type) is in the grid, add the residue
-                    if ad_map.is_in_map([x, y, z]):
-                        idx.append(ob_residue.GetIdx())
-                        break
-
-            return idx
-
     def is_clash(self, xyz, molecule=None, radius=None):
         """
         Check if there is a clash between a coordinate xyz and itself or another molecule
@@ -305,15 +264,12 @@ class Molecule():
 
         return coords
 
-    def guess_rotatable_bonds(self, ad_map=None):
+    def guess_rotatable_bonds(self):
         """ Guess all the rotatable bonds in the molecule
         based the rotatable forcefield """
         unique = []
         self.rotatable_bonds = {}
         rotatable_bond = namedtuple('rotatable_bond', 'name')
-
-        # Get all the atom ids in the molecule
-        atom_ids = self.atoms_in_map(ad_map)
 
         # Find all the hydroxyl
         ob_smarts = ob.OBSmartsPattern()
@@ -326,19 +282,17 @@ class Molecule():
             the same rotatable bonds, like hydroxyl in tyrosine. The
             GetUMapList function doesn't work on that specific case
             """
-            if set(match[0:2]).intersection(atom_ids) and not match[0] in unique:
+            if not match[0] in unique:
                 key = tuple([idx - 1 for idx in match])
                 self.rotatable_bonds[key] = rotatable_bond('hydroxyl')
                 unique.append(match[0])
 
-    def guess_hydrogen_bond_anchors(self, waterfield, ad_map=None):
+    def guess_hydrogen_bond_anchors(self, waterfield):
         """ Guess all the hydrogen bonds anchors (donor/acceptor)
         in the molecule based on the hydrogen bond forcefield """
         self.hydrogen_bond_anchors = {}
         hb_anchor = namedtuple('hydrogen_bond_anchor', 'id name type vectors')
 
-        # Get all the atom ids in the molecule
-        atom_ids = self.atoms_in_map(ad_map)
         # Get all the available hb types
         atom_types = waterfield.get_atom_types()
         # Keep track of all the visited atom
@@ -361,7 +315,7 @@ class Molecule():
                 if hb_type is None and not visited[idx]:
                     visited[idx] = True
 
-                if idx in atom_ids and not visited[idx]:
+                if not visited[idx]:
                     visited[idx] = True
 
                     try:
