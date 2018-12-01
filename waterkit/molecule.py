@@ -159,13 +159,19 @@ class Molecule():
 
     def atom_informations(self, atom_ids=None):
         """Get atom informations (xyz, q, type)."""
-        columns = ['xyz', 'q', 'type']
+        columns = ['atom_i', 'atom_xyz', 'atom_q', 'atom_type']
+
+        if atom_ids is not None:
+            if not isinstance(atom_ids, (list, tuple)):
+                atom_ids = [atom_ids]
+        else:
+            atom_ids = range(0, self._OBMol.NumAtoms())
 
         coordinates = self.coordinates(atom_ids)
         partial_charges = self.partial_charges(atom_ids)
         atom_types = self.atom_types(atom_ids)
 
-        data = [(c, p, t) for c, p, t in zip(coordinates, partial_charges, atom_types)]
+        data = [(i, c, p, t) for i, c, p, t in zip(atom_ids, coordinates, partial_charges, atom_types)]
         df = pd.DataFrame(data=data, columns=columns)
 
         return df
@@ -267,9 +273,10 @@ class Molecule():
     def guess_rotatable_bonds(self):
         """ Guess all the rotatable bonds in the molecule
         based the rotatable forcefield """
+        columns = ["atom_i", "atom_j", "atom_i_xyz", "atom_j_xyz",
+                   "atom_k_xyz", "atom_l_xyz", "name"]
+        data = []
         unique = []
-        self.rotatable_bonds = {}
-        rotatable_bond = namedtuple('rotatable_bond', 'name')
 
         # Find all the hydroxyl
         ob_smarts = ob.OBSmartsPattern()
@@ -283,15 +290,24 @@ class Molecule():
             GetUMapList function doesn't work on that specific case
             """
             if not match[0] in unique:
-                key = tuple([idx - 1 for idx in match])
-                self.rotatable_bonds[key] = rotatable_bond('hydroxyl')
+                atom_i = match[0] - 1
+                atom_j = match[1] - 1
+                atom_i_xyz = self.coordinates(match[0] - 1)[0]
+                atom_j_xyz = self.coordinates(match[1] - 1)[0]
+                atom_k_xyz = self.coordinates(match[2] - 1)[0]
+                atom_l_xyz = self.coordinates(match[3] - 1)[0]
+                data.append([atom_i, atom_j, atom_i_xyz, atom_j_xyz,
+                             atom_k_xyz, atom_l_xyz, "hydroxyl"])
                 unique.append(match[0])
+
+        self.rotatable_bonds = pd.DataFrame(data=data, columns=columns)
+        self.rotatable_bonds.sort_values(by="atom_i", inplace=True)
 
     def guess_hydrogen_bond_anchors(self, waterfield):
         """ Guess all the hydrogen bonds anchors (donor/acceptor)
         in the molecule based on the hydrogen bond forcefield """
-        self.hydrogen_bond_anchors = {}
-        hb_anchor = namedtuple('hydrogen_bond_anchor', 'id name type vectors')
+        columns = ["atom_i", "vector_xyz", "anchor_type", "anchor_name"]
+        data = []
 
         # Get all the available hb types
         atom_types = waterfield.get_atom_types()
@@ -321,9 +337,13 @@ class Molecule():
                     try:
                         # Calculate the vectors on the anchor
                         vectors = self._hb_vectors(idx - 1, atom_type.hyb, atom_type.n_water, atom_type.hb_length)
-                        self.hydrogen_bond_anchors[idx - 1] = hb_anchor(idx - 1, name, hb_type, vectors)
+                        for vector in vectors:
+                            data.append([idx - 1, vector, hb_type, name])
                     except:
                         print "Warning: Could not determine hydrogen bond vectors on atom %s of type %s." % (idx, name)
+
+        self.hydrogen_bond_anchors = pd.DataFrame(data=data, columns=columns)
+        self.hydrogen_bond_anchors.sort_values(by="atom_i", inplace=True)
 
     def _hb_vectors(self, idx, hyb, n_hbond, hb_length):
         """ Return all the hydrogen bond vectors the atom idx """

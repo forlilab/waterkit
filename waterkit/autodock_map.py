@@ -265,7 +265,7 @@ class Map():
         """Get energy of a molecule from maps."""
         energy = 0.
 
-        se = df.groupby('type')['xyz'].apply(list)
+        se = df.groupby('atom_type')['atom_xyz'].apply(list)
 
         for atom_type, xyz in se.iteritems():
             energy += np.sum(self._maps_interpn[atom_type](xyz, method=method))

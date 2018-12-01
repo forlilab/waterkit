@@ -12,6 +12,7 @@ from collections import namedtuple
 
 import numpy as np
 import openbabel as ob
+import pandas as pd
 
 import utils
 from molecule import Molecule
@@ -105,16 +106,28 @@ class Water(Molecule):
         self._anchor = np.array([anchor_xyz, anchor_vector])
         self._anchor_type = anchor_type
 
-    def is_water(self):
-        """Tell if it is a water or not."""
-        return True
-
     def update_coordinates(self, atom_xyz, atom_id):
         """
         Update the coordinates of an OBAtom
         """
         ob_atom = self._OBMol.GetAtomById(atom_id)
         ob_atom.SetVector(atom_xyz[0], atom_xyz[1], atom_xyz[2])
+
+    def is_water(self):
+        """Tell if it is a water or not."""
+        return True
+
+    def is_spherical(self):
+        """Tell if water is spherical or not."""
+        if self._OBMol.NumAtoms() == 1:
+            return True
+        return False
+
+    def is_tip5p(self):
+        """Tell if water is TIP5P or not."""
+        if self._OBMol.NumAtoms() == 5:
+            return True
+        return False
 
     def build_tip5p(self):
         """
@@ -168,8 +181,8 @@ class Water(Molecule):
     def guess_hydrogen_bond_anchors(self, waterfield):
         """ Guess all the hydrogen bond anchors in the
         TIP5P water molecule. We don't need the waterfield here. """
-        self.hydrogen_bond_anchors = {}
-        hb_anchor = namedtuple('hydrogen_bond_anchor', 'id name type vectors')
+        columns = ["atom_i", "vector_xyz", "anchor_type", "anchor_name"]
+        data = []
 
         # Get all the available hb types
         atom_types = waterfield.get_atom_types()
@@ -190,19 +203,27 @@ class Water(Molecule):
                 hb_type = 'acceptor'
 
             vectors = self._hb_vectors(idx-1, atom_type.hyb, atom_type.n_water, atom_type.hb_length)
-            self.hydrogen_bond_anchors[idx-1] = hb_anchor(idx - 1, name, hb_type, vectors)
+            for vector in vectors:
+                data.append([idx - 1, vector, hb_type, name])
+
+        self.hydrogen_bond_anchors = pd.DataFrame(data=data, columns=columns)
 
     def translate(self, vector):
-        """ Translate the water molecule by a vector """
+        """Translate the water molecule."""
         water_xyz = self.coordinates() + vector
         for atom_id, coord_xyz in enumerate(water_xyz):
             self.update_coordinates(coord_xyz, atom_id)
         #self._OBMol.Translate(vector)
 
+        # We have also to translate the hydrogen bond vectors if present
+        if self.hydrogen_bond_anchors is not None:
+            self.hydrogen_bond_anchors['vector_xyz'] += vector
+
     def rotate(self, angle, ref_id=1):
-        """
-        Rotate water molecule along the axis Oxygen and a choosen atom (H or Lp)
-        """
+        """Rotate water molecule.
+
+        The rotation is along the axis Oxygen 
+        and a choosen atom (H or Lp)."""
         water_xyz = self.coordinates()
 
         # Get the rotation between the oxygen and the atom ref
@@ -217,3 +238,9 @@ class Water(Molecule):
         for atom_id in atom_ids:
             coord_xyz = utils.rotate_point(water_xyz[atom_id], oxygen_xyz, r, np.radians(angle))
             self.update_coordinates(coord_xyz, atom_id)
+
+        # We have also to rotate the hydrogen bond vectors if present
+        if self.hydrogen_bond_anchors is not None:
+            for index, vector in self.hydrogen_bond_anchors.iterrows():
+                vector_xyz = utils.rotate_point(vector['vector_xyz'], oxygen_xyz, r, np.radians(angle))
+                self.hydrogen_bond_anchors.at[index, 'vector_xyz'] = vector_xyz

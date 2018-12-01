@@ -247,29 +247,22 @@ class WaterBox():
 
         return best_hba, best_hbv_id
 
-    def place_optimal_waters(self, molecules):
+    def place_optimal_spherical_waters(self, molecules, atom_type='OW', partial_charge=-0.411):
         """ Place one or multiple water molecules 
         in the ideal position above an acceptor or donor atom
         """
         waters = []
         data = []
 
-        atom_type = 'OW'
-        partial_charge = -0.411
-
         for i, molecule in enumerate(molecules):
             if molecule.hydrogen_bond_anchors is None:
-                try:
-                    molecule.guess_hydrogen_bond_anchors(self._hb_forcefield, self.map)
-                except:
-                    molecule.guess_hydrogen_bond_anchors(self._hb_forcefield)
+                molecule.guess_hydrogen_bond_anchors(self._hb_forcefield)
 
-            for j, hba in molecule.hydrogen_bond_anchors.iteritems():
-                anchor_xyz = molecule.coordinates(j)[0]
-                for vector_xyz in hba.vectors:
-                    # We store the water and the connection
-                    waters.append(Water(vector_xyz, atom_type, partial_charge, anchor_xyz, vector_xyz, hba.type))
-                    data.append((i, j, len(waters) - 1, None))
+            for index, row in molecule.hydrogen_bond_anchors.iterrows():
+                anchor_xyz = molecule.coordinates(row['atom_i'])[0]
+                waters.append(Water(row['vector_xyz'], atom_type, partial_charge, 
+                                    anchor_xyz, row['vector_xyz'], row['anchor_type']))
+                data.append((i, row['atom_i'], len(waters) - 1, None))
 
         # Convert list of tuples into dataframe
         columns = ['molecule_i', 'atom_i', 'molecule_j', 'atom_j']
@@ -358,7 +351,7 @@ class WaterBox():
         else:
             opt_disordered = False
 
-        waters, connections = self.place_optimal_waters(molecules)
+        waters, connections = self.place_optimal_spherical_waters(molecules)
         waters, df = n.optimize(waters, connections, opt_disordered=opt_disordered)
 
         if len(waters):

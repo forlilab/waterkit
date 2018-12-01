@@ -46,8 +46,8 @@
 FE_coeff_vdW    0.1662
 FE_coeff_hbond  0.1209
 FE_coeff_estat  0.1406
-FE_coeff_desolv 0.1322
-FE_coeff_tors   0.2983
+FE_coeff_desolv 0.0000
+FE_coeff_tors   0.0000
 
 # AutoDock 4 Energy Parameters
 
@@ -120,4 +120,4 @@ atom_par J      4.00  0.150  33.5103  -0.00143  0.0  0.0  0  -1  -1  0	# Ring cl
 atom_par Q      4.00  0.150  33.5103  -0.00143  0.0  0.0  0  -1  -1  0	# Ring closure Glue Aliphatic Carbon  # SF
 atom_par W      0.00  0.200  17.1573  -0.00000  0.0  0.0  0  -1  -1  2	# Acceptor 2 H-bonds Oxygen
 atom_par Lp     0.00  0.200  17.1573  -0.00251  1.1  5.0  5  -1  -1  2	# Acceptor 2 H-bonds Oxygen
-atom_par OD     3.20  0.200  17.1573  -0.00251  0.0  0.0  2  -1  -1  3	# Donor 1 H-bond Hydrogen
+atom_par OD     4.00  0.200  17.1573  -0.00251  0.0  0.0  2  -1  -1  3	# Donor 1 H-bond Hydrogen

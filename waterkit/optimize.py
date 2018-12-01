@@ -6,6 +6,7 @@
 # Class for water network optimizer
 #
 
+import time
 import warnings
 
 import numpy as np
@@ -51,84 +52,32 @@ class WaterOptimizer():
         i = np.random.choice(d.shape[0], p=p)
         return i
 
-    def _smooth_distance(self, r, rij):
-        smooth = 0.5
-
-        if rij - 0.5 * smooth < r < rij + .5 * smooth :
-            return rij
-        elif r >= rij + .5 * smooth:
-            return r - .5 * smooth
-        elif r <= rij - 0.5 * smooth:
-            return r + .5 * smooth
-
-    def _hydrogen_bond_distance(self, r, a, c):
-        rs = self._smooth_distance(r, self._opt_distance)
-        return ((a/(rs**12)) - (c/(rs**10)))
-
-    def _hydrogen_bond_angle(self, angles):
-        score = 1.
-        angle_90 = np.pi / 2.
-
-        for angle in angles:
-            if angle < angle_90:
-                score *= np.cos(angle)**2
-            else:
-                score *= 0.
-
-        return score
-
-    def _energy_pairwise(self, water_xyz, anchors_xyz, vectors_xyz, anchors_types):
-        energy = 0.
-
-        for i, xyz in enumerate(water_xyz[1:]):
-            if i <= 1:
-                ref_xyz = xyz # use hydrogen for distance
-                water_type = 'donor'
-            else:
-                ref_xyz = water_xyz[0] # use oxygen for distance
-                water_type = 'acceptor'
-
-            for anchor_xyz, vector_xyz, anchor_type in zip(anchors_xyz, vectors_xyz, anchors_types):
-                """ water and anchor types have to be opposite types
-                in order to have an hydrogen bond between them """
-                if water_type != anchor_type:
-                    beta_1 = utils.get_angle(xyz, anchor_xyz, vector_xyz, False)[0]
-                    beta_2 = utils.get_angle(xyz + utils.vector(water_xyz[0], xyz), xyz, anchor_xyz, False)[0]
-                    score_a = self._hydrogen_bond_angle([beta_1, beta_2])
-                    r = utils.get_euclidean_distance(ref_xyz, np.array([anchor_xyz]))[0]
-                    score_d = self._hydrogen_bond_distance(r, 55332.873, 18393.199)
-                    energy += score_a * score_d
-
-        return energy
-
     def _optimize_disordered_waters(self, receptor, waters, connections, ad_map):
         """Optimize water molecules on rotatable bonds."""
         disordered_energies = []
-        rotatable_bonds = receptor.rotatable_bonds
 
         # Number of rotation necessary to do a full spin
         n_rotation = np.int(np.floor((360 / self._rotation))) - 1
         rotation = np.radians(self._rotation)
 
         # Iterate through every disordered bonds
-        for match, value in rotatable_bonds.iteritems():
+        for index, row in receptor.rotatable_bonds.iterrows():
             energies = []
             angles = []
             rot_waters = []
 
             # Get index of all the waters attached
             # to a disordered group by looking at the connections
-            for atom_id in match:
-                if atom_id in connections['atom_i'].values:
-                    index = connections.loc[connections['atom_i'] == atom_id]['molecule_j'].values
-                    rot_waters.extend([waters[i] for i in index])
+            tmp = connections['atom_i'].isin(row[['atom_i', 'atom_j']])
+            molecule_j = connections.loc[tmp]["molecule_j"].values
+            rot_waters.extend([waters[j] for j in molecule_j])
 
             # Get energy of the favorable disordered waters
             energy_waters = np.array([ad_map.energy(w.atom_informations()) for w in rot_waters])
             energy_waters[energy_waters > 0] = 0
             energies.append(np.sum(energy_waters))
             # Current angle of the disordered group
-            current_angle = np.radians(receptor._OBMol.GetTorsion(match[3]+1, match[2]+1, match[1]+1, match[0]+1))
+            current_angle = utils.dihedral(row[['atom_i_xyz', 'atom_j_xyz', 'atom_k_xyz', 'atom_l_xyz']].values)
             angles.append(current_angle)
 
             """ Find all the atoms that depends on these atoms. This
@@ -137,9 +86,9 @@ class WaterOptimizer():
             # molecule._OBMol.FindChildren(atom_children, match[2], match[3])
             # print np.array(atom_children)
 
-            # Atoms 1 and 2 define the rotation axis
-            p1 = receptor.coordinates(match[2])[0]
-            p2 = receptor.coordinates(match[1])[0]
+            # Atoms 3 and 2 define the rotation axis
+            p1 = row['atom_k_xyz']
+            p2 = row['atom_j_xyz']
 
             # Scan all the angles
             for i in range(n_rotation):
@@ -185,8 +134,7 @@ class WaterOptimizer():
         """Optimize the position of the spherical water molecule. 
 
         The movement of the water is contrained by the distance and 
-        the angle with the anchor.
-        """
+        the angle with the anchor."""
         oxygen_type = water.atom_types([0])[0]
         max_radius = self._distance
         min_radius = 2.5
@@ -224,67 +172,143 @@ class WaterOptimizer():
 
         return energy_water
 
+    def _orient_disordered_groups(self, p, atoms, hb_vectors, disordered_groups):
+        """Point disordered HB vectors toward water molecule."""
+        acceptor_types = ['OA', 'NA', 'SA']
+        angle = np.radians(109.5)
+        anchor_name = 'H_O_001'
+        anchor_type = 'donor'
+        atom_type = 'HD'
+        distance_hydrogen = 1.
+        distance_vector = 2.8
+        partial_charge = 0.200
+
+        for _, disordered_atoms in disordered_groups.iterrows():
+            if disordered_atoms[['atom_i', 'atom_j']].isin(atoms['atom_i']).any():
+                atom_i_xyz = disordered_atoms['atom_i_xyz']
+                atom_j_xyz = disordered_atoms['atom_j_xyz']
+                atom_k_xyz = disordered_atoms['atom_k_xyz']
+
+                # 1. Get rotation point
+                r = np.cross(utils.vector(atom_i_xyz, p), utils.vector(atom_i_xyz, atom_k_xyz)) + atom_j_xyz
+                h = utils.rotate_point(atom_k_xyz, atom_j_xyz, r, angle)
+                new_hd = utils.resize_vector(h, distance_hydrogen, atom_j_xyz)
+                new_vector = utils.resize_vector(h, distance_vector, atom_j_xyz)
+
+                """2. Change hydrogen atom coordinate and HB vector associated.
+                If there is no hydrogen atom, we create it and HB vector also."""
+                try:
+                    i = atoms.index[atoms['atom_i'] == disordered_atoms['atom_i']].tolist()[0]
+                    atoms.at[i, 'atom_xyz'] = new_hd
+                    i = hb_vectors.index[hb_vectors['atom_i'] == disordered_atoms['atom_i']].tolist()[0]
+                    hb_vectors.at[i, 'vector_xyz'] = new_vector
+                except:
+                    atom_data = {'atom_i' : disordered_atoms['atom_i'],
+                            'atom_xyz': new_hd,
+                            'atom_q': partial_charge,
+                            'atom_type': atom_type}
+                    atoms = atoms.append(atom_data, ignore_index=True)
+
+                    hb_data = {'atom_i' : disordered_atoms['atom_i'],
+                            'vector_xyz': new_vector,
+                            'anchor_type': anchor_type,
+                            'anchor_name': anchor_name}
+                    hb_vectors = hb_vectors.append(hb_data, ignore_index=True)
+
+                """3. Change HB vector associated to the OA/NA/SA.And keep 
+                only one HB vector if there is more than one. If the oxygen 
+                atom is not here, we do nothing because it means that it is 
+                too far from the water molecule anyway."""
+                try:
+                    i = hb_vectors.index[hb_vectors['atom_i'] == disordered_atoms['atom_j']].tolist()
+                    if len(i) == 2:
+                        hb_vectors.drop(i[-1], inplace=True)
+                    hb_vectors.at[i[0], 'vector_xyz'] = new_vector
+                except:
+                    # We do nothing
+                    pass
+
+                # 4. If hydrogen atom attached to OA/NA/SA, we change the type from HD to Hd
+                if atoms.loc[atoms['atom_i'] == disordered_atoms['atom_j']]['atom_type'].isin(acceptor_types).any():
+                    atoms.loc[atoms['atom_i'] == disordered_atoms['atom_i'], 'atom_type'] = 'Hd'
+
+        return atoms, hb_vectors
+
     def _optimize_orientation(self, water):
         """Optimize the orientation of the water molecule."""
-        anchors_xyz = []
-        vectors_xyz = []
-        anchors_ids = []
-        anchors_types = []
-        energies = []
         angles = []
+        atoms = []
+        disordered_groups = []
+        energies = []
+        hb_vectors = []
+        distance_cutoff = 4.0
 
         if water._anchor_type == 'donor':
             ref_id = 3
         else:
             ref_id = 1
 
-        water_xyz = water.coordinates()
+        pairwise_energy = self._water_box._ad4_forcefield.intermolecular_energy
+
+        water_xyz = water.coordinates(0)[0]
         # Number of rotation necessary to do a full spin
         n_rotation = np.int(np.floor((360 / self._rotation))) - 1
+
         # Get all the neighborhood atoms (active molecules)
-        closest_atom_ids = self._water_box.closest_atoms(water_xyz[0], 3.4)
+        closest_atom_ids = self._water_box.closest_atoms(water_xyz, distance_cutoff)
+        se = closest_atom_ids.groupby('molecule_i')['atom_i'].apply(list)
 
-        # Retrieve the coordinates of all the anchors
-        for _, row in closest_atom_ids.iterrows():
-            molecule = self._water_box.molecules[row['molecule_i']]
+        for molecule_i, atom_ids in se.iteritems():
+            molecule = self._water_box.molecules[molecule_i]
+            """We have to add the molecule id because the atom id alone
+            is not enough to identify an atom."""
+            mol_prefix = str(molecule_i) + '_'
 
-            # Get anchors ids
-            anchor_ids = molecule.hydrogen_bond_anchors.keys()
-            closest_anchor_ids = list(set([row['atom_i']]).intersection(anchor_ids))
+            # Retrieve all the informations about the closest atoms
+            tmp_atoms = molecule.atom_informations(atom_ids)
+            tmp_atoms['atom_i'] = mol_prefix + tmp_atoms['atom_i'].astype(str)
+            atoms.append(tmp_atoms)
 
-            # Get rotatable bonds ids
-            try:
-                rotatable_bond_ids = molecule.rotatable_bonds.keys()
-            except:
-                rotatable_bond_ids = []
+            # Retrieve all the hydrogen bond anchors
+            tmp = molecule.hydrogen_bond_anchors['atom_i'].isin(atom_ids)
+            tmp_hb = molecule.hydrogen_bond_anchors.loc[tmp]
+            if not tmp_hb.empty:
+                tmp_hb['atom_i'] = mol_prefix + tmp_hb[['atom_i']].astype(str)
+                hb_vectors.append(tmp_hb)
 
-            for idx in closest_anchor_ids:
-                anchor_xyz = molecule.coordinates(idx)
-                anchor_type = molecule.hydrogen_bond_anchors[idx].type
+            # Retrieve all the disordered atoms
+            if molecule.rotatable_bonds is not None:
+                tmp = molecule.rotatable_bonds[['atom_i', 'atom_j']].isin(atom_ids)
+                tmp = tmp['atom_i'] | tmp['atom_j']
+                tmp_disordered = molecule.rotatable_bonds.loc[tmp]
+                if not tmp_disordered.empty:
+                    tmp_disordered['atom_i'] = mol_prefix + tmp_disordered[['atom_i']].astype(str)
+                    tmp_disordered['atom_j'] = mol_prefix + tmp_disordered[['atom_j']].astype(str)
+                    disordered_groups.append(tmp_disordered)
 
-                if [idx for i in rotatable_bond_ids if idx in i]:
-                    """ If the vectors are on a rotatable bond 
-                    we change them in order to be always pointing to
-                    the water molecule (perfect HB). In fact the vector
-                    is now the coordinate of the oxygen atom. And we
-                    keep only one vector, we don't want to count it twice"""
-                    v = water_xyz[0]
-                    a = anchor_xyz
-                else:
-                    # Otherwise, get all the vectors on this anchor
-                    v = molecule.hydrogen_bond_anchors[idx].vectors
-                    a = np.tile(anchor_xyz, (v.shape[0], 1))
+        # Concatenate all the results
+        atoms = pd.concat(atoms, ignore_index=True)
 
-                anchors_xyz.append(a)
-                vectors_xyz.append(v)
-                anchors_ids.extend([idx] * v.shape[0])
-                anchors_types.extend([anchor_type] * v.shape[0])
+        try:
+            hb_vectors = pd.concat(hb_vectors, ignore_index=True)
+        except ValueError:
+            hb_vectors = None
+        
+        try:
+            disordered_groups = pd.concat(disordered_groups, ignore_index=True)
+        except ValueError:
+            disordered_groups = None
 
-        anchors_xyz = np.vstack(anchors_xyz)
-        vectors_xyz = np.vstack(vectors_xyz)
+        # We remove all the oxygen water molecule to speed up the computation
+        atoms.drop(atoms[atoms['atom_type'] == 'OW'].index, inplace=True)
+        """We want that all the disordered hydrogen atoms point toward the water.
+        Otherwise the interaction are not correctly modelized."""
+        if disordered_groups is not None:
+            atoms, hb_vectors = self._orient_disordered_groups(water_xyz, atoms, hb_vectors, disordered_groups)
 
         # Get the energy of the current orientation
-        energy_water = self._energy_pairwise(water_xyz, anchors_xyz, vectors_xyz, anchors_types)
+        energy_water = pairwise_energy(water.atom_informations(atom_ids=[1, 2, 3, 4]), atoms,
+                                       water.hydrogen_bond_anchors, hb_vectors)
         energies.append(energy_water)
         # Set the current to 0, there is no angle reference
         current_angle = 0.
@@ -293,13 +317,15 @@ class WaterOptimizer():
         # Rotate the water molecule and get its energy
         for i in range(n_rotation):
             water.rotate(self._rotation, ref_id=ref_id)
-            water_xyz = water.coordinates()
 
-            # Get energy and update the current angle (increment rotation)
-            energies.append(self._energy_pairwise(water_xyz, anchors_xyz, vectors_xyz, anchors_types))
+            # Get energy 
+            energies.append(pairwise_energy(water.atom_informations(atom_ids=[1, 2, 3, 4]), atoms,
+                                            water.hydrogen_bond_anchors, hb_vectors))
+            # ...and update the current angle (increment rotation)
             current_angle += self._rotation
             angles.append(current_angle)
 
+        # Choose the orientation
         if self._how == 'best':
             i = np.argmin(energies)
         elif self._how == ' boltzmann':
