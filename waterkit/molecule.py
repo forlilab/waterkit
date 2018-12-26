@@ -462,23 +462,18 @@ class Molecule():
         """ Export all the hb vectors to PDB file. """
         pdb_line = "ATOM  %5d  %-3s ANC%2s%4d    %8.3f%8.3f%8.3f%6.2f 1.00    %6.3f %2s\n"
 
-        try:
+        if self.hydrogen_bond_anchors is not None:
             i = 1
             str_out = ""
 
-            for key in sorted(self.hydrogen_bond_anchors):
-                anchor = self.hydrogen_bond_anchors[key]
+            for index, anchor in self.hydrogen_bond_anchors.iterrows():
+                x, y, z = anchor.vector_xyz
+                atom_type = anchor.anchor_type[0].upper()
 
-                vectors = anchor.vectors
-                atom_type = anchor.type[0].upper()
+                str_out += pdb_line % (i, atom_type, 'A', index, x, y, z, 1, 1, atom_type)
+                i += 1
 
-                for vector in vectors:
-                    x, y, z = vector
-                    str_out += pdb_line % (i, atom_type, 'A', key, x, y, z, 1, 1, atom_type)
-                    i += 1
-        except:
+            with open(fname, 'w') as w:
+                w.write(str_out)
+        else:
             print "Error: There is no hydrogen bond anchors."
-            return None
-
-        with open(fname, 'w') as w:
-            w.write(str_out)
