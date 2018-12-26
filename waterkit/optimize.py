@@ -328,7 +328,7 @@ class WaterOptimizer():
         # Choose the orientation
         if self._how == 'best':
             i = np.argmin(energies)
-        elif self._how == ' boltzmann':
+        elif self._how == 'boltzmann':
             i = self._boltzmann_choice(energies)
 
         # Once we checked all the angles, we rotate the water molecule to the best angle
@@ -364,21 +364,28 @@ class WaterOptimizer():
                 else:
                     energy_position = ad_map.energy(water.atom_informations())
 
-                # Before going further we check the energy
+                """Before going further we check the energy.
+                If the spherical water has already a bad energy
+                there is no point of going further and try to
+                orient it..."""
                 if energy_position <= self._energy_cutoff:
                     # Build the TIP5
-                    # TODO: Should be outside this function
                     water.build_tip5p()
 
                     # Optimize the rotation
                     if opt_rotation:
                         energy_orientation = self._optimize_orientation(water)
                     else:
-                        energy_orientation = None
+                        # Make sure we pass the energy filter
+                        energy_orientation = self._energy_cutoff - 1.
 
-                    # TODO: Doublon, all the information should be stored in waterbox df
-                    water.energy = energy_position
-                    data.append((shell_id + 1, energy_position, energy_orientation))
+                    # Last energy filter
+                    if energy_orientation <= self._energy_cutoff:
+                        # TODO: Doublon, all the information should be stored in waterbox df
+                        water.energy = energy_orientation
+                        data.append((shell_id + 1, energy_position, energy_orientation))
+                    else:
+                        to_be_removed.append(i)
                 else:
                     to_be_removed.append(i)
             else:
@@ -443,9 +450,9 @@ class WaterOptimizer():
                         best_water_ids = cluster[cluster['xray'] == True].index.values
                     else:
                         if self._how == 'best':
-                            best_water_ids = [cluster['energy_position'].idxmin()]
+                            best_water_ids = [cluster['energy_orientation'].idxmin()]
                         elif self._how == 'boltzmann':
-                            i = self._boltzmann_choice(cluster['energy_position'].values)
+                            i = self._boltzmann_choice(cluster['energy_orientation'].values)
                             best_water_ids = [cluster.index.values[i]]
 
                     water_ids = cluster.index.difference(best_water_ids).values
