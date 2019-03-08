@@ -18,7 +18,7 @@ import utils
 
 class WaterOptimizer():
 
-    def __init__(self, water_box, how='best', distance=3.4, angle=145, rotation=10,
+    def __init__(self, water_box, how='best', distance=3.4, angle=90, rotation=10,
                  energy_cutoff=0, temperature=298.15):
         self._water_box = water_box
         self._how = how
@@ -29,8 +29,6 @@ class WaterOptimizer():
         self._energy_cutoff = energy_cutoff
         # Boltzmann constant (kcal/mol)
         self._kb = 0.0019872041
-        # Optimal distance between O and H
-        self._opt_distance = 1.9
 
     def _cluster(self, waters, distance=2., method='single'):
         """ Cluster water molecule based on their position using hierarchical clustering """

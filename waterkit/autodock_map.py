@@ -328,7 +328,7 @@ class Map():
 
                 # Update map and interpolator
                 self._maps[atom_type] = x
-                self._maps_interpn[atom_type] = self._generate_affinity_map_interpn(self._maps[atom_type])
+                self._maps_interpn[atom_type] = self._generate_affinity_map_interpn(x)
             except:
                 print "Warning: This map %s does not exist." % (atom_type)
                 continue
