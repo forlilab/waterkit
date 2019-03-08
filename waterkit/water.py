@@ -12,6 +12,7 @@ from collections import namedtuple
 
 import numpy as np
 import openbabel as ob
+import pandas as pd
 
 import utils
 from molecule import Molecule
@@ -19,10 +20,10 @@ from molecule import Molecule
 
 class Water(Molecule):
 
-    def __init__(self, oxygen_xyz, oxygen_type='OW', anchor_xyz=None, vector_xyz=None, anchor_type=None):
+    def __init__(self, xyz, atom_type='OW', partial_charge=-0.411, anchor_xyz=None, vector_xyz=None, anchor_type=None):
         self._OBMol = ob.OBMol()
         # Add the oxygen atom
-        self.add_atom(oxygen_xyz, atom_type=oxygen_type, atom_num=8)
+        self.add_atom(xyz, atom_type, partial_charge, atom_num=8)
         # Store all the informations about the anchoring
         if all(v is not None for v in [anchor_xyz, vector_xyz, anchor_type]):
             self.set_anchor(anchor_xyz, vector_xyz, anchor_type)
@@ -54,7 +55,7 @@ class Water(Molecule):
         return result
 
     @classmethod
-    def from_file(cls, fname, oxygen_type='OW'):
+    def from_file(cls, fname, atom_type='OW', partial_charge=-0.411):
         """Create list of Water object from a PDB file."""
         waters = []
 
@@ -72,20 +73,26 @@ class Water(Molecule):
 
         for x in ob.OBMolAtomIter(OBMol):
             if x.IsOxygen():
-                oxygen_xyz = np.array([x.GetX(), x.GetY(), x.GetZ()])
-                waters.append(cls(oxygen_xyz, oxygen_type))
+                xyz = np.array([x.GetX(), x.GetY(), x.GetZ()])
+                waters.append(cls(xyz, atom_type, partial_charge))
 
         return waters
 
-    def add_atom(self, atom_xyz, atom_type='OA', atom_num=1, bond=None):
+    def add_atom(self, xyz, atom_type, partial_charge, atom_num=1, bond=None):
         """
         Add an OBAtom to the molecule
         """
         a = self._OBMol.NewAtom()
-        a.SetVector(atom_xyz[0], atom_xyz[1], atom_xyz[2])
+        a.SetVector(xyz[0], xyz[1], xyz[2])
+        """Weird stuffs happen here... I have to Set, Get 
+        and re-Set the partial charge. Otherwise it does
+        not work correctly."""
+        a.SetPartialCharge(partial_charge)
+        a.GetPartialCharge()
+        a.SetPartialCharge(partial_charge)
         a.SetType(atom_type)
-        # Weird thing appends here...
-        # If I remove a.GetType(), the oxygen type become O3 instead of OA/HO
+        """Also eird thing appends here... If I remove a.GetType(), 
+        the oxygen type become O3 instead of OA/HO."""
         a.GetType()
         a.SetAtomicNum(np.int(atom_num))
 
@@ -99,10 +106,6 @@ class Water(Molecule):
         self._anchor = np.array([anchor_xyz, anchor_vector])
         self._anchor_type = anchor_type
 
-    def is_water(self):
-        """Tell if it is a water or not."""
-        return True
-
     def update_coordinates(self, atom_xyz, atom_id):
         """
         Update the coordinates of an OBAtom
@@ -110,34 +113,30 @@ class Water(Molecule):
         ob_atom = self._OBMol.GetAtomById(atom_id)
         ob_atom.SetVector(atom_xyz[0], atom_xyz[1], atom_xyz[2])
 
-    def get_energy(self, ad_map, atom_id=None):
-        """
-        Return the energy of the water molecule
-        """
-        if atom_id is None:
-            n_atoms = self._OBMol.NumAtoms()
-            # Spherical water is only one atom, the oxygen
-            if n_atoms == 1:
-                atom_id = 0
-            # TIP5P water is 5 atoms, we ignore the oxygen
-            elif n_atoms == 5:
-                atom_id = [1, 2, 3, 4]
+    def is_water(self):
+        """Tell if it is a water or not."""
+        return True
 
-        coordinates = self.get_coordinates(atom_id)
-        atom_types = self.get_atom_types(atom_id)
+    def is_spherical(self):
+        """Tell if water is spherical or not."""
+        if self._OBMol.NumAtoms() == 1:
+            return True
+        return False
 
-        energy = 0.
-
-        for coordinate, atom_type in zip(coordinates, atom_types):
-            energy += ad_map.get_energy(coordinate, atom_type)
-
-        return energy[0]
+    def is_tip5p(self):
+        """Tell if water is TIP5P or not."""
+        if self._OBMol.NumAtoms() == 5:
+            return True
+        return False
 
     def build_tip5p(self):
         """
         Construct hydrogen atoms (H) and lone-pairs (Lp)
         TIP5P parameters: http://www1.lsbu.ac.uk/water/water_models.html
         """
+        atom_types = ['HD', 'HD', 'Lp', 'Lp']
+        partial_charges = [0.241, 0.241, -0.241, -0.241]
+
         # Order in which we will build H/Lp
         if self._anchor_type == "acceptor":
             d = [0.9572, 0.9572, 0.7, 0.7]
@@ -146,7 +145,7 @@ class Water(Molecule):
             d = [0.7, 0.7, 0.9572, 0.9572]
             a = [109.47, 104.52]
 
-        coord_oxygen = self.get_coordinates(0)[0]
+        coord_oxygen = self.coordinates(0)[0]
 
         # Vector between O and the Acceptor/Donor atom
         v = utils.vector(coord_oxygen, self._anchor[0])
@@ -174,18 +173,16 @@ class Water(Molecule):
         else:
             atoms = [a3, a4, a1, a2]
 
-        atom_types = ['HD', 'HD', 'Lp', 'Lp']
-
         i = 2
-        for atom, atom_type in zip(atoms, atom_types):
-            self.add_atom(atom, atom_type=atom_type, atom_num=1, bond=(1, i, 1))
+        for atom, atom_type, partial_charge in zip(atoms, atom_types, partial_charges):
+            self.add_atom(atom, atom_type, partial_charge, atom_num=1, bond=(1, i, 1))
             i += 1
 
     def guess_hydrogen_bond_anchors(self, waterfield):
         """ Guess all the hydrogen bond anchors in the
         TIP5P water molecule. We don't need the waterfield here. """
-        self.hydrogen_bond_anchors = {}
-        hb_anchor = namedtuple('hydrogen_bond_anchor', 'id name type vectors')
+        columns = ["atom_i", "vector_xyz", "anchor_type", "anchor_name"]
+        data = []
 
         # Get all the available hb types
         atom_types = waterfield.get_atom_types()
@@ -205,21 +202,29 @@ class Water(Molecule):
             elif atom_type.hb_type == 2:
                 hb_type = 'acceptor'
 
-            vectors = self._get_hb_vectors(idx-1, atom_type.hyb, atom_type.n_water, atom_type.hb_length)
-            self.hydrogen_bond_anchors[idx-1] = hb_anchor(idx - 1, name, hb_type, vectors)
+            vectors = self._hb_vectors(idx-1, atom_type.hyb, atom_type.n_water, atom_type.hb_length)
+            for vector in vectors:
+                data.append([idx - 1, vector, hb_type, name])
+
+        self.hydrogen_bond_anchors = pd.DataFrame(data=data, columns=columns)
 
     def translate(self, vector):
-        """ Translate the water molecule by a vector """
-        water_xyz = self.get_coordinates() + vector
+        """Translate the water molecule."""
+        water_xyz = self.coordinates() + vector
         for atom_id, coord_xyz in enumerate(water_xyz):
             self.update_coordinates(coord_xyz, atom_id)
         #self._OBMol.Translate(vector)
 
+        # We have also to translate the hydrogen bond vectors if present
+        if self.hydrogen_bond_anchors is not None:
+            self.hydrogen_bond_anchors['vector_xyz'] += vector
+
     def rotate(self, angle, ref_id=1):
-        """
-        Rotate water molecule along the axis Oxygen and a choosen atom (H or Lp)
-        """
-        water_xyz = self.get_coordinates()
+        """Rotate water molecule.
+
+        The rotation is along the axis Oxygen 
+        and a choosen atom (H or Lp)."""
+        water_xyz = self.coordinates()
 
         # Get the rotation between the oxygen and the atom ref
         oxygen_xyz = water_xyz[0]
@@ -233,3 +238,9 @@ class Water(Molecule):
         for atom_id in atom_ids:
             coord_xyz = utils.rotate_point(water_xyz[atom_id], oxygen_xyz, r, np.radians(angle))
             self.update_coordinates(coord_xyz, atom_id)
+
+        # We have also to rotate the hydrogen bond vectors if present
+        if self.hydrogen_bond_anchors is not None:
+            for index, vector in self.hydrogen_bond_anchors.iterrows():
+                vector_xyz = utils.rotate_point(vector['vector_xyz'], oxygen_xyz, r, np.radians(angle))
+                self.hydrogen_bond_anchors.at[index, 'vector_xyz'] = vector_xyz

@@ -8,10 +8,12 @@
 
 import copy
 import os
+import re
 from collections import namedtuple
 
 import numpy as np
 import openbabel as ob
+import pandas as pd
 from scipy import spatial
 
 import utils
@@ -65,38 +67,51 @@ class Molecule():
         obconv.SetInFormat(file_extension)
         OBMol = ob.OBMol()
         obconv.ReadFile(OBMol, fname)
-        return cls(OBMol)
+
+        m = cls(OBMol)
+
+        # OpenBabel do chemical perception to define the type
+        # So we override the types with AutoDock atom types
+        # from the PDBQT file
+        if file_extension == '.pdbqt':
+            atom_types = m._atom_types_from_pdbqt_file(fname)
+            for a, atom_type in zip(ob.OBMolAtomIter(m._OBMol), atom_types):
+                a.SetType(atom_type)
+                # Weird thing appends here...
+                # If I remove a.GetType(), the oxygen type become O3 instead of OA/HO
+                a.GetType()
+
+        return m
+
+    def _atom_types_from_pdbqt_file(self, fname):
+        """Get atom types from PDBQT file."""
+        atom_types = []
+
+        with open(fname) as f:
+            lines = f.readlines()
+            for line in lines:
+                if re.search('^ATOM', line) or re.search('^HETATM', line):
+                    atom_types.append(line[77:79].strip())
+
+        return atom_types
 
     def is_water(self):
         """Tell if it is a water or not."""
         return False
 
-    def get_atom(self, i):
+    def atom(self, i):
         """
         Return the OBAtom i
         """
         return self._OBMol.GetAtom(i)
 
-    def get_atoms_in_map(self, ad_map=None):
+    def residue(self, i):
         """
-        Returns a list of index of all the atoms in the map
+        Return the OBResidue i
         """
-        idx = []
+        return self._OBMol.GetResidue(i)
 
-        # If we don't provide an AutoDock Map, we return all the atoms
-        if ad_map is None:
-            idx = [ob_atom.GetIdx() for ob_atom in ob.OBMolAtomIter(self._OBMol)]
-            return idx
-        else:
-            for ob_atom in ob.OBMolAtomIter(self._OBMol):
-                x, y, z = ob_atom.GetX(), ob_atom.GetY(), ob_atom.GetZ()
-
-                if ad_map.is_in_map([x, y, z]):
-                    idx.append(ob_atom.GetIdx())
-
-            return idx
-
-    def get_coordinates(self, atom_ids=None):
+    def coordinates(self, atom_ids=None):
         """
         Return coordinates of all atoms or a certain atom
         We do it like this because OBMol.GetCoordinates isn't working
@@ -114,7 +129,7 @@ class Molecule():
 
         return coordinates
 
-    def get_atom_types(self, atom_ids=None):
+    def atom_types(self, atom_ids=None):
         """
         Return atom types of all atoms or a certain atom
         """
@@ -129,42 +144,46 @@ class Molecule():
 
         return atom_types
 
-    def get_residue(self, i):
-        """
-        Return the OBResidue i
-        """
-        return self._OBMol.GetResidue(i)
-
-    def get_residues_in_map(self, ad_map=None):
-        """
-        Return a list of index of all the residues in the map
-        """
-        idx = []
-
-        # If we don't provide an AutoDock Map, we return all the resiudes
-        if ad_map is None:
-            idx = [ob_residue.GetIdx() for ob_residue in ob.OBResidueIter(self._OBMol)]
-            return idx
+    def partial_charges(self, atom_ids=None):
+        """Get partial charges."""
+        if atom_ids is not None:
+            if not isinstance(atom_ids, (list, tuple)):
+                atom_ids = [atom_ids]
         else:
-            for ob_residue in ob.OBResidueIter(self._OBMol):
-                for ob_atom in ob.OBResidueAtomIter(ob_residue):
-                    x, y, z = ob_atom.GetX(), ob_atom.GetY(), ob_atom.GetZ()
+            atom_ids = range(0, self._OBMol.NumAtoms())
 
-                    # If at least one atom (whatever the type) is in the grid, add the residue
-                    if ad_map.is_in_map([x, y, z]):
-                        idx.append(ob_residue.GetIdx())
-                        break
+        ob_atoms = [self._OBMol.GetAtomById(i) for i in atom_ids]
+        partial_charges = [x.GetPartialCharge() for x in ob_atoms]
 
-            return idx
+        return partial_charges
+
+    def atom_informations(self, atom_ids=None):
+        """Get atom informations (xyz, q, type)."""
+        columns = ['atom_i', 'atom_xyz', 'atom_q', 'atom_type']
+
+        if atom_ids is not None:
+            if not isinstance(atom_ids, (list, tuple)):
+                atom_ids = [atom_ids]
+        else:
+            atom_ids = range(0, self._OBMol.NumAtoms())
+
+        coordinates = self.coordinates(atom_ids)
+        partial_charges = self.partial_charges(atom_ids)
+        atom_types = self.atom_types(atom_ids)
+
+        data = [(i, c, p, t) for i, c, p, t in zip(atom_ids, coordinates, partial_charges, atom_types)]
+        df = pd.DataFrame(data=data, columns=columns)
+
+        return df
 
     def is_clash(self, xyz, molecule=None, radius=None):
         """
         Check if there is a clash between a coordinate xyz and itself or another molecule
         """
         if molecule is not None:
-            atoms = molecule.get_coordinates()
+            atoms = molecule.coordinates()
         else:
-            atoms = self.get_coordinates()
+            atoms = self.coordinates()
 
         # Compute all distances between atom and all other atoms
         d = utils.get_euclidean_distance(xyz, atoms)
@@ -197,7 +216,7 @@ class Molecule():
 
         return lst
 
-    def get_neighbor_atoms(self, start_index=1, depth=1, hydrogen=True):
+    def neighbor_atoms(self, start_index=1, depth=1, hydrogen=True):
         """
         Return a nested list of all the neighbor OBAtoms by following the bond connectivity
         https://baoilleach.blogspot.com/2008/02/calculate-circular-fingerprints-with.html
@@ -236,14 +255,14 @@ class Molecule():
 
         return neighbors
 
-    def get_neighbor_atom_coordinates(self, id_atom, depth=1, hydrogen=True):
+    def neighbor_atom_coordinates(self, id_atom, depth=1, hydrogen=True):
         """
         Return a nested list of all the coordinates of all the neighbor
         atoms by following the bond connectivity
         """
         coords = []
 
-        atoms = self.get_neighbor_atoms(id_atom, depth, hydrogen)
+        atoms = self.neighbor_atoms(id_atom, depth, hydrogen)
 
         for level in atoms:
             tmp = [[ob_atom.GetX(), ob_atom.GetY(), ob_atom.GetZ()] for ob_atom in level]
@@ -251,15 +270,13 @@ class Molecule():
 
         return coords
 
-    def guess_rotatable_bonds(self, ad_map=None):
+    def guess_rotatable_bonds(self):
         """ Guess all the rotatable bonds in the molecule
         based the rotatable forcefield """
+        columns = ["atom_i", "atom_j", "atom_i_xyz", "atom_j_xyz",
+                   "atom_k_xyz", "atom_l_xyz", "name"]
+        data = []
         unique = []
-        self.rotatable_bonds = {}
-        rotatable_bond = namedtuple('rotatable_bond', 'name')
-
-        # Get all the atom ids in the molecule
-        atom_ids = self.get_atoms_in_map(ad_map)
 
         # Find all the hydroxyl
         ob_smarts = ob.OBSmartsPattern()
@@ -272,19 +289,26 @@ class Molecule():
             the same rotatable bonds, like hydroxyl in tyrosine. The
             GetUMapList function doesn't work on that specific case
             """
-            if set(match[0:2]).intersection(atom_ids) and not match[0] in unique:
-                key = tuple([idx - 1 for idx in match])
-                self.rotatable_bonds[key] = rotatable_bond('hydroxyl')
+            if not match[0] in unique:
+                atom_i = match[0] - 1
+                atom_j = match[1] - 1
+                atom_i_xyz = self.coordinates(match[0] - 1)[0]
+                atom_j_xyz = self.coordinates(match[1] - 1)[0]
+                atom_k_xyz = self.coordinates(match[2] - 1)[0]
+                atom_l_xyz = self.coordinates(match[3] - 1)[0]
+                data.append([atom_i, atom_j, atom_i_xyz, atom_j_xyz,
+                             atom_k_xyz, atom_l_xyz, "hydroxyl"])
                 unique.append(match[0])
 
-    def guess_hydrogen_bond_anchors(self, waterfield, ad_map=None):
+        self.rotatable_bonds = pd.DataFrame(data=data, columns=columns)
+        self.rotatable_bonds.sort_values(by="atom_i", inplace=True)
+
+    def guess_hydrogen_bond_anchors(self, waterfield):
         """ Guess all the hydrogen bonds anchors (donor/acceptor)
         in the molecule based on the hydrogen bond forcefield """
-        self.hydrogen_bond_anchors = {}
-        hb_anchor = namedtuple('hydrogen_bond_anchor', 'id name type vectors')
+        columns = ["atom_i", "vector_xyz", "anchor_type", "anchor_name"]
+        data = []
 
-        # Get all the atom ids in the molecule
-        atom_ids = self.get_atoms_in_map(ad_map)
         # Get all the available hb types
         atom_types = waterfield.get_atom_types()
         # Keep track of all the visited atom
@@ -307,24 +331,28 @@ class Molecule():
                 if hb_type is None and not visited[idx]:
                     visited[idx] = True
 
-                if idx in atom_ids and not visited[idx]:
+                if not visited[idx]:
                     visited[idx] = True
 
                     try:
                         # Calculate the vectors on the anchor
-                        vectors = self._get_hb_vectors(idx - 1, atom_type.hyb, atom_type.n_water, atom_type.hb_length)
-                        self.hydrogen_bond_anchors[idx - 1] = hb_anchor(idx - 1, name, hb_type, vectors)
+                        vectors = self._hb_vectors(idx - 1, atom_type.hyb, atom_type.n_water, atom_type.hb_length)
+                        for vector in vectors:
+                            data.append([idx - 1, vector, hb_type, name])
                     except:
                         print "Warning: Could not determine hydrogen bond vectors on atom %s of type %s." % (idx, name)
 
-    def _get_hb_vectors(self, idx, hyb, n_hbond, hb_length):
+        self.hydrogen_bond_anchors = pd.DataFrame(data=data, columns=columns)
+        self.hydrogen_bond_anchors.sort_values(by="atom_i", inplace=True)
+
+    def _hb_vectors(self, idx, hyb, n_hbond, hb_length):
         """ Return all the hydrogen bond vectors the atom idx """
         vectors = []
 
         # Get origin atom
-        anchor_xyz = self.get_coordinates(idx)[0]
+        anchor_xyz = self.coordinates(idx)[0]
         # Get coordinates of all the neihbor atoms
-        neighbors_xyz = self.get_neighbor_atom_coordinates(idx, depth=2)
+        neighbors_xyz = self.neighbor_atom_coordinates(idx, depth=2)
         neighbor1_xyz = neighbors_xyz[1][0]
 
         if hyb == 1:
@@ -434,23 +462,18 @@ class Molecule():
         """ Export all the hb vectors to PDB file. """
         pdb_line = "ATOM  %5d  %-3s ANC%2s%4d    %8.3f%8.3f%8.3f%6.2f 1.00    %6.3f %2s\n"
 
-        try:
+        if self.hydrogen_bond_anchors is not None:
             i = 1
             str_out = ""
 
-            for key in sorted(self.hydrogen_bond_anchors):
-                anchor = self.hydrogen_bond_anchors[key]
+            for index, anchor in self.hydrogen_bond_anchors.iterrows():
+                x, y, z = anchor.vector_xyz
+                atom_type = anchor.anchor_type[0].upper()
 
-                vectors = anchor.vectors
-                atom_type = anchor.type[0].upper()
+                str_out += pdb_line % (i, atom_type, 'A', index, x, y, z, 1, 1, atom_type)
+                i += 1
 
-                for vector in vectors:
-                    x, y, z = vector
-                    str_out += pdb_line % (i, atom_type, 'A', key, x, y, z, 1, 1, atom_type)
-                    i += 1
-        except:
+            with open(fname, 'w') as w:
+                w.write(str_out)
+        else:
             print "Error: There is no hydrogen bond anchors."
-            return None
-
-        with open(fname, 'w') as w:
-            w.write(str_out)

@@ -6,6 +6,7 @@
 # Class to manage autodock maps
 #
 
+import collections
 import os
 import re
 import copy
@@ -34,7 +35,7 @@ class Map():
             # Get information (center, spacing, nelements) from each grid
             # and make sure they are all identical
             for map_file, label in zip(map_files, labels):
-                grid_information = self._get_grid_information_from_map(map_file)
+                grid_information = self._grid_information_from_map(map_file)
 
                 if prv_grid_information is not None:
                     if not cmp(prv_grid_information, grid_information):
@@ -78,6 +79,9 @@ class Map():
 
         return info
 
+    def copy(self):
+        return copy.deepcopy(self)
+
     @classmethod
     def from_fld(cls, fld_file):
         """Read fld file."""
@@ -99,7 +103,7 @@ class Map():
         if map_files and labels:
             return cls(map_files, labels)
 
-    def _get_grid_information_from_map(self, map_file):
+    def _grid_information_from_map(self, map_file):
         """Read grid information in the map file"""
         grid_information = {'spacing': None,
                             'nelements': None,
@@ -196,6 +200,35 @@ class Map():
 
         return idx
 
+    def atoms_in_map(self, molecule):
+        """List of index of all the atoms in the map."""
+        idx = []
+        OBMol = molecule._OBMol
+
+        for ob_atom in ob.OBMolAtomIter(OBMol):
+            x, y, z = ob_atom.GetX(), ob_atom.GetY(), ob_atom.GetZ()
+
+            if self.is_in_map([x, y, z]):
+                idx.append(ob_atom.GetIdx())
+
+        return idx
+
+    def residues_in_map(self, molecule):
+        """List of index of all the residues in the map."""
+        idx = []
+        OBMol = molecule._OBMol
+
+        for ob_residue in ob.OBResidueIter(OBMol):
+            for ob_atom in ob.OBResidueAtomIter(ob_residue):
+                x, y, z = ob_atom.GetX(), ob_atom.GetY(), ob_atom.GetZ()
+
+                # If at least one atom (whatever the type) is in the grid, add the residue
+                if self.is_in_map([x, y, z]):
+                    idx.append(ob_residue.GetIdx())
+                    break
+
+        return idx
+
     def is_in_map(self, xyz):
         """
         Check if coordinates xyz are in the AutoDock map
@@ -224,13 +257,22 @@ class Map():
 
         return close_to
 
-    def get_energy(self, xyz, atom_type, method='linear'):
-        """
-        Return the energy of each coordinates xyz
-        """
+    def energy_coordinates(self, xyz, atom_type, method='linear'):
+        """Energy of each coordinates xyz."""
         return self._maps_interpn[atom_type](xyz, method=method)
 
-    def get_neighbor_points(self, xyz, min_radius=0, max_radius=5):
+    def energy(self, df, method='linear'):
+        """Get energy of a molecule from maps."""
+        energy = 0.
+
+        se = df.groupby('atom_type')['atom_xyz'].apply(list)
+
+        for atom_type, xyz in se.iteritems():
+            energy += np.sum(self._maps_interpn[atom_type](xyz, method=method))
+
+        return energy
+
+    def neighbor_points(self, xyz, min_radius=0, max_radius=5):
         """
         Return all the coordinates xyz in a certaim radius around a point
         """
@@ -270,8 +312,26 @@ class Map():
 
         return selected_coordinates
 
-    def copy(self):
-        return copy.deepcopy(self)
+    def apply_operation_on_maps(self, expression, atom_types):
+        """Apply string expression on affinity grids."""
+        if not isinstance(atom_types, collections.Iterable):
+            atom_types = [atom_types]
+
+        if not 'x' in expression:
+            print "Error: operation cannot be applied, x is not defined."
+            return None
+
+        for atom_type in atom_types:
+            try:
+                x = self._maps[atom_type]
+                x = eval(expression)
+
+                # Update map and interpolator
+                self._maps[atom_type] = x
+                self._maps_interpn[atom_type] = self._generate_affinity_map_interpn(x)
+            except:
+                print "Warning: This map %s does not exist." % (atom_type)
+                continue
 
     def combine(self, name, atom_types, how='best', ad_map=None):
         """
@@ -327,7 +387,7 @@ class Map():
                 if same_grid:
                     selected_maps.append(ad_map._maps[selected_type])
                 else:
-                    energy = ad_map.get_energy(grid, selected_type)
+                    energy = ad_map.energy(grid, selected_type)
                     print energy.shape
                     energy = np.reshape(energy, (len(x), len(y), len(z)))
                     # I have to check why I have to do this!
