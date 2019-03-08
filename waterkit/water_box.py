@@ -341,15 +341,23 @@ class WaterBox():
         """Build the next hydration shell."""
         shell_id = self.number_of_shells(ignore_xray=True)
         molecules = self.molecules_in_shell(shell_id)
-        n = WaterOptimizer(self, how)
+        n = WaterOptimizer(self, how, angle=90, temperature=300.)
 
         # Test if we have all the material to continue
         assert len(molecules) > 0, "There is molecule(s) in the shell %s" % shell_id
 
+        # Only the receptor contains disordered hydrogens
         if shell_id == 0:
             opt_disordered = True
         else:
             opt_disordered = False
+
+        """ Before placing water molecules, we update the Ow map first
+        except if it is the first hydration shell. Like this if it is
+        the last hydration that we are placing, we do not update the map
+        unnecessarily."""
+        if self._water_map is not None and shell_id != 0:
+            self._update_map(molecules, self._water_map, choices=['Ow'])
 
         waters, connections = self.place_optimal_spherical_waters(molecules)
         waters, df = n.optimize(waters, connections, opt_disordered=opt_disordered)
@@ -368,11 +376,6 @@ class WaterBox():
 
             # Select water molecules and update shell informations
             n.activate_molecules_in_shell(shell_id + 1)
-
-            if self._water_map is not None:
-                # Get only active waters and update the last map OW
-                active_waters = self.molecules_in_shell(shell_id + 1)
-                self._update_map(active_waters, self._water_map, choices=['OW'])
 
             return True
         else:
