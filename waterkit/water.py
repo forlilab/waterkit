@@ -20,7 +20,7 @@ from molecule import Molecule
 
 class Water(Molecule):
 
-    def __init__(self, xyz, atom_type='OW', partial_charge=-0.411, anchor_xyz=None, vector_xyz=None, anchor_type=None):
+    def __init__(self, xyz, atom_type='Ow', partial_charge=-0.411, anchor_xyz=None, vector_xyz=None, anchor_type=None):
         self._OBMol = ob.OBMol()
         # Add the oxygen atom
         self.add_atom(xyz, atom_type, partial_charge, atom_num=8)
@@ -55,7 +55,7 @@ class Water(Molecule):
         return result
 
     @classmethod
-    def from_file(cls, fname, atom_type='OW', partial_charge=-0.411):
+    def from_file(cls, fname, atom_type='Ow', partial_charge=-0.411):
         """Create list of Water object from a PDB file."""
         waters = []
 

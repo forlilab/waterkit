@@ -19,16 +19,21 @@ import utils
 class WaterOptimizer():
 
     def __init__(self, water_box, how='best', distance=3.4, angle=90, rotation=10,
-                 energy_cutoff=0, temperature=298.15):
+                 orientation=50, energy_cutoff=0, temperature=298.15):
         self._water_box = water_box
         self._how = how
         self._distance = distance
         self._angle = angle
         self._rotation = rotation
+        self._orientation = orientation
         self._temperature = temperature
         self._energy_cutoff = energy_cutoff
         # Boltzmann constant (kcal/mol)
         self._kb = 0.0019872041
+
+        # Generate n orientation quaternions
+        coordinates = np.random.random(size=(self._orientation, 3))
+        self._quaternions = utils.shoemake(coordinates)
 
     def _cluster(self, waters, distance=2., method='single'):
         """ Cluster water molecule based on their position using hierarchical clustering """
@@ -128,7 +133,7 @@ class WaterOptimizer():
 
         return disordered_energies
 
-    def _optimize_position(self, water, ad_map):
+    def _optimize_position_grid(self, water, ad_map):
         """Optimize the position of the spherical water molecule. 
 
         The movement of the water is contrained by the distance and 
@@ -157,6 +162,8 @@ class WaterOptimizer():
         # Energy of the spherical water
         energy_water = ad_map.energy(water.atom_informations())
 
+        print 'Current energy (position): ', energy_water
+
         if energy_sphere.size:
             if self._how == 'best':
                 i = energy_sphere.argmin()
@@ -166,9 +173,66 @@ class WaterOptimizer():
             # Update the coordinates
             water.translate(utils.vector(water.coordinates(0), coord_sphere[i]))
 
+            print 'Energy (position): ', energy_sphere[i], i
+
             return energy_sphere[i]
 
         return energy_water
+
+    def _optimize_orientation_grid(self, water, id_water):
+        """Optimize the orientation of the TIP5P water molecule using the grid. """
+        energies = []
+        coordinates = []
+
+        ad_map = self._water_box.map
+        coordinates_water = water.coordinates()
+        xyz_oxygen = water.coordinates(0)
+
+        #print 'Current coordinates (orientation): ', coordinates_water
+
+        # Current energy of the TIP5P water
+        info_water = water.atom_informations(range(1, 5))
+        energy_water = ad_map.energy(info_water)
+        print 'Current energy (orientation): ', energy_water
+
+        # Move the water to the origin for the rotation
+        coordinates_water -= xyz_oxygen
+        #print 'Current coordinates (origin)(orientation): ', coordinates_water
+        #print ''
+
+        for x, q in enumerate(self._quaternions):
+            coor_tmp = np.zeros(shape=(4, 3))
+
+            # Rotate each atoms by the quaternion
+            for i, u in enumerate(coordinates_water[1:]):
+                coor_tmp[i] = utils.rotate_vector_by_quaternion(u, q)
+
+            # Change coordinates by the new ones and
+            # we translate it back the original oxygen position
+            coor_tmp += xyz_oxygen
+            #print 'New coordinates (orientation): ', coor_tmp
+
+            # Get energy from the grid and save the coordinates
+            [water.update_coordinates(coor_tmp[i - 1], i) for i in range(1,5)]
+            info_water = water.atom_informations(range(1, 5))
+            #print info_water
+            energies.append(ad_map.energy(info_water))
+            coordinates.append(coor_tmp)
+
+            #print ''
+
+        if self._how == 'best':
+            i = energies.argmin()
+        elif self._how == 'boltzmann':
+            i = self._boltzmann_choice(energies)
+
+        print energies
+        print 'Energy (orientation): ', energies[i], i
+
+        # Update the coordinates with the selected orientation
+        [water.update_coordinates(coordinates[i][j - 1], j) for j in range(1,5)]
+
+        return energies[i]
 
     def _orient_disordered_groups(self, p, atoms, hb_vectors, disordered_groups):
         """Point disordered HB vectors toward water molecule."""
@@ -232,7 +296,7 @@ class WaterOptimizer():
 
         return atoms, hb_vectors
 
-    def _optimize_orientation(self, water):
+    def _optimize_orientation_pairwise(self, water):
         """Optimize the orientation of the water molecule."""
         angles = []
         atoms = []
@@ -298,7 +362,7 @@ class WaterOptimizer():
             disordered_groups = None
 
         # We remove all the oxygen water molecule to speed up the computation
-        atoms.drop(atoms[atoms['atom_type'] == 'OW'].index, inplace=True)
+        atoms.drop(atoms[atoms['atom_type'] == 'Ow'].index, inplace=True)
         """We want that all the disordered hydrogen atoms point toward the water.
         Otherwise the interaction are not correctly modelized."""
         if disordered_groups is not None:
@@ -358,7 +422,7 @@ class WaterOptimizer():
             if ad_map.is_in_map(water.coordinates(0)[0]):
                 # Optimize the position of the spherical water
                 if opt_position:
-                    energy_position = self._optimize_position(water, ad_map)
+                    energy_position = self._optimize_position_grid(water, ad_map)
                 else:
                     energy_position = ad_map.energy(water.atom_informations())
 
@@ -372,7 +436,7 @@ class WaterOptimizer():
 
                     # Optimize the rotation
                     if opt_rotation:
-                        energy_orientation = self._optimize_orientation(water)
+                        energy_orientation = self._optimize_orientation_pairwise(water)
                     else:
                         # Make sure we pass the energy filter
                         energy_orientation = self._energy_cutoff - 1.
@@ -386,6 +450,97 @@ class WaterOptimizer():
                         to_be_removed.append(i)
                 else:
                     to_be_removed.append(i)
+            else:
+                to_be_removed.append(i)
+
+        # Keep only the good waters
+        waters = [water for i, water in enumerate(waters) if not i in to_be_removed]
+        # Keep connections of the good waters
+        if connections is not None:
+            index = connections.loc[connections['molecule_j'].isin(to_be_removed)].index
+            connections.drop(index, inplace=True)
+            # Renumber the water molecules
+            connections['molecule_j'] = range(0, len(waters))
+            df['connections'] = connections
+
+        # Add water shell informations
+        columns = ['shell_id', 'energy_position', 'energy_orientation']
+        df_shell = pd.DataFrame(data, columns=columns)
+        df['shells'] = df_shell
+
+        return (waters, df)
+
+    def sample(self, waters, connections=None, opt_position=True, opt_disordered=True):
+        """Optimize position of water molecules."""
+        df = {}
+        data = []
+        profiles = []
+        to_be_removed = []
+
+        shell_id = self._water_box.number_of_shells(ignore_xray=True)
+        ad_map = self._water_box.map
+        water_map = self._water_box._water_map
+
+        if opt_disordered and connections is not None:
+            receptor = self._water_box.molecules_in_shell(0)[0]
+            # Start first by optimizing the disordered water molecules
+            self._optimize_disordered_waters(receptor, waters, connections, ad_map)
+
+        # We optimize water randomly. So the starting point will be always different.
+        water_orders = np.arange(len(waters))
+        np.random.shuffle(water_orders)
+
+        """And now we optimize all water individually. All the
+        water molecules are outside the box or with a positive
+        energy are considered as bad and are removed."""
+        for i in water_orders:
+            water = waters[i]
+
+            if ad_map.is_in_map(water.coordinates(0)[0]):
+                print 'Water: ', i
+                water.to_file('waters/water_%05d_ori.pdb' % i, 'pdb')
+
+                # Optimize the position of the spherical water
+                if opt_position:
+                    energy_position = self._optimize_position_grid(water, ad_map)
+                else:
+                    energy_position = ad_map.energy(water.atom_informations())
+
+                water.to_file('waters/water_%05d_pos_opt.pdb' % i, 'pdb')
+
+                """Before going further we check the energy.
+                If the spherical water has already a bad energy
+                there is no point of going further and try to
+                orient it..."""
+                if energy_position <= self._energy_cutoff:
+                    # Build the TIP5
+                    water.build_tip5p()
+
+                    # Optimize the orientation
+                    energy_orientation = self._optimize_orientation_grid(water, i)
+
+                    # The last great energy filter
+                    if energy_orientation <= self._energy_cutoff:
+                        # TODO: Doublon, all the information should be stored in waterbox df
+                        water.energy = energy_orientation
+                        data.append((shell_id + 1, energy_position, energy_orientation))
+
+                        water.to_file('waters/water_%05d_rot_opt.pdb' % (i), 'pdb')
+
+                        # And we update the map
+                        self._water_box._update_map(water, water_map, choices=['Ow', 'HD', 'Lp'])
+                        ad_map.to_map('Ow', 'update')
+                        ad_map.to_map('HD', 'update')
+                        ad_map.to_map('Lp', 'update')
+                        sys.exit(0)
+                        print ''
+                    else:
+                        to_be_removed.append(i)
+                        print 'WARNING: SPHERICAL OKAY BUT NOT TIP5P!!'
+                        print ''
+                else:
+                    to_be_removed.append(i)
+                    print ''
             else:
                 to_be_removed.append(i)
 

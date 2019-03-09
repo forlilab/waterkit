@@ -24,6 +24,13 @@ class Waterkit():
         self._ad4_forcefield = ad4_forcefield
         self._water_map = water_map
 
+        # AD map names
+        self._type_lp = 'Lp'
+        self._type_oa = 'Oa'
+        self._type_od = 'Oa'
+        self._type_w = 'Ow'
+        self._type_e = 'Electrostatics'
+
         """If the user does not provide any of these elements,
         we take those available per default in waterkit."""
         if self._hb_forcefield is None:
@@ -42,9 +49,12 @@ class Waterkit():
             self._water_map = Map.from_fld(water_fld_file)
 
         # Combine OA, OD and e to create OW
-        self._water_map.combine('OW', ['OA', 'OD'], how='add')
-        self._water_map.apply_operation_on_maps('-np.abs(x * 0.241)', ['Electrostatics'])
-        self._water_map.combine('OW', ['OW', 'Electrostatics'], how='add')
+        # Since waters are spherical, both donor/acceptor, so e is always favorable
+        self._water_map.apply_operation_on_maps('-np.abs(x)', [self._type_e])
+        self._water_map.combine(self._type_w, [self._type_oa, self._type_od, self._type_e], how='add')
+        # Add e to HD and Lp
+        self._water_map.combine('HD', ['HD', self._type_e], how='add')
+        self._water_map.combine(self._type_lp, [self._type_lp, self._type_e], how='add')
 
         # Deactivate HD-Hd interaction in AutoDock ForceField
         self._ad4_forcefield.deactivate_pairs([['HD', 'Hd']])
@@ -56,9 +66,8 @@ class Waterkit():
         of water molecules until the box is complety full."""
         # Combine OA, OD and e to create OW
         # Warning: this is not the same how as the one passed in input
-        ad_map.combine('OW', ['OA', 'OD'], how='add')
-        ad_map.apply_operation_on_maps('-np.abs(x * 0.241)', ['Electrostatics'])
-        ad_map.combine('OW', ['OW', 'Electrostatics'], how='add')
+        ad_map.apply_operation_on_maps('-np.abs(x)', [self._type_e])
+        ad_map.combine(self._type_w, [self._type_oa, self._type_od, self._type_e], how='add')
 
         #w_copy = copy.deepcopy(w_ori)
         w = WaterBox(self._hb_forcefield, self._ad4_forcefield, self._water_map)

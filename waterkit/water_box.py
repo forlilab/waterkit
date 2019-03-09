@@ -247,7 +247,7 @@ class WaterBox():
 
         return best_hba, best_hbv_id
 
-    def place_optimal_spherical_waters(self, molecules, atom_type='OW', partial_charge=-0.411):
+    def place_optimal_spherical_waters(self, molecules, atom_type='Ow', partial_charge=-0.411):
         """ Place one or multiple water molecules 
         in the ideal position above an acceptor or donor atom
         """
@@ -282,6 +282,9 @@ class WaterBox():
 
         if choices is not None:
             map_types = list(set(map_types) & set(choices))
+
+        if not isinstance(waters, collections.Iterable):
+            waters = [waters]
 
         for water in waters:
             o, h1, h2 = water.coordinates([0, 1, 2])
@@ -352,30 +355,20 @@ class WaterBox():
         else:
             opt_disordered = False
 
-        """ Before placing water molecules, we update the Ow map first
-        except if it is the first hydration shell. Like this if it is
-        the last hydration that we are placing, we do not update the map
-        unnecessarily."""
-        if self._water_map is not None and shell_id != 0:
-            self._update_map(molecules, self._water_map, choices=['Ow'])
-
         waters, connections = self.place_optimal_spherical_waters(molecules)
-        waters, df = n.optimize(waters, connections, opt_disordered=opt_disordered)
+        waters, df = n.sample(waters, connections, opt_disordered=opt_disordered)
 
         if len(waters):
             # And add all the waters
             self.add_molecules(waters, df['connections'])
 
-            # Tag as non-Xray waters (for the clustering)
+            # Tag as non-Xray waters, and are active
             df['shells']['xray'] = False
-            df['shells']['active'] = False
+            df['shells']['active'] = True
 
             # Add informations about the new shell
             for key in df.keys():
                 self.add_informations(df[key], key)
-
-            # Select water molecules and update shell informations
-            n.activate_molecules_in_shell(shell_id + 1)
 
             return True
         else:

@@ -236,3 +236,24 @@ def sphere_grid_points(center, spacing, radius, min_radius=0):
     distance = spatial.distance.cdist(data, center.reshape(1, -1)).ravel()
     points_in_sphere = data[(distance >= min_radius) & (distance <= radius)]
     return points_in_sphere
+
+
+def rotate_vector_by_quaternion(v, q):
+    """Rotate point using a quaternion."""
+    # https://gamedev.stackexchange.com/questions/28395/rotating-vector3-by-a-quaternion
+    u = q[1:]
+    s = q[0]
+    v_prime = 2. * np.dot(u, v) * u + (s * s - np.dot(u, u)) * v + 2. * s * np.cross(u, v)
+    return v_prime
+
+
+def shoemake(coordinates):
+    """Shoemake transformation."""
+    # http://planning.cs.uiuc.edu/node198.html
+    coordinates = np.atleast_2d(coordinates)
+    t1 = np.sqrt(1. - coordinates[:,0])
+    t2 = np.sqrt(coordinates[:,0])
+    s1 = 2. * np.pi * coordinates[:,1]
+    s2 = 2. * np.pi * coordinates[:,2]
+    return np.dstack((t1 * np.sin(s1), t1 * np.cos(s1), 
+                      t2 * np.sin(s2), t2 * np.cos(s2)))[0]
