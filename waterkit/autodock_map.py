@@ -314,7 +314,7 @@ class Map():
 
     def apply_operation_on_maps(self, expression, atom_types):
         """Apply string expression on affinity grids."""
-        if not isinstance(atom_types, collections.Iterable):
+        if not isinstance(atom_types, (list, tuple)):
             atom_types = [atom_types]
 
         if not 'x' in expression:
