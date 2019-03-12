@@ -80,6 +80,7 @@ class Molecule():
                 # Weird thing appends here...
                 # If I remove a.GetType(), the oxygen type become O3 instead of OA/HO
                 a.GetType()
+                a.SetType(atom_type)
 
         return m
 
