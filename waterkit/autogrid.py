@@ -17,6 +17,7 @@ from autodock_map import Map
 
 
 def execute_command(cmd_line):
+    """Simple function to execute bash command."""
     args = cmd_line.split()
     p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     output, errors = p.communicate()
@@ -31,7 +32,7 @@ class AutoGrid():
 
     def run(self, receptor_file, atom_types, center=(0., 0., 0.),
             npts=(32, 32, 32), spacing=0.375, smooth=0.5, clean=False):
-
+        """Execute AutoGrid on receptor file."""
         if not isinstance(atom_types, (list, tuple)):
             atom_types = [atom_types]
 
@@ -55,7 +56,7 @@ class AutoGrid():
 
         gpf_file = '%s.gpf' % receptor_name
         glg_file = '%s.glg' % receptor_name
-        
+
         with open(gpf_file, 'w') as w:
             w.write(ag_str)
 
