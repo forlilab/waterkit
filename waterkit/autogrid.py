@@ -46,6 +46,7 @@ class AutoGrid():
         ag_str += 'spacing %.3f\n' % spacing
         ag_str += 'receptor_types ' + ' '.join(receptor_types) + '\n'
         ag_str += 'ligand_types ' + ' '.join(atom_types) + '\n'
+        ag_str += 'receptor %s\n' % receptor_file
         ag_str += 'gridcenter %.3f %.3f %.3f\n' % (center[0], center[1], center[2])
         ag_str += 'smooth %.3f\n' % smooth
         for atom_type in atom_types:
