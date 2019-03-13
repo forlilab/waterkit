@@ -74,27 +74,37 @@ class Molecule():
         # So we override the types with AutoDock atom types
         # from the PDBQT file
         if file_extension == '.pdbqt':
-            atom_types = m._atom_types_from_pdbqt_file(fname)
-            for a, atom_type in zip(ob.OBMolAtomIter(m._OBMol), atom_types):
-                a.SetType(atom_type)
+            qs, ts = m._qt_from_pdbqt_file(fname)
+
+            for a, q, t in zip(ob.OBMolAtomIter(m._OBMol), qs, ts):
                 # Weird thing appends here...
                 # If I remove a.GetType(), the oxygen type become O3 instead of OA/HO
-                a.GetType()
-                a.SetType(atom_type)
+                for _ in range(2):
+                    a.SetType(t)
+                    a.SetPartialCharge(q)
+                    a.GetType()
+                    a.GetPartialCharge()
 
         return m
 
-    def _atom_types_from_pdbqt_file(self, fname):
+    def _qt_from_pdbqt_file(self, fname):
         """Get atom types from PDBQT file."""
         atom_types = []
+        partial_charges = []
 
         with open(fname) as f:
             lines = f.readlines()
             for line in lines:
                 if re.search('^ATOM', line) or re.search('^HETATM', line):
                     atom_types.append(line[77:79].strip())
+                    partial_charges.append(np.float(line[70:77].strip()))
 
-        return atom_types
+        return partial_charges, atom_types
+
+    def add_molecule(self, molecule):
+        """Add Molecule to self."""
+        if isinstance(molecule, Molecule):
+            self._OBMol += molecule._OBMol
 
     def is_water(self):
         """Tell if it is a water or not."""
@@ -451,12 +461,15 @@ class Molecule():
 
         return vectors
 
-    def to_file(self, fname, fformat):
+    def to_file(self, fname, fformat, options=None):
         """
         Write OBMolecule to a file
         """
         obconv = ob.OBConversion()
         obconv.SetOutFormat(fformat)
+        if options is not None:
+            for option in options:
+                obconv.AddOption(option)
         obconv.WriteFile(self._OBMol, fname)
 
     def export_hb_vectors(self, fname):
