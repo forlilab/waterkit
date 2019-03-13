@@ -86,18 +86,23 @@ class Water(Molecule):
         a.SetVector(xyz[0], xyz[1], xyz[2])
         """Weird stuffs happen here... I have to Set, Get 
         and re-Set the partial charge. Otherwise it does
-        not work correctly."""
-        a.SetPartialCharge(partial_charge)
-        a.GetPartialCharge()
-        a.SetPartialCharge(partial_charge)
-        a.SetType(atom_type)
-        """Also eird thing appends here... If I remove a.GetType(), 
-        the oxygen type become O3 instead of OA/HO."""
-        a.GetType()
+        not work correctly. Also weird thing appends here... 
+        If I remove a.GetType(), the oxygen type become 
+        O3 instead of OA/HO."""
+        for _ in range(2):
+            a.SetPartialCharge(partial_charge)
+            a.SetType(atom_type)
+            a.GetPartialCharge()
+            a.GetType()
+
         a.SetAtomicNum(np.int(atom_num))
 
         if bond is not None and self._OBMol.NumAtoms() >= 1:
             self._OBMol.AddBond(bond[0], bond[1], bond[2])
+
+    def delete_atom(self, atom_id):
+        """Delete OBAtom from OBMol using atom id."""
+        self._OBMol.DeleteAtom(self.atom(atom_id))
 
     def set_anchor(self, anchor_xyz, vector_xyz, anchor_type):
         """Add information about the anchoring."""
@@ -128,6 +133,15 @@ class Water(Molecule):
         if self._OBMol.NumAtoms() == 5:
             return True
         return False
+
+    def tip3p(self):
+        """Return tip3p Water."""
+        if self.is_tip5p():
+            w = copy.deepcopy(self)
+            w.delete_atom(3)
+            w.delete_atom(4)
+
+            return w
 
     def build_tip5p(self):
         """
