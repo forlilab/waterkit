@@ -79,6 +79,9 @@ class Map():
 
         return info
 
+    def size(self):
+        return self._npts.prod()
+
     def copy(self):
         return copy.deepcopy(self)
 
@@ -334,20 +337,44 @@ class Map():
                 continue
 
     def combine(self, name, atom_types, how='best', ad_map=None):
-        """
-        Funtion to combine autodock map together
-        """
+        """Funtion to combine Autoock map together. """
+        selected_maps = []
         same_grid = True
         indices = np.index_exp[:, :, :]
 
+        if not isinstance(atom_types, (list, tuple)):
+            atom_types = [atom_types]
+
+        if how == 'replace':
+            assert ad_map is not None, "Another map has to be specified for the replace mode."
+            assert len(atom_types) == 1, "Multiple atom types cannot replace the same atom type."
+
+        if name not in self._maps:
+            self._maps[name] = np.zeros(self._npts)
+
+        """ Get the common maps, the requested ones and the actual ones that we have 
+        and check maps that we cannot process because there are not present in one
+        of the ad_map.
+        """
+        selected_types = set(self._maps.keys()) & set(atom_types)
         if ad_map is not None:
-            # Check if the grid are the same between the two ad_maps
-            # And we do it like this because grid are tuples of numpy array
-            same_grid = all([np.array_equal(x, y) for x, y in zip(self._grid, ad_map._grid)])
+            selected_types = set(selected_types) & set(ad_map._maps.keys())
+        unselected_types = set(selected_types) - set(atom_types)
 
+        if not selected_types:
+            print "Warning: no maps were selected from %s list." % atom_types
+            return False
+        if unselected_types:
+            print "Warning: %s maps can't be combined." % ' '.join(unselected_types)
+        
         # Check if the grid are the same between the two ad_maps
+        # And we do it like this because grid are tuples of numpy array
+        if ad_map is not None:
+            same_grid = all([np.array_equal(x, y) for x, y in zip(self._grid, ad_map._grid)])
+        # If the grid are not the same between the two ad_maps, we
+        # retrieve the common indices. The indices are expressed in 
+        # the self map referential.
         if ad_map is not None and same_grid is False:
-
             ix_min, iy_min, iz_min = self._cartesian_to_index([ad_map._xmin, ad_map._ymin, ad_map._zmin])
             ix_max, iy_max, iz_max = self._cartesian_to_index([ad_map._xmax, ad_map._ymax, ad_map._zmax]) + 1
 
@@ -357,93 +384,46 @@ class Map():
 
             X, Y, Z = np.meshgrid(x, y, z)
             grid = np.stack((X.ravel(), Y.ravel(), Z.ravel()), axis=-1)
+            # If we take grid point outside ad_map, we end up with inf value after
+            #grid = grid[ad_map.is_in_map(grid)]
 
             indices = np.index_exp[ix_min:ix_max, iy_min:iy_max, iz_min:iz_max]
 
-            # If ad_map smaller than self in every dimension
-            # If ad_map is bigger than self in any dimension
-
-        # Get the common maps, the requested ones and the actual ones that we have
-        selected_types = set(self._maps.keys()) & set(atom_types)
-
-        if ad_map is not None:
-            selected_types = set(selected_types) & set(ad_map._maps.keys())
-
-        # Check maps that we cannot process because there are
-        # not present in one of the ad_map
-        unselected_types = set(selected_types) - set(atom_types)
-
-        if unselected_types:
-            print "Those maps can't be combined: %s" % ', '.join(unselected_types)
-
-        selected_maps = []
-
         # Select maps
         for selected_type in selected_types:
-
-            selected_maps.append(self._maps[selected_type][indices])
+            if how != 'replace':
+                selected_maps.append(self._maps[selected_type][indices])
 
             if ad_map is not None:
                 if same_grid:
                     selected_maps.append(ad_map._maps[selected_type])
                 else:
-                    energy = ad_map.energy(grid, selected_type)
-                    print energy.shape
-                    energy = np.reshape(energy, (len(x), len(y), len(z)))
-                    # I have to check why I have to do this!
+                    energy = ad_map.energy_coordinates(grid, selected_type)
+                    """ Replace inf by zero, otherwise we cannot add water energy to the grid
+                    But ideally, we should check that all the grid point are inside the ad_map.
+                    Otherwise, we will end up with weird stuff the new map.
+                    """
+                    energy[energy == np.inf] = 0.
+                    # Reshape and swap x and y axis, right? Easy.
+                    # Thank you Diogo Santos Martins!!
+                    energy = np.reshape(energy, (y.shape[0], x.shape[0], z.shape[0]))
                     energy = np.swapaxes(energy, 0, 1)
 
                     selected_maps.append(energy)
 
-        if name not in self._maps:
-            self._maps[name] = np.zeros(self._npts)
+        if selected_types:
+            # Combine all the maps
+            if how == 'best':
+                self._maps[name][indices] = np.nanmin(selected_maps, axis=0)
+            elif how == 'add':
+                self._maps[name][indices] = np.nansum(selected_maps, axis=0)
+            elif how == 'replace':
+                self._maps[name][indices] = selected_maps[0]
 
-        # Combine all the maps
-        if how == 'best':
-            self._maps[name][indices] = np.nanmin(selected_maps, axis=0)
-        elif how == 'add':
-            self._maps[name][indices] = np.nansum(selected_maps, axis=0)
+            # Update the interpolate energy function
+            self._maps_interpn[name] = self._generate_affinity_map_interpn(self._maps[name])
 
-        # Update the interpolate energy function
-        self._maps_interpn[name] = self._generate_affinity_map_interpn(self._maps[name])
-
-    def transform_grid(self, rotation, translation):
-        """
-        Transform the grid by applying rotation and translation
-        """
-        X, Y, Z = np.meshgrid(self._grid[0], self._grid[1], self._grid[2])
-        grid = np.stack((X.ravel(), Y.ravel(), Z.ravel()), axis=-1)
-
-        # Apply rotation and translation
-        # http://ajcr.net/Basic-guide-to-einsum/ (we don't use einsum, but it's cool!)
-        grid = np.dot(grid, rotation) + translation
-
-        # Keep only unique point
-        # We don't want to store the whole grid
-        new_grid = tuple((np.unique(grid[:, 0]), np.unique(grid[:, 1]), np.unique(grid[:, 2])))
-
-        self._update_grid(new_grid)
-
-    def _update_grid(self, new_grid):
-        """
-        Update the grid and all the information derived (center, map_interpn..)
-        """
-        # Make sure that the new grid has the same dimension as the old one
-        same_shape = all([x.size == y.size for x, y in zip(self._grid, new_grid)])
-
-        if same_shape is True:
-
-            # Update grid
-            self._grid = new_grid
-            # Update all other informations
-            self._center = np.mean(self._grid, axis=1)
-            self._xmin, self._xmax = np.min(self._grid[0]), np.max(self._grid[0])
-            self._ymin, self._ymax = np.min(self._grid[1]), np.max(self._grid[1])
-            self._zmin, self._zmax = np.min(self._grid[2]), np.max(self._grid[2])
-
-            # Update interpolate energy functions with the new grid
-            for map_type in self._maps.iterkeys():
-                self._maps_interpn[map_type] = self._generate_affinity_map_interpn(self._maps[map_type])
+        return True
 
     def to_pdb(self, fname, map_type, max_energy=None):
         """

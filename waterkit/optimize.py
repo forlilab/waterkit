@@ -6,7 +6,8 @@
 # Class for water network optimizer
 #
 
-import time
+import os
+import uuid
 import warnings
 
 import numpy as np
@@ -14,12 +15,12 @@ import pandas as pd
 from scipy.cluster.hierarchy import linkage, fcluster
 
 import utils
-
+from autogrid import AutoGrid
 
 class WaterOptimizer():
 
     def __init__(self, water_box, how='best', distance=3.4, angle=90, rotation=10,
-                 orientation=50, energy_cutoff=0, temperature=298.15):
+                 orientation=100, energy_cutoff=0, temperature=298.15):
         self._water_box = water_box
         self._how = how
         self._distance = distance
@@ -162,8 +163,6 @@ class WaterOptimizer():
         # Energy of the spherical water
         energy_water = ad_map.energy(water.atom_informations())
 
-        print 'Current energy (position): ', energy_water
-
         if energy_sphere.size:
             if self._how == 'best':
                 i = energy_sphere.argmin()
@@ -173,13 +172,11 @@ class WaterOptimizer():
             # Update the coordinates
             water.translate(utils.vector(water.coordinates(0), coord_sphere[i]))
 
-            print 'Energy (position): ', energy_sphere[i], i
-
             return energy_sphere[i]
 
         return energy_water
 
-    def _optimize_orientation_grid(self, water, id_water):
+    def _optimize_orientation_grid(self, water):
         """Optimize the orientation of the TIP5P water molecule using the grid. """
         energies = []
         coordinates = []
@@ -188,17 +185,8 @@ class WaterOptimizer():
         coordinates_water = water.coordinates()
         xyz_oxygen = water.coordinates(0)
 
-        #print 'Current coordinates (orientation): ', coordinates_water
-
-        # Current energy of the TIP5P water
-        info_water = water.atom_informations(range(1, 5))
-        energy_water = ad_map.energy(info_water)
-        print 'Current energy (orientation): ', energy_water
-
-        # Move the water to the origin for the rotation
+        # Translate the water to the origin for the rotation
         coordinates_water -= xyz_oxygen
-        #print 'Current coordinates (origin)(orientation): ', coordinates_water
-        #print ''
 
         for x, q in enumerate(self._quaternions):
             coor_tmp = np.zeros(shape=(4, 3))
@@ -210,24 +198,18 @@ class WaterOptimizer():
             # Change coordinates by the new ones and
             # we translate it back the original oxygen position
             coor_tmp += xyz_oxygen
-            #print 'New coordinates (orientation): ', coor_tmp
 
             # Get energy from the grid and save the coordinates
             [water.update_coordinates(coor_tmp[i - 1], i) for i in range(1,5)]
             info_water = water.atom_informations(range(1, 5))
-            #print info_water
+
             energies.append(ad_map.energy(info_water))
             coordinates.append(coor_tmp)
-
-            #print ''
 
         if self._how == 'best':
             i = energies.argmin()
         elif self._how == 'boltzmann':
             i = self._boltzmann_choice(energies)
-
-        print energies
-        print 'Energy (orientation): ', energies[i], i
 
         # Update the coordinates with the selected orientation
         [water.update_coordinates(coordinates[i][j - 1], j) for j in range(1,5)]
@@ -477,9 +459,21 @@ class WaterOptimizer():
         profiles = []
         to_be_removed = []
 
+        type_lp = 'Lp'
+        type_hd = 'HD'
+        type_oa = 'Oa'
+        type_od = 'Od'
+        type_w = 'Ow'
+        type_e = 'Electrostatics'
+        atom_types = ['Oa', 'Od', 'HD', 'Lp']
+        atom_types_replaced = ['Ow', 'HD', 'Lp']
+        npts = (19, 19, 19)
+
+        ag = AutoGrid()
+
+        receptor = self._water_box.molecules_in_shell(0)[0]
         shell_id = self._water_box.number_of_shells(ignore_xray=True)
         ad_map = self._water_box.map
-        water_map = self._water_box._water_map
 
         if opt_disordered and connections is not None:
             receptor = self._water_box.molecules_in_shell(0)[0]
@@ -490,6 +484,8 @@ class WaterOptimizer():
         water_orders = np.arange(len(waters))
         np.random.shuffle(water_orders)
 
+        j = 1
+
         """And now we optimize all water individually. All the
         water molecules are outside the box or with a positive
         energy are considered as bad and are removed."""
@@ -497,55 +493,59 @@ class WaterOptimizer():
             water = waters[i]
 
             if ad_map.is_in_map(water.coordinates(0)[0]):
-                print 'Water: ', i
-                water.to_file('waters/water_%05d_ori.pdb' % i, 'pdb')
-
                 # Optimize the position of the spherical water
                 if opt_position:
                     energy_position = self._optimize_position_grid(water, ad_map)
                 else:
                     energy_position = ad_map.energy(water.atom_informations())
 
-                water.to_file('waters/water_%05d_pos_opt.pdb' % i, 'pdb')
-
                 """Before going further we check the energy.
                 If the spherical water has already a bad energy
                 there is no point of going further and try to
                 orient it..."""
-                if energy_position <= self._energy_cutoff:
+                if energy_position < self._energy_cutoff:
                     # Build the TIP5
                     water.build_tip5p()
-
                     # Optimize the orientation
-                    energy_orientation = self._optimize_orientation_grid(water, i)
+                    energy_orientation = self._optimize_orientation_grid(water)
 
                     # The last great energy filter
-                    if energy_orientation <= self._energy_cutoff:
+                    if energy_orientation < self._energy_cutoff:
                         # TODO: Doublon, all the information should be stored in waterbox df
                         water.energy = energy_orientation
                         data.append((shell_id + 1, energy_position, energy_orientation))
 
-                        water.to_file('waters/water_%05d_rot_opt.pdb' % (i), 'pdb')
+                        # We don't want name overlap between different replicates
+                        short_uuid = str(uuid.uuid4())[0:8]
+                        #print short_uuid, '%05d' % i, '%05d' % j, '%8.3f' % energy_position, '%8.3f' % energy_orientation
+                        receptor_file = '%s.pdbqt' % short_uuid
+                        center = water.coordinates(0)[0]
+
+                        receptor.add_molecule(water.tip3p())
+                        receptor.to_file(receptor_file, 'pdbqt', 'rcp')
+
+                        water_map = ag.run(receptor_file, atom_types, center, npts, clean=True)
+                        #water_map.combine(type_w, [type_oa, type_od, type_e], how='add')
+                        water_map.combine(type_w, [type_oa, type_od], how='add')
+                        #water_map.combine(type_hd, [type_hd, type_e], how='add')
+                        #water_map.combine(type_lp, [type_lp, type_e], how='add')
+
+                        os.remove(receptor_file)
 
                         # And we update the map
-                        self._water_box._update_map(water, water_map, choices=['Ow', 'HD', 'Lp'])
-                        ad_map.to_map('Ow', 'update')
-                        ad_map.to_map('HD', 'update')
-                        ad_map.to_map('Lp', 'update')
-                        sys.exit(0)
-                        print ''
+                        for atom_type in atom_types_replaced:
+                            ad_map.combine(atom_type, atom_type, 'replace', water_map)
+
+                        j += 1
                     else:
                         to_be_removed.append(i)
-                        print 'WARNING: SPHERICAL OKAY BUT NOT TIP5P!!'
-                        print ''
                 else:
                     to_be_removed.append(i)
-                    print ''
             else:
                 to_be_removed.append(i)
 
         # Keep only the good waters
-        waters = [water for i, water in enumerate(waters) if not i in to_be_removed]
+        waters = [waters[i] for i in water_orders if not i in to_be_removed]
         # Keep connections of the good waters
         if connections is not None:
             index = connections.loc[connections['molecule_j'].isin(to_be_removed)].index
