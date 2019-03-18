@@ -88,7 +88,7 @@ class Molecule():
         return m
 
     def _qt_from_pdbqt_file(self, fname):
-        """Get atom types from PDBQT file."""
+        """Get partial charges and atom types from PDBQT file."""
         atom_types = []
         partial_charges = []
 
