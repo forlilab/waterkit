@@ -6,7 +6,6 @@
 # Class to manage water box
 #
 
-import collections
 import copy
 
 import numpy as np
@@ -68,7 +67,7 @@ class WaterBox():
 
     def add_molecules(self, molecules, connections=None, add_KDTree=True):
         """ Add a new molecule to the waterbox """
-        if not isinstance(molecules, collections.Iterable):
+        if not isinstance(molecules, (list, tuple)):
             molecules = [molecules]
 
         try:
@@ -105,7 +104,7 @@ class WaterBox():
         """ Build or update the cKDTree of all the atoms in
         the water box for quick nearest-neighbor lookup
         """
-        if not isinstance(molecules, collections.Iterable):
+        if not isinstance(molecules, (list, tuple)):
             molecules = [molecules]
 
         try:
@@ -154,7 +153,7 @@ class WaterBox():
     def molecules_in_shell(self, shell_ids=None, active_only=True, xray_only=False):
         """ Get all the molecule in shell """
         if shell_ids is not None:
-            if not isinstance(shell_ids, collections.Iterable):
+            if not isinstance(shell_ids, (list, tuple)):
                 shell_ids = [shell_ids]
             df = self.df['shells'][self.df['shells']['shell_id'].isin(shell_ids)]
         else:
@@ -177,7 +176,7 @@ class WaterBox():
         df = self.df['kdtree_relations'].loc[index]
 
         if exclude is not None:
-            if not isinstance(exclude, collections.Iterable):
+            if not isinstance(exclude, (list, tuple)):
                 exclude = [exclude]
             df = df[-df['molecule_i'].isin(exclude)]
 
@@ -283,7 +282,7 @@ class WaterBox():
         if choices is not None:
             map_types = list(set(map_types) & set(choices))
 
-        if not isinstance(waters, collections.Iterable):
+        if not isinstance(waters, (list, tuple)):
             waters = [waters]
 
         for water in waters:
@@ -340,11 +339,11 @@ class WaterBox():
         for map_type in map_types:
             self.map._maps_interpn[map_type] = self.map._generate_affinity_map_interpn(self.map._maps[map_type])
 
-    def build_next_shell(self, how='best'):
+    def build_next_shell(self, how='best', temperature=300.):
         """Build the next hydration shell."""
         shell_id = self.number_of_shells(ignore_xray=True)
         molecules = self.molecules_in_shell(shell_id)
-        n = WaterOptimizer(self, how, angle=90, temperature=300.)
+        n = WaterOptimizer(self, how, angle=90, temperature=temperature)
 
         # Test if we have all the material to continue
         assert len(molecules) > 0, "There is molecule(s) in the shell %s" % shell_id

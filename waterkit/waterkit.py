@@ -26,8 +26,10 @@ class Waterkit():
 
         # AD map names
         self._type_lp = 'Lp'
+        self._type_hd = 'HD'
+        self._type_dhd = 'Hd'
         self._type_oa = 'Oa'
-        self._type_od = 'Oa'
+        self._type_od = 'Od'
         self._type_w = 'Ow'
         self._type_e = 'Electrostatics'
 
@@ -57,9 +59,9 @@ class Waterkit():
         self._water_map.combine(self._type_lp, [self._type_lp, self._type_e], how='add')
 
         # Deactivate HD-Hd interaction in AutoDock ForceField
-        self._ad4_forcefield.deactivate_pairs([['HD', 'Hd']])
+        self._ad4_forcefield.deactivate_pairs([[self._type_hd, self._type_dhd]])
 
-    def hydrate(self, receptor, ad_map, waters=None, n_layer=0, how='best'):
+    def hydrate(self, receptor, ad_map, waters=None, n_layer=0, how='best', temperature=300.):
         """ Hydrate the molecule with water molecucules.
 
         The receptor is hydrated by adding successive layers
@@ -68,6 +70,8 @@ class Waterkit():
         # Warning: this is not the same how as the one passed in input
         ad_map.apply_operation_on_maps('-np.abs(x)', [self._type_e])
         ad_map.combine(self._type_w, [self._type_oa, self._type_od, self._type_e], how='add')
+        ad_map.combine(self._type_hd, [self._type_hd, self._type_e], how='add')
+        ad_map.combine(self._type_lp, [self._type_lp, self._type_e], how='add')
 
         #w_copy = copy.deepcopy(w_ori)
         w = WaterBox(self._hb_forcefield, self._ad4_forcefield, self._water_map)
@@ -81,7 +85,7 @@ class Waterkit():
             # build_next_shell returns True if
             # it was able to put water molecules,
             # otherwise it returns False and we break
-            if w.build_next_shell(how):
+            if w.build_next_shell(how, temperature):
                 pass
             else:
                 break
