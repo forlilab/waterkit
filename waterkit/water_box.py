@@ -355,7 +355,7 @@ class WaterBox():
             opt_disordered = False
 
         waters, connections = self.place_optimal_spherical_waters(molecules)
-        waters, df = n.sample(waters, connections, opt_disordered=opt_disordered)
+        waters, df = n.optimize_grid(waters, connections, opt_disordered=opt_disordered)
 
         if len(waters):
             # And add all the waters
