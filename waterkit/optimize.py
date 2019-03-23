@@ -192,6 +192,8 @@ class WaterOptimizer():
 
         The movement of the water is contrained by the distance and 
         the angle with the anchor."""
+        oxygen_type = water.atom_types([0])[0]
+        
         coord_sphere, energy_sphere = self._neighbor_points_grid(water, ad_map, add_noise)
 
         if energy_sphere.size:
