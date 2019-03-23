@@ -144,7 +144,7 @@ class WaterOptimizer():
 
         return disordered_energies
 
-    def _neighbor_points_grid(self, water, ad_map):
+    def _neighbor_points_grid(self, water, ad_map, add_noise=False):
         oxygen_type = water.atom_types([0])[0]
         """This is how we select the allowed positions:
         1. Get all the point coordinates on the grid around the anchor (sphere). If the anchor type 
@@ -157,6 +157,11 @@ class WaterOptimizer():
             coord_sphere = ad_map.neighbor_points(water._anchor[0], self._min_distance - 1., self._max_distance - 1.)
         else:
             coord_sphere = ad_map.neighbor_points(water._anchor[0], self._min_distance, self._max_distance)
+
+        if add_noise:
+            limit = ad_map._spacing / 2.
+            coord_sphere += np.random.uniform(-limit, limit, coord_sphere.shape)
+
         angle_sphere = utils.get_angle(coord_sphere, water._anchor[0], water._anchor[1])
 
         coord_sphere = coord_sphere[angle_sphere >= self._angle]
@@ -164,11 +169,11 @@ class WaterOptimizer():
 
         return coord_sphere, energy_sphere
 
-    def _optimize_placement_order_grid(self, waters, ad_map):
+    def _optimize_placement_order_grid(self, waters, ad_map, add_noise=False):
         energies = []
 
         for water in waters:
-            _, energy_sphere = self._neighbor_points_grid(water, ad_map)
+            _, energy_sphere = self._neighbor_points_grid(water, ad_map, add_noise)
 
             if energy_sphere.size:
                 energies.append(np.min(energy_sphere))
@@ -182,12 +187,12 @@ class WaterOptimizer():
 
         return order
 
-    def _optimize_position_grid(self, water, ad_map):
+    def _optimize_position_grid(self, water, ad_map, add_noise=False):
         """Optimize the position of the spherical water molecule. 
 
         The movement of the water is contrained by the distance and 
         the angle with the anchor."""
-        coord_sphere, energy_sphere = self._neighbor_points_grid(water, ad_map)
+        coord_sphere, energy_sphere = self._neighbor_points_grid(water, ad_map, add_noise)
 
         if energy_sphere.size:
             if self._how == 'best':
@@ -521,7 +526,7 @@ class WaterOptimizer():
         for i in water_orders:
             water = waters[i]
 
-            energy_position = self._optimize_position_grid(water, ad_map)
+            energy_position = self._optimize_position_grid(water, ad_map, add_noise=True)
 
             """Before going further we check the energy.
             If the spherical water has already a bad energy
