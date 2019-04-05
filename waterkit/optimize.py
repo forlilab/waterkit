@@ -154,9 +154,9 @@ class WaterOptimizer():
         3. Select coordinates with an angle superior or equal to the choosen angle
         4. Get their energy"""
         if water._anchor_type == 'donor':
-            coord_sphere = ad_map.neighbor_points(water._anchor[0], self._min_distance - 1., self._max_distance - 1.)
+            coord_sphere = ad_map.neighbor_points(water._anchor[0], self._max_distance - 1., self._min_distance - 1.)
         else:
-            coord_sphere = ad_map.neighbor_points(water._anchor[0], self._min_distance, self._max_distance)
+            coord_sphere = ad_map.neighbor_points(water._anchor[0], self._max_distance, self._min_distance)
 
         if add_noise:
             limit = ad_map._spacing / 2.
@@ -193,7 +193,7 @@ class WaterOptimizer():
 
     def _optimize_position_grid(self, water, ad_map, add_noise=False, from_edges=None):
         """Optimize the position of the spherical water molecule. 
-
+        
         The movement of the water is contrained by the distance and 
         the angle with the anchor."""
         oxygen_type = water.atom_types([0])[0]

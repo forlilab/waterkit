@@ -12,6 +12,7 @@ import re
 import copy
 
 import numpy as np
+from scipy import spatial
 from scipy.interpolate import RegularGridInterpolator
 
 import utils
@@ -57,8 +58,8 @@ class Map():
             # Minimum and maximum coordinates
             self._xmin, self._ymin, self._zmin = self._center - l
             self._xmax, self._ymax, self._zmax = self._center + l
-            # Generate the cartesian grid
-            self._grid = self._generate_cartesian()
+            # Generate the kdtree and bin edges of the grid
+            self._kdtree, self._edges = self._build_kdtree_from_grid()
 
             # Read all the affinity maps
             for label, map_file in maps.items():
@@ -151,11 +152,11 @@ class Map():
         Return a interpolate function from the grid and the affinity map.
         This helps to interpolate the energy of coordinates off the grid.
         """
-        return RegularGridInterpolator(self._grid, affinity_map, bounds_error=False, fill_value=np.inf)
+        return RegularGridInterpolator(self._edges, affinity_map, bounds_error=False, fill_value=np.inf)
 
-    def _generate_cartesian(self):
+    def _build_kdtree_from_grid(self):
         """
-        Generate all the coordinates xyz for each AutoDock map node
+        Return the kdtree and bin edges (x, y, z) of the AutoDock map
         """
         x = np.linspace(self._xmin, self._xmax, self._npts[0])
         y = np.linspace(self._ymin, self._ymax, self._npts[1])
@@ -163,43 +164,27 @@ class Map():
 
         # We use a tuple of numpy arrays and not a complete numpy array
         # because otherwise the output will be different if the grid is cubic or not
-        arr = tuple([x, y, z])
+        edges = tuple([x, y, z])
 
-        return arr
+        X, Y, Z = np.meshgrid(x, y, z)
+        xyz = np.stack((X.ravel(), Y.ravel(), Z.ravel()), axis=-1)
+        kdtree = spatial.cKDTree(xyz)
+
+        return kdtree, edges
 
     def _index_to_cartesian(self, idx):
         """
-        Return the cartesian coordinates associated to the index
+        Return the cartesian grid coordinates associated to the grid index
         """
-        # Transform 1D to 2D array
-        idx = np.atleast_2d(idx)
-
-        # Get coordinates x, y, z
-        x = self._grid[0][idx[:, 0]]
-        y = self._grid[1][idx[:, 1]]
-        z = self._grid[2][idx[:, 2]]
-
-        # Column: x, y, z
-        arr = np.stack((x, y, z), axis=-1)
-
-        return arr
+        return self._kdtree.mins + idx * self._spacing
 
     def _cartesian_to_index(self, xyz):
         """
-        Return the closest index of the cartesian coordinates
+        Return the closest grid index of the cartesian grid coordinates
         """
-        idx = []
-
-        # Otherwise we can't "broadcast" xyz in the grid
-        xyz = np.atleast_2d(xyz)
-
-        for i in range(xyz.shape[0]):
-            idx.append([np.abs(self._grid[0] - xyz[i, 0]).argmin(),
-                        np.abs(self._grid[1] - xyz[i, 1]).argmin(),
-                        np.abs(self._grid[2] - xyz[i, 2]).argmin()])
-
-        # We want just to keep the struict number of dim useful
-        idx = np.squeeze(np.array(idx))
+        idx = np.rint((xyz - self._kdtree.mins) / self._spacing).astype(np.int)
+        # All the index values outside the grid are clipped (limited) to the nearest index
+        np.clip(idx, [0, 0, 0], self._npts, idx)
 
         return idx
 
@@ -275,43 +260,15 @@ class Map():
 
         return energy
 
-    def neighbor_points(self, xyz, min_radius=0, max_radius=5):
+    def neighbor_points(self, xyz, radius, min_radius=0):
         """
-        Return all the coordinates xyz in a certaim radius around a point
+        Return all the coordinates xyz in a certain radius around a point
         """
-        imin, imax = [], []
-
-        idx = self._cartesian_to_index(xyz)
-
-        # Number of grid points based on the grid spacing
-        n = np.int(np.rint(max_radius / self._spacing))
-
-        # Be sure, we don't go beyond limits of the grid
-        for i in range(idx.shape[0]):
-            # This is for the min border
-            if idx[i] - n > 0:
-                imin.append(idx[i] - n)
-            else:
-                imin.append(0)
-
-            # This is for the max border
-            if idx[i] + n < self._npts[i]:
-                imax.append(idx[i] + n)
-            else:
-                imax.append(self._npts[i] - 1)
-
-        x = np.arange(imin[0], imax[0] + 1)
-        y = np.arange(imin[1], imax[1] + 1)
-        z = np.arange(imin[2], imax[2] + 1)
-
-        X, Y, Z = np.meshgrid(x, y, z)
-        data = np.stack((X.ravel(), Y.ravel(), Z.ravel()), axis=-1)
-
-        coordinates = self._index_to_cartesian(data)
-        distance = utils.get_euclidean_distance(coordinates, xyz)
-
-        # We want coordinates only in between
-        selected_coordinates = coordinates[(distance >= min_radius) & (distance <= max_radius)]
+        coordinates = self._kdtree.data[self._kdtree.query_ball_point(xyz, radius)]
+        
+        if min_radius > 0:
+            distance = spatial.distance.cdist([xyz], coordinates, 'euclidean')[0]
+            selected_coordinates = coordinates[distance >= min_radius]
 
         return selected_coordinates
 
@@ -370,7 +327,7 @@ class Map():
         # Check if the grid are the same between the two ad_maps
         # And we do it like this because grid are tuples of numpy array
         if ad_map is not None:
-            same_grid = all([np.array_equal(x, y) for x, y in zip(self._grid, ad_map._grid)])
+            same_grid = all([np.array_equal(x, y) for x, y in zip(self._edges, ad_map._edges)])
         # If the grid are not the same between the two ad_maps, we
         # retrieve the common indices. The indices are expressed in 
         # the self map referential.
@@ -378,9 +335,9 @@ class Map():
             ix_min, iy_min, iz_min = self._cartesian_to_index([ad_map._xmin, ad_map._ymin, ad_map._zmin])
             ix_max, iy_max, iz_max = self._cartesian_to_index([ad_map._xmax, ad_map._ymax, ad_map._zmax]) + 1
 
-            x = self._grid[0][ix_min:ix_max]
-            y = self._grid[1][iy_min:iy_max]
-            z = self._grid[2][iz_min:iz_max]
+            x = self._edges[0][ix_min:ix_max]
+            y = self._edges[1][iy_min:iy_max]
+            z = self._edges[2][iz_min:iz_max]
 
             X, Y, Z = np.meshgrid(x, y, z)
             grid = np.stack((X.ravel(), Y.ravel(), Z.ravel()), axis=-1)
@@ -442,7 +399,7 @@ class Map():
                 if v > 999.99:
                     v = 999.99
 
-                w.write(line % (i, i, self._grid[0][idx[j][0]], self._grid[1][idx[j][1]], self._grid[2][idx[j][2]], v))
+                w.write(line % (i, i, self._edges[0][idx[j][0]], self._edges[1][idx[j][1]], self._edges[2][idx[j][2]], v))
                 i += 1
 
     def to_map(self, map_types=None, prefix=None, grid_parameter_file='grid.gpf',

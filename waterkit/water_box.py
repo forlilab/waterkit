@@ -273,9 +273,9 @@ class WaterBox():
         """ Update the maps using the water map based
         on the position of the water molecules
         """
-        x_len = np.int(np.floor(water_map._grid[0].shape[0] / 2.) + 5)
-        y_len = np.int(np.floor(water_map._grid[1].shape[0] / 2.) + 5)
-        z_len = np.int(np.floor(water_map._grid[2].shape[0] / 2.) + 5)
+        x_len = np.int(np.floor(water_map._edges[0].shape[0] / 2.) + 5)
+        y_len = np.int(np.floor(water_map._edges[1].shape[0] / 2.) + 5)
+        z_len = np.int(np.floor(water_map._edges[2].shape[0] / 2.) + 5)
 
         map_types = list(set(self.map._maps.keys()) & set(water_map._maps.keys()))
 
@@ -298,9 +298,9 @@ class WaterBox():
             iz_min = iz - z_len if iz - z_len >= 0 else 0
             iz_max = iz + z_len
 
-            x = self.map._grid[0][ix_min:ix_max + 1]
-            y = self.map._grid[1][iy_min:iy_max + 1]
-            z = self.map._grid[2][iz_min:iz_max + 1]
+            x = self.map._edges[0][ix_min:ix_max + 1]
+            y = self.map._edges[1][iy_min:iy_max + 1]
+            z = self.map._edges[2][iz_min:iz_max + 1]
 
             X, Y, Z = np.meshgrid(x, y, z)
             grid = np.stack((X.ravel(), Y.ravel(), Z.ravel()), axis=-1)
