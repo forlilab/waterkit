@@ -268,9 +268,9 @@ class Map():
         
         if min_radius > 0:
             distance = spatial.distance.cdist([xyz], coordinates, 'euclidean')[0]
-            selected_coordinates = coordinates[distance >= min_radius]
+            coordinates = coordinates[distance >= min_radius]
 
-        return selected_coordinates
+        return coordinates
 
     def apply_operation_on_maps(self, expression, atom_types):
         """Apply string expression on affinity grids."""
