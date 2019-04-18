@@ -21,7 +21,13 @@ import utils
 class Map():
 
     def __init__(self, map_files=None, labels=None):
-        """Create Map object by reading either fld file or map file."""
+        """Initialize a Map object by reading AutoDock map files.
+
+        Args:
+            map_files (list): list of the autodock map files
+            labels (list): list of the atom types corresponding to each maps
+
+        """
         maps = {}
         prv_grid_information = None
 
@@ -80,15 +86,29 @@ class Map():
 
         return info
 
-    def size(self):
-        return self._npts.prod()
-
     def copy(self):
+        """Create a deep copy the current state of the Map object.
+
+        Returns:
+            Map: Deep copy of the map
+
+        """
         return copy.deepcopy(self)
 
     @classmethod
     def from_fld(cls, fld_file):
-        """Read fld file."""
+        """Read a fld file.
+
+        The AutoDock map files are read using the information contained
+        into the fld file. The fld file is created by AutoGrid.
+
+        Args:
+            fld_file (str): pathname of the AutoGrid fld file.
+
+        Returns:
+            Map: Instance of Map object.
+
+        """
         map_files = []
         labels = []
 
@@ -188,8 +208,25 @@ class Map():
 
         return idx
 
+    def size(self):
+        """Return the number of grid points in the grid.
+
+        Returns:
+            int: number of grid points
+
+        """
+        return self._npts.prod()
+
     def atoms_in_map(self, molecule):
-        """List of index of all the atoms in the map."""
+        """List of index of all the atoms in the map.
+
+        Args:
+            molecule (molecule): Molecule object
+
+        Returns:
+            list: atom indexes
+
+        """
         idx = []
         OBMol = molecule._OBMol
 
@@ -202,7 +239,15 @@ class Map():
         return idx
 
     def residues_in_map(self, molecule):
-        """List of index of all the residues in the map."""
+        """List of index of all the residues in the map.
+
+        Args:
+            molecule (Molecule): Molecule object
+
+        Returns:
+            list: residue indexes
+
+        """
         idx = []
         OBMol = molecule._OBMol
 
@@ -218,9 +263,14 @@ class Map():
         return idx
 
     def is_in_map(self, xyz):
-        """
-        Check if coordinates xyz are in the AutoDock map
-        and return a boolean numpy array
+        """Check if coordinates are in the map.
+
+        Args:
+            xyz (ndarray): 2d Numpy array of the coordinates
+
+        Returns:
+            ndarray: 1d Numpy array of boolean
+
         """
         xyz = np.atleast_2d(xyz)
         x, y, z = xyz[:, 0], xyz[:, 1], xyz[:, 2]
@@ -234,7 +284,16 @@ class Map():
         return all_in
 
     def is_close_to_edge(self, xyz, distance):
-        """ Check if the points xyz is at X distance of the edge of the box """
+        """Check if the points xyz is at a certain distance of the edge of the box.
+
+        Args:
+            xyz (ndarray): 2n Numpy array of the coordinates
+            distance (float): distance
+
+        Returns:
+            ndarray: 1d Numpy array of boolean
+
+        """
         xyz = np.atleast_2d(xyz)
         x, y, z = xyz[:, 0], xyz[:, 1], xyz[:, 2]
 
@@ -246,11 +305,30 @@ class Map():
         return close_to
 
     def energy_coordinates(self, xyz, atom_type, method='linear'):
-        """Energy of each coordinates xyz."""
+        """Grid energy of each coordinates xyz.
+
+        Args:
+            xyz (ndarray): 2d Numpy array of coordinates
+            atom_type (str): name of the atom type
+            method (str): Interpolate method (default: linear)
+
+        Returns:
+            ndarray: 1d Numpy array of the energy values
+
+        """
         return self._maps_interpn[atom_type](xyz, method=method)
 
     def energy(self, df, method='linear'):
-        """Get energy of a molecule from maps."""
+        """Get energy interaction of a molecule based of the grid.
+
+        Args:
+            df (DataFrame): Pandas DatFrame with columns ('atom_i', 'atom_xyz', 'atom_q', 'atom_type')
+            method (str): Interpolate method (default: linear)
+
+        Returns:
+            float: Grid energy interaction
+
+        """
         energy = 0.
 
         se = df.groupby('atom_type')['atom_xyz'].apply(list)
@@ -261,8 +339,16 @@ class Map():
         return energy
 
     def neighbor_points(self, xyz, radius, min_radius=0):
-        """
-        Return all the coordinates xyz in a certain radius around a point
+        """Grid coordinates around a point at a certain distance.
+
+        Args:
+            xyz (array_like): 3D coordinates of a point
+            radius (float): max radius
+            min_radius (float): min radius (default: 0)
+
+        Returns:
+            ndarray: 2D Numpy array of coordinates
+
         """
         coordinates = self._kdtree.data[self._kdtree.query_ball_point(xyz, radius)]
         
@@ -273,7 +359,16 @@ class Map():
         return coordinates
 
     def apply_operation_on_maps(self, expression, atom_types):
-        """Apply string expression on affinity grids."""
+        """Apply mathematical expression on affinity grids.
+
+        Args:
+            expression (str): maths expression that must contains x (x is the grid value)
+            atom_types (list): list of atom types
+
+        Returns:
+            None
+
+        """
         if not isinstance(atom_types, (list, tuple)):
             atom_types = [atom_types]
 
@@ -294,7 +389,18 @@ class Map():
                 continue
 
     def combine(self, name, atom_types, how='best', ad_map=None):
-        """Funtion to combine Autoock map together. """
+        """Funtion to combine Autoock map together.
+
+        Args:
+            name (str): name of the new or existing grid
+            atom_types (list): list of atom types combined
+            how (str)): combination methods: best, add, replace (default: best)
+            ad_map (Map): another Map object (default: None)
+
+        Returns:
+            bool: True if succeeded or False otherwise
+
+        """
         selected_maps = []
         same_grid = True
         indices = np.index_exp[:, :, :]
@@ -383,8 +489,16 @@ class Map():
         return True
 
     def to_pdb(self, fname, map_type, max_energy=None):
-        """
-        Write the AutoDock map in a PDB file
+        """Export AutoDock map in PDB format.
+
+        Args:
+            fname (str): PDB file pathname
+            mapt_type (str): atom type name
+            max_energy (float): max limit energy (default: None)
+
+        Returns:
+            None
+
         """
         idx = np.array(np.where(self._maps[map_type] <= max_energy)).T
 
@@ -404,7 +518,19 @@ class Map():
 
     def to_map(self, map_types=None, prefix=None, grid_parameter_file='grid.gpf',
                grid_data_file='maps.fld', macromolecule='molecule.pdbqt'):
-        """Write one or multiple AutoDock map in map format"""
+        """Export AutoDock maps.
+
+        Args:
+            map_types (list): list of atom types to export
+            prefix (str): prefix name file (default: None)
+            grid_parameter_file (str): name of the gpf file (default: grid.gpf)
+            grid_data_file (str): name of the fld file (default: maps.fld)
+            macromolecule (str): name of the receptor (default: molecule.pdbqt)
+
+        Returns:
+            None
+
+        """
         if map_types is None:
             map_types = self._maps.keys()
         elif not isinstance(map_types, (list, tuple)):

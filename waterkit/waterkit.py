@@ -19,6 +19,14 @@ from waterfield import Waterfield
 class Waterkit():
 
     def __init__(self, hb_forcefield=None,  ad4_forcefield=None, water_map=None):
+        """Initialize WaterKit.
+
+        Args:
+            hb_forcefield (Waterfield): Hydrogen Bond forcefield (default: None)
+            ad4_forcefield (AutoDockForceField): AutoDock forcefield (default: None)
+            water_map (Map): AutoDock Map of a reference water (default: None)
+
+        """
         self.water_boxes = []
         self._hb_forcefield = hb_forcefield
         self._ad4_forcefield = ad4_forcefield
@@ -61,11 +69,24 @@ class Waterkit():
         # Deactivate HD-Hd interaction in AutoDock ForceField
         self._ad4_forcefield.deactivate_pairs([[self._type_hd, self._type_dhd]])
 
-    def hydrate(self, receptor, ad_map, waters=None, n_layer=0, how='best', temperature=300.):
+    def hydrate(self, receptor, ad_map, waters=None, n_layer=1, how='best', temperature=300.):
         """ Hydrate the molecule with water molecucules.
 
         The receptor is hydrated by adding successive layers
-        of water molecules until the box is complety full."""
+        of water molecules until the box is complety full.
+
+        Args:
+            receptor (Molecule): Receptor of the protein
+            ad_map (Map): AutoDock map of the receptor
+            waters (list): List of X-Ray water molecules (Water) to incorporate (default: None)
+            n_layer (int): Number of hydration layer to add (default: 1)
+            how (str): Method for water placement: 'best' or 'boltzmann' (default: best)
+            temperature (float): Temperature in Kelvin, only used for Boltzmann sampling (default: 300)
+
+        Returns:
+            None
+
+        """
         # Combine OA, OD and e to create OW
         # Warning: this is not the same how as the one passed in input
         ad_map.apply_operation_on_maps('-np.abs(x)', [self._type_e])
@@ -102,7 +123,16 @@ class Waterkit():
         self.water_box = w
 
     def write_shells(self, prefix='water', only_active=True):
-        """ Write layers of water in a PDBQT file """
+        """Export hydration shells in a PDBQT format.
+
+        Args:
+            prefix (str): prefix name of the files
+            only_active (bool): Write only active water molecules
+
+        Returns:
+            None
+
+        """
         line = "ATOM  %5d  %-3s HOH%2s%4d    %8.3f%8.3f%8.3f%6.2f 1.00    %6.3f %2s\n"
 
         if not only_active:
