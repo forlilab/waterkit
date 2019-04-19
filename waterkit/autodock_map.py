@@ -430,16 +430,19 @@ class Map():
         if unselected_types:
             print "Warning: %s maps can't be combined." % ' '.join(unselected_types)
         
-        # Check if the grid are the same between the two ad_maps
-        # And we do it like this because grid are tuples of numpy array
+        """ Check if the grid are the same between the two ad_maps.
+        And we do it like this because grid are tuples of numpy array.
+        """
         if ad_map is not None:
             same_grid = all([np.array_equal(x, y) for x, y in zip(self._edges, ad_map._edges)])
-        # If the grid are not the same between the two ad_maps, we
-        # retrieve the common indices. The indices are expressed in 
-        # the self map referential.
+
         if ad_map is not None and same_grid is False:
+            """ If the grids are not the same between the two ad_maps, we have to
+            retrieve the indices of the self map (reference) that corresponds to the
+            cordinates of the ad_map.
+            """
             ix_min, iy_min, iz_min = self._cartesian_to_index([ad_map._xmin, ad_map._ymin, ad_map._zmin])
-            ix_max, iy_max, iz_max = self._cartesian_to_index([ad_map._xmax, ad_map._ymax, ad_map._zmax]) + 1
+            ix_max, iy_max, iz_max = self._cartesian_to_index([ad_map._xmax, ad_map._ymax, ad_map._zmax])
 
             x = self._edges[0][ix_min:ix_max]
             y = self._edges[1][iy_min:iy_max]
@@ -447,8 +450,14 @@ class Map():
 
             X, Y, Z = np.meshgrid(x, y, z)
             grid = np.stack((X.ravel(), Y.ravel(), Z.ravel()), axis=-1)
-            # If we take grid point outside ad_map, we end up with inf value after
-            #grid = grid[ad_map.is_in_map(grid)]
+            
+            """ All the coordinates outside ad_map are clipped, to avoid inf value
+            during the interpolation. This is not the best way of doing that 
+            because because we lose the exact correspondance between the index 
+            and the coordinates in the self map.
+            """
+            np.clip(grid, [ad_map._xmin, ad_map._ymin, ad_map._zmin], 
+                    [ad_map._xmax, ad_map._ymax, ad_map._zmax], grid)
 
             indices = np.index_exp[ix_min:ix_max, iy_min:iy_max, iz_min:iz_max]
 
@@ -462,11 +471,6 @@ class Map():
                     selected_maps.append(ad_map._maps[selected_type])
                 else:
                     energy = ad_map.energy_coordinates(grid, selected_type)
-                    """ Replace inf by zero, otherwise we cannot add water energy to the grid
-                    But ideally, we should check that all the grid point are inside the ad_map.
-                    Otherwise, we will end up with weird stuff the new map.
-                    """
-                    energy[energy == np.inf] = 0.
                     # Reshape and swap x and y axis, right? Easy.
                     # Thank you Diogo Santos Martins!!
                     energy = np.reshape(energy, (y.shape[0], x.shape[0], z.shape[0]))
