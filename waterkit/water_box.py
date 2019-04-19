@@ -253,8 +253,6 @@ class WaterBox():
         waters = []
         data = []
 
-        j = 0
-
         for i, molecule in enumerate(molecules):
             if molecule.hydrogen_bond_anchors is None:
                 molecule.guess_hydrogen_bond_anchors(self._hb_forcefield)
@@ -262,14 +260,11 @@ class WaterBox():
             for index, row in molecule.hydrogen_bond_anchors.iterrows():
                 # Add water molecule only if it's in the map
                 if self.map.is_in_map(row.vector_xyz):
-                    print j, row.atom_i, row.anchor_type, row.anchor_name
                     anchor_xyz = molecule.coordinates(row.atom_i)[0]
                     w = Water(row.vector_xyz, atom_type, partial_charge, anchor_xyz, row.vector_xyz, row.anchor_type)
                     
                     waters.append(w)
                     data.append((i, row.atom_i, len(waters) - 1, None))
-
-                    j += 1
 
         # Convert list of tuples into dataframe
         columns = ['molecule_i', 'atom_i', 'molecule_j', 'atom_j']
