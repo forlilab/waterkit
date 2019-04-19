@@ -246,7 +246,7 @@ class WaterOptimizer():
             coordinates.append(coor_tmp)
 
         if self._how == 'best':
-            i = energies.argmin()
+            i = np.argmin(energies)
         elif self._how == 'boltzmann':
             i = self._boltzmann_choice(energies)
 
@@ -493,15 +493,16 @@ class WaterOptimizer():
 
     def optimize_grid(self, waters, connections=None, opt_disordered=True):
         """Optimize position of water molecules."""
-        df = {}
+        ad_map = self._water_box.map
+        receptor = self._water_box.molecules_in_shell(0)[0]
+        shell_id = self._water_box.number_of_shells(ignore_xray=True)
 
-        atom_types = ['Oa', 'Od', 'HD', 'Lp']
-        atom_types_replaced = ['Ow', 'HD', 'Lp']
-        best_energy_spherical_waters = []
+        df = {}
         data = []
-        npts = (19, 19, 19)
-        profiles = []
         to_be_removed = []
+        spacing = ad_map._spacing
+        boxsize = np.array([7, 7, 7])
+        npts = np.round(boxsize / spacing).astype(np.int)
 
         type_lp = 'Lp'
         type_hd = 'HD'
@@ -509,10 +510,8 @@ class WaterOptimizer():
         type_od = 'Od'
         type_w = 'Ow'
         type_e = 'Electrostatics'
-
-        ad_map = self._water_box.map
-        receptor = self._water_box.molecules_in_shell(0)[0]
-        shell_id = self._water_box.number_of_shells(ignore_xray=True)
+        atom_types = ['Oa', 'Od', 'HD', 'Lp']
+        atom_types_replaced = ['Ow', 'HD', 'Lp']
 
         ag = AutoGrid()
 
@@ -522,22 +521,20 @@ class WaterOptimizer():
         # The placement order is based on the best energy around each hydrogen anchor point
         water_orders = self._optimize_placement_order_grid(waters, ad_map, from_edges=1.)
         to_be_removed.extend(set(np.arange(len(waters))) - set(water_orders))
-        # ... or the placement order is random. So the starting point will be always different.
-        #water_orders = np.arange(len(waters))
-        #np.random.shuffle(water_orders)
 
-        """And now we optimize all water individually. All the
+        """ And now we optimize all water individually. All the
         water molecules are outside the box or with a positive
-        energy are considered as bad and are removed."""
+        energy are considered as bad and are removed.
+        """
         for i in water_orders:
             water = waters[i]
 
             energy_position = self._optimize_position_grid(water, ad_map, add_noise=True, from_edges=1.)
 
-            """Before going further we check the energy.
-            If the spherical water has already a bad energy
-            there is no point of going further and try to
-            orient it..."""
+            """ Before going further we check the energy. If the spherical water 
+            has already a bad energy there is no point of going further and try to
+            orient it.
+            """
             if energy_position < self._energy_cutoff:
                 # Build the TIP5
                 water.build_tip5p()
@@ -553,13 +550,19 @@ class WaterOptimizer():
                     # We don't want name overlap between different replicates
                     short_uuid = str(uuid.uuid4())[0:8]
                     receptor_file = '%s.pdbqt' % short_uuid
-                    center = water.coordinates(0)[0]
+
+                    """ If we choose the closest point in the grid and not the coordinates of the
+                    oxygen as the center of the grid, it is because we want to avoid any edge effect
+                    when we will combine the small box to the bigger box, and also the energy is
+                    not interpolated but it is coming from the grid directly.
+                    """
+                    center = ad_map.neighbor_points(water.coordinates(0)[0], spacing)[0]
 
                     # Dirty hack to write the receptor with all the water molecules
                     receptor.add_molecule(water.tip3p())
                     receptor.to_file(receptor_file, 'pdbqt', 'rcp')
 
-                    water_map = ag.run(receptor_file, atom_types, center, npts, clean=True)
+                    water_map = ag.run(receptor_file, atom_types, center, npts, spacing, clean=True)
                     water_map.combine(type_w, [type_oa, type_od], how='add')
 
                     # And we update the receptor map
