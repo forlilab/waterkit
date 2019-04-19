@@ -6,6 +6,7 @@
 # Utils functions
 #
 
+import subprocess
 
 import numpy as np
 
@@ -257,3 +258,10 @@ def shoemake(coordinates):
     s2 = 2. * np.pi * coordinates[:,2]
     return np.dstack((t1 * np.sin(s1), t1 * np.cos(s1), 
                       t2 * np.sin(s2), t2 * np.cos(s2)))[0]
+
+def execute_command(cmd_line):
+    """Simple function to execute bash command."""
+    args = cmd_line.split()
+    p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    output, errors = p.communicate()
+    return output, errors

@@ -9,19 +9,11 @@
 from __future__ import print_function
 
 import os
-import subprocess
 from glob import glob
 
+import utils
 from molecule import Molecule
 from autodock_map import Map
-
-
-def execute_command(cmd_line):
-    """Simple function to execute bash command."""
-    args = cmd_line.split()
-    p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    output, errors = p.communicate()
-    return output, errors
 
 
 class AutoGrid():
@@ -62,7 +54,7 @@ class AutoGrid():
             w.write(ag_str)
 
         cmd_line = '%s -p %s -l %s' % (self._exec_path, gpf_file, glg_file)
-        execute_command(cmd_line)
+        utils.execute_command(cmd_line)
 
         ad_map = Map.from_fld('%s_maps.fld' % receptor_name)
 
