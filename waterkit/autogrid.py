@@ -19,12 +19,33 @@ from autodock_map import Map
 class AutoGrid():
 
     def __init__(self, exec_path='autogrid4', param_file='AD4_parameters.dat'):
+        """Initialize AutoGrid.
+
+        Args:
+            exec_path (str): pathname of the autogrid executable (default: autogrid4)
+            param_file (str): pathname of the AutoDock forcefield (default: AD4_parameters.dat)
+
+        """
         self._exec_path = exec_path
         self._param_file = param_file
 
     def run(self, receptor_file, atom_types, center=(0., 0., 0.),
             npts=(32, 32, 32), spacing=0.375, smooth=0.5, clean=False):
-        """Execute AutoGrid on receptor file."""
+        """Execute AutoGrid on receptor file.
+
+        Args:
+            receptor_file (str): pathname of the PDBQT receptor file
+            atom_types (list): list of the ligand atom types
+            center (array_like): center of the grid (default: (0, 0, 0))
+            npts (array_like): size of the grid box (default: (32, 32, 32))
+            spacing (float): space between grid points (default: 0.375)
+            smooth (float): AutoDock energy smoothing (default: 0.5)
+            clean (bool): Remove all the map, fld, gpf and glg files, except the PDBQT receptor file (default: False)
+
+        Returns:
+            Map: Return a Map instance
+
+        """
         if not isinstance(atom_types, (list, tuple)):
             atom_types = [atom_types]
 
