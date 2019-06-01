@@ -143,13 +143,19 @@ class Water(Molecule):
 
             return w
 
-    def build_tip5p(self):
+    def build_explicit_water(self, model="tip3p"):
         """
         Construct hydrogen atoms (H) and lone-pairs (Lp)
         TIP5P parameters: http://www1.lsbu.ac.uk/water/water_models.html
         """
-        atom_types = ['HD', 'HD', 'Lp', 'Lp']
-        partial_charges = [0.241, 0.241, -0.241, -0.241]
+        if model == "tip3p":
+            atom_types = ["Hw", "Hw"]
+            partial_charges = [0.4170, 0.4170]
+        elif model == "tip5p":
+            atom_types = ["Hw", "Hw", "Lp", "Lp"]
+            partial_charges = [0.241, 0.241, -0.241, -0.241]
+        else:
+            return False
 
         # Order in which we will build H/Lp
         if self._anchor_type == "acceptor":
@@ -191,6 +197,8 @@ class Water(Molecule):
         for atom, atom_type, partial_charge in zip(atoms, atom_types, partial_charges):
             self.add_atom(atom, atom_type, partial_charge, atom_num=1, bond=(1, i, 1))
             i += 1
+
+        return True
 
     def guess_hydrogen_bond_anchors(self, waterfield):
         """ Guess all the hydrogen bond anchors in the

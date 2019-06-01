@@ -491,7 +491,7 @@ class WaterOptimizer():
 
         return (waters, df)
 
-    def optimize_grid(self, waters, connections=None, opt_disordered=True):
+    def optimize_grid(self, waters, connections=None, water_model="tip3p", opt_disordered=True):
         """Optimize position of water molecules."""
         ad_map = self._water_box.map
         receptor = self._water_box.molecules_in_shell(0)[0]
@@ -504,14 +504,17 @@ class WaterOptimizer():
         boxsize = np.array([7, 7, 7])
         npts = np.round(boxsize / spacing).astype(np.int)
 
-        type_lp = 'Lp'
-        type_hd = 'HD'
-        type_oa = 'Oa'
-        type_od = 'Od'
-        type_w = 'Ow'
-        type_e = 'Electrostatics'
-        atom_types = ['Oa', 'Od', 'HD', 'Lp']
-        atom_types_replaced = ['Ow', 'HD', 'Lp']
+        type_lp = "Lp"
+        type_hd = "Hw"
+        type_w = "Ow"
+        type_e = "Electrostatics"
+
+        if water_model == "tip3p":
+            atom_types = ["Ow"]
+            atom_types_replaced = ["Ow", "Electrostatics"]
+        elif water_model == "tip5p":
+            atom_types = ["Ow"]
+            atom_types_replaced = ["Ow", "Electrostatics"]
 
         ag = AutoGrid()
 
@@ -537,7 +540,7 @@ class WaterOptimizer():
             """
             if energy_position < self._energy_cutoff:
                 # Build the TIP5
-                water.build_tip5p()
+                water.build_explicit_water(model="tip5p")
                 # Optimize the orientation
                 energy_orientation = self._optimize_orientation_grid(water)
 
@@ -549,7 +552,7 @@ class WaterOptimizer():
 
                     # We don't want name overlap between different replicates
                     short_uuid = str(uuid.uuid4())[0:8]
-                    receptor_file = '%s.pdbqt' % short_uuid
+                    receptor_file = "%s.pdbqt" % short_uuid
 
                     """ If we choose the closest point in the grid and not the coordinates of the
                     oxygen as the center of the grid, it is because we want to avoid any edge effect
@@ -560,14 +563,15 @@ class WaterOptimizer():
 
                     # Dirty hack to write the receptor with all the water molecules
                     receptor.add_molecule(water.tip3p())
-                    receptor.to_file(receptor_file, 'pdbqt', 'rcp')
+                    receptor.to_file(receptor_file, "pdbqt", "rcp")
 
                     water_map = ag.run(receptor_file, atom_types, center, npts, spacing, clean=True)
-                    water_map.combine(type_w, [type_oa, type_od], how='add')
+                    water_map.apply_operation_on_maps('-np.abs(x)', [type_e])
+                    water_map.combine(type_w, [type_w, type_e], how="add")
 
                     # And we update the receptor map
                     for atom_type in atom_types_replaced:
-                        ad_map.combine(atom_type, atom_type, 'replace', water_map)
+                        ad_map.combine(atom_type, atom_type, "replace", water_map)
 
                     os.remove(receptor_file)
 
@@ -580,16 +584,16 @@ class WaterOptimizer():
         waters = [waters[i] for i in water_orders if not i in to_be_removed]
         # Keep connections of the good waters
         if connections is not None:
-            index = connections.loc[connections['molecule_j'].isin(to_be_removed)].index
+            index = connections.loc[connections["molecule_j"].isin(to_be_removed)].index
             connections.drop(index, inplace=True)
             # Renumber the water molecules
-            connections['molecule_j'] = range(0, len(waters))
+            connections["molecule_j"] = range(0, len(waters))
             df['connections'] = connections
 
         # Add water shell informations
-        columns = ['shell_id', 'energy_position', 'energy_orientation']
+        columns = ["shell_id", "energy_position", "energy_orientation"]
         df_shell = pd.DataFrame(data, columns=columns)
-        df['shells'] = df_shell
+        df["shells"] = df_shell
 
         return (waters, df)
 

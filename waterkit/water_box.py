@@ -427,3 +427,30 @@ class WaterBox():
         else:
             # The receptor wasn't initialized yet.
             return False
+
+    def to_file(self, fname, fformat="pdbqt", options=None):
+        """Write all the content of the water box in a file.
+
+        Args:
+            fname (str): name of the output file
+            fformat (str): output format (example: pdbqt)
+            options (str): Open Babel writing options
+
+        Returns:
+            None
+
+        """
+        str_output = ""
+
+        obconv = ob.OBConversion()
+        obconv.SetOutFormat(fformat)
+
+        if options is not None:
+            for option in options:
+                obconv.AddOption(option)
+
+        for molecule in self.molecules:
+            str_output += obconv.WriteString(molecule).split("\n", 3)[3][:-5]
+
+        with open(fname, 'w') as w:
+            w.write(str_output)
