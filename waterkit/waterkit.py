@@ -18,28 +18,15 @@ from waterfield import Waterfield
 
 class Waterkit():
 
-    def __init__(self, hb_forcefield=None,  ad4_forcefield=None, water_map=None):
+    def __init__(self, hb_forcefield=None):
         """Initialize WaterKit.
 
         Args:
             hb_forcefield (Waterfield): Hydrogen Bond forcefield (default: None)
-            ad4_forcefield (AutoDockForceField): AutoDock forcefield (default: None)
-            water_map (Map): AutoDock Map of a reference water (default: None)
 
         """
         self.water_boxes = []
         self._hb_forcefield = hb_forcefield
-        self._ad4_forcefield = ad4_forcefield
-        self._water_map = water_map
-
-        # AD map names
-        self._type_lp = 'Lp'
-        self._type_hd = 'HD'
-        self._type_dhd = 'Hd'
-        self._type_oa = 'Oa'
-        self._type_od = 'Od'
-        self._type_w = 'Ow'
-        self._type_e = 'Electrostatics'
 
         """If the user does not provide any of these elements,
         we take those available per default in waterkit."""
@@ -48,28 +35,8 @@ class Waterkit():
             hb_forcefield_file = os.path.join(d, 'data/waterfield.par')
             self._hb_forcefield = Waterfield(hb_forcefield_file)
 
-        if self._ad4_forcefield is None:
-            d = imp.find_module('waterkit')[1]
-            ad4_forcefield_file = os.path.join(d, 'data/AD4_parameters.dat')
-            self._ad4_forcefield = AutoDockForceField(ad4_forcefield_file)
-
-        if self._water_map is None:
-            d = imp.find_module('waterkit')[1]
-            water_fld_file = os.path.join(d, 'data/water/maps.fld')
-            self._water_map = Map.from_fld(water_fld_file)
-
-        # Combine OA, OD and e to create OW
-        # Since waters are spherical, both donor/acceptor, so e is always favorable
-        self._water_map.apply_operation_on_maps('-np.abs(x)', [self._type_e])
-        self._water_map.combine(self._type_w, [self._type_oa, self._type_od, self._type_e], how='add')
-        # Add e to HD and Lp
-        self._water_map.combine('HD', ['HD', self._type_e], how='add')
-        self._water_map.combine(self._type_lp, [self._type_lp, self._type_e], how='add')
-
-        # Deactivate HD-Hd interaction in AutoDock ForceField
-        self._ad4_forcefield.deactivate_pairs([[self._type_hd, self._type_dhd]])
-
-    def hydrate(self, receptor, ad_map, waters=None, n_layer=1, how='best', temperature=300.):
+    def hydrate(self, receptor, ad_map, n_layer=1, how='best', 
+                temperature=300., water_model='tip3p'):
         """ Hydrate the molecule with water molecucules.
 
         The receptor is hydrated by adding successive layers
@@ -78,30 +45,50 @@ class Waterkit():
         Args:
             receptor (Molecule): Receptor of the protein
             ad_map (Map): AutoDock map of the receptor
-            waters (list): List of X-Ray water molecules (Water) to incorporate (default: None)
             n_layer (int): Number of hydration layer to add (default: 1)
             how (str): Method for water placement: 'best' or 'boltzmann' (default: best)
             temperature (float): Temperature in Kelvin, only used for Boltzmann sampling (default: 300)
+            water_model (str): Model used for the water molecule, tip3p or tip5p (default: tip3p)
 
         Returns:
             None
 
         """
-        # Combine OA, OD and e to create OW
-        # Warning: this is not the same how as the one passed in input
-        ad_map.apply_operation_on_maps('-np.abs(x)', [self._type_e])
-        ad_map.combine(self._type_w, [self._type_oa, self._type_od, self._type_e], how='add')
-        ad_map.combine(self._type_hd, [self._type_hd, self._type_e], how='add')
-        ad_map.combine(self._type_lp, [self._type_lp, self._type_e], how='add')
+        i = 1
+        # AD map names
+        type_hd = 'Hw'
+        type_lp = 'Lp'
+        type_w = 'Ow'
+        type_e = 'Electrostatics'
+
+        """In TIP3P and TIP5P models, hydrogen atoms and lone-pairs does not
+        have VdW radius, so their interactions with the receptor are purely
+        based on electrostatics. So the HD and Lp maps are just the electrostatic 
+        map. Each map is multiplied by the partial charge. So it is just a
+        look-up table to get the energy for each water molecule.
+        """
+        if water_model == 'tip3p':
+            hw_q = 0.417
+            ow_q = -0.834
+        elif water_model == 'tip5p':
+            hw_q = 0.241
+            lp_q = -0.241
+            # Need to put a charge for the placement of the spherical water
+            ow_q = -0.482
+        else:
+            print "Error: water model %s unknown." % water_model
+            return False
+
+        ad_map.apply_operation_on_maps(type_hd, type_e, 'x * %f' % hw_q)
+        if water_model == 'tip5p':
+            ad_map.apply_operation_on_maps(type_lp, type_e, 'x * %f' % lp_q)
+        ad_map.apply_operation_on_maps(type_e, type_e, '-np.abs(x * %f)' % ow_q)
+        ad_map.combine(type_w, [type_w, type_e], how='add')
 
         #w_copy = copy.deepcopy(w_ori)
         w = WaterBox(self._hb_forcefield, self._ad4_forcefield, self._water_map)
         w.add_receptor(receptor, ad_map)
 
-        if waters is not None:
-            w.add_crystallographic_waters(waters, how)
-
-        i = 1
         while True:
             # build_next_shell returns True if
             # it was able to put water molecules,
@@ -121,6 +108,8 @@ class Waterkit():
             i += 1
 
         self.water_box = w
+
+        return True
 
     def write_shells(self, prefix='water', only_active=True):
         """Export hydration shells in a PDBQT format.

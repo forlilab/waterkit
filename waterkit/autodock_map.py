@@ -318,11 +318,15 @@ class Map():
         """
         return self._maps_interpn[atom_type](xyz, method=method)
 
-    def energy(self, df, method='linear'):
+    def energy(self, df, ignore_atom_types=None, ignore_electrostatic=False, 
+               ignore_desolvation=False, method='linear'):
         """Get energy interaction of a molecule based of the grid.
 
         Args:
             df (DataFrame): Pandas DatFrame with columns ('atom_i', 'atom_xyz', 'atom_q', 'atom_type')
+            ignore_atom_types (list): list of atom types/terms to ignore (default: None)
+            ignore_electrostatic (bool): to ignore electrostatic term (default: False)
+            ignore_desolvation (bool): to ignore desolvation term (default: False)
             method (str): Interpolate method (default: linear)
 
         Returns:
@@ -331,10 +335,25 @@ class Map():
         """
         energy = 0.
 
-        se = df.groupby('atom_type')['atom_xyz'].apply(list)
+        if ignore_atom_types is None:
+            ignore_atom_types = []
 
-        for atom_type, xyz in se.iteritems():
-            energy += np.sum(self._maps_interpn[atom_type](xyz, method=method))
+        if not isinstance(ignore_atom_types, (list, tuple)):
+            ignore_atom_types = [ignore_atom_types]
+
+        se = df.groupby('atom_type', as_index=False)['atom_xyz', 'atom_q'].agg(lambda x: list(x)).values
+
+        for atom_type, xyz, q in se:
+            if not atom_type in ignore_atom_types:
+                vdw_hb = self._maps_interpn[atom_type](xyz, method=method)
+
+            if not ignore_electrostatic:
+                elec = self._maps_interpn['Electrostatic'](xyz, method=method) * np.array(q)
+
+            if not ignore_desolvation:
+                desolv = self._maps_interpn['Desolvation'](xyz, method=method)
+
+            energy += np.sum(vdw_hb + elec + desolv)
 
         return energy
 
@@ -358,32 +377,39 @@ class Map():
 
         return coordinates
 
-    def apply_operation_on_maps(self, expression, atom_types):
+    def apply_operation_on_maps(self, names, atom_types, expression):
         """Apply mathematical expression on affinity grids.
 
         Args:
-            expression (str): maths expression that must contains x (x is the grid value)
+            names (list): name of the new or existing grid
             atom_types (list): list of atom types
+            expression (str): maths expression that must contains x (x is the grid value)
 
         Returns:
             None
 
         """
+        if not isinstance(names, (list, tuple)):
+            names = [names]
+
         if not isinstance(atom_types, (list, tuple)):
             atom_types = [atom_types]
+
+        assert len(atom_types) == len(names), "Names and atom_types lengths are not matching."
 
         if not 'x' in expression:
             print "Error: operation cannot be applied, x is not defined."
             return None
 
-        for atom_type in atom_types:
+        for name, atom_type in zip(names, atom_types):
             try:
                 x = self._maps[atom_type]
+                # When 'eval' a new copy of the map is created
                 x = eval(expression)
 
                 # Update map and interpolator
-                self._maps[atom_type] = x
-                self._maps_interpn[atom_type] = self._generate_affinity_map_interpn(x)
+                self._maps[name] = x
+                self._maps_interpn[name] = self._generate_affinity_map_interpn(x)
             except:
                 print "Warning: This map %s does not exist." % (atom_type)
                 continue

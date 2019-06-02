@@ -19,16 +19,14 @@ from optimize import WaterOptimizer
 
 class WaterBox():
 
-    def __init__(self, hb_forcefield, ad4_forcefield, water_map):
+    def __init__(self, hb_forcefield):
         self.df = {}
         self._kdtree = None
         self.molecules = {}
         self.map = None
 
         # Forcefields and WaterMap
-        self._ad4_forcefield = ad4_forcefield
         self._hb_forcefield = hb_forcefield
-        self._water_map = water_map
 
         # All the informations are stored into a dict of df
         columns = ['molecule_i', 'atom_i', 'molecule_j', 'atom_j']
@@ -271,76 +269,6 @@ class WaterBox():
         connections = pd.DataFrame(data, columns=columns)
 
         return (waters, connections)
-
-    def _update_map(self, waters, water_map, water_orientation=[[0, 0, 1], [1, 0, 0]], choices=None):
-        """ Update the maps using the water map based
-        on the position of the water molecules
-        """
-        x_len = np.int(np.floor(water_map._edges[0].shape[0] / 2.) + 5)
-        y_len = np.int(np.floor(water_map._edges[1].shape[0] / 2.) + 5)
-        z_len = np.int(np.floor(water_map._edges[2].shape[0] / 2.) + 5)
-
-        map_types = list(set(self.map._maps.keys()) & set(water_map._maps.keys()))
-
-        if choices is not None:
-            map_types = list(set(map_types) & set(choices))
-
-        if not isinstance(waters, (list, tuple)):
-            waters = [waters]
-
-        for water in waters:
-            o, h1, h2 = water.coordinates([0, 1, 2])
-
-            # Create the grid around the protein water molecule
-            ix, iy, iz = self.map._cartesian_to_index(o)
-
-            ix_min = ix - x_len if ix - x_len >= 0 else 0
-            ix_max = ix + x_len
-            iy_min = iy - y_len if iy - y_len >= 0 else 0
-            iy_max = iy + y_len
-            iz_min = iz - z_len if iz - z_len >= 0 else 0
-            iz_max = iz + z_len
-
-            x = self.map._edges[0][ix_min:ix_max + 1]
-            y = self.map._edges[1][iy_min:iy_max + 1]
-            z = self.map._edges[2][iz_min:iz_max + 1]
-
-            X, Y, Z = np.meshgrid(x, y, z)
-            grid = np.stack((X.ravel(), Y.ravel(), Z.ravel()), axis=-1)
-
-            # Do the translation
-            translation = utils.vector(o, water_map._center)
-            grid += translation
-
-            # First rotation along z-axis
-            u = utils.normalize(utils.vector(o, np.mean([h1, h2], axis=0)))
-            rotation_z = utils.get_rotation_matrix(u, water_orientation[0])
-            grid = np.dot(grid, rotation_z)
-
-            # Second rotation along x-axis
-            h1 = np.dot(h1 + translation, rotation_z)
-            h2 = np.dot(h2 + translation, rotation_z)
-            v = utils.normalize(np.cross(h1, h2))
-            rotation_x = utils.get_rotation_matrix(v, water_orientation[1])
-            grid = np.dot(grid, rotation_x)
-
-            for map_type in map_types:
-                # Interpolate energy
-                energy = water_map.energy_coordinates(grid, map_type)
-                # Replace inf by zero, otherwise we cannot add water energy to the grid
-                energy[energy == np.inf] = 0.
-
-                # Reshape and swap x and y axis, right? Easy.
-                # Thank you Diogo Santos Martins!!
-                energy = np.reshape(energy, (y.shape[0], x.shape[0], z.shape[0]))
-                energy = np.swapaxes(energy, 0, 1)
-
-                # Add it to the existing grid
-                self.map._maps[map_type][ix_min:ix_max + 1, iy_min:iy_max + 1, iz_min:iz_max + 1] += energy
-
-        # Update interpolator
-        for map_type in map_types:
-            self.map._maps_interpn[map_type] = self.map._generate_affinity_map_interpn(self.map._maps[map_type])
 
     def build_next_shell(self, how='best', temperature=300.):
         """Build the next hydration shell."""

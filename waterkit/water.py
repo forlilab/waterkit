@@ -142,6 +142,8 @@ class Water(Molecule):
             w.delete_atom(4)
 
             return w
+            
+        return self
 
     def build_explicit_water(self, model="tip3p"):
         """
@@ -150,7 +152,7 @@ class Water(Molecule):
         """
         if model == "tip3p":
             atom_types = ["Hw", "Hw"]
-            partial_charges = [0.4170, 0.4170]
+            partial_charges = [0.417, 0.417]
         elif model == "tip5p":
             atom_types = ["Hw", "Hw", "Lp", "Lp"]
             partial_charges = [0.241, 0.241, -0.241, -0.241]
