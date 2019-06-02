@@ -19,14 +19,15 @@ from optimize import WaterOptimizer
 
 class WaterBox():
 
-    def __init__(self, hb_forcefield):
+    def __init__(self, hb_forcefield, water_model="tip3p"):
         self.df = {}
         self._kdtree = None
         self.molecules = {}
         self.map = None
 
-        # Forcefields and WaterMap
+        # Forcefields and water model
         self._hb_forcefield = hb_forcefield
+        self._water_model = water_model
 
         # All the informations are stored into a dict of df
         columns = ['molecule_i', 'atom_i', 'molecule_j', 'atom_j']

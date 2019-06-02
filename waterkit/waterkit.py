@@ -35,8 +35,8 @@ class Waterkit():
             hb_forcefield_file = os.path.join(d, 'data/waterfield.par')
             self._hb_forcefield = Waterfield(hb_forcefield_file)
 
-    def hydrate(self, receptor, ad_map, n_layer=1, how='best', 
-                temperature=300., water_model='tip3p'):
+    def hydrate(self, receptor, ad_map, water_model="tip3p", n_layer=1, 
+                how="best", temperature=300.):
         """ Hydrate the molecule with water molecucules.
 
         The receptor is hydrated by adding successive layers
@@ -45,20 +45,16 @@ class Waterkit():
         Args:
             receptor (Molecule): Receptor of the protein
             ad_map (Map): AutoDock map of the receptor
+            water_model (str): Model used for the water molecule, tip3p or tip5p (default: tip3p)
             n_layer (int): Number of hydration layer to add (default: 1)
             how (str): Method for water placement: 'best' or 'boltzmann' (default: best)
             temperature (float): Temperature in Kelvin, only used for Boltzmann sampling (default: 300)
-            water_model (str): Model used for the water molecule, tip3p or tip5p (default: tip3p)
 
         Returns:
             None
 
         """
         i = 1
-        # AD map names
-        type_hd = 'Hw'
-        type_lp = 'Lp'
-        type_w = 'Ow'
         type_e = 'Electrostatics'
 
         """In TIP3P and TIP5P models, hydrogen atoms and lone-pairs does not
@@ -68,9 +64,14 @@ class Waterkit():
         look-up table to get the energy for each water molecule.
         """
         if water_model == 'tip3p':
+            type_ow = 'OW'
+            type_hd = 'HW'
             hw_q = 0.417
             ow_q = -0.834
         elif water_model == 'tip5p':
+            type_ow = 'OT'
+            type_hd = 'HT'
+            type_lp = 'LP'
             hw_q = 0.241
             lp_q = -0.241
             # Need to put a charge for the placement of the spherical water
@@ -83,10 +84,10 @@ class Waterkit():
         if water_model == 'tip5p':
             ad_map.apply_operation_on_maps(type_lp, type_e, 'x * %f' % lp_q)
         ad_map.apply_operation_on_maps(type_e, type_e, '-np.abs(x * %f)' % ow_q)
-        ad_map.combine(type_w, [type_w, type_e], how='add')
+        ad_map.combine(type_ow, [type_ow, type_e], how='add')
 
         #w_copy = copy.deepcopy(w_ori)
-        w = WaterBox(self._hb_forcefield, self._ad4_forcefield, self._water_map)
+        w = WaterBox(self._hb_forcefield, water_model)
         w.add_receptor(receptor, ad_map)
 
         while True:

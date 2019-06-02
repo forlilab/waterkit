@@ -249,6 +249,7 @@ class WaterOptimizer():
     def optimize_grid(self, waters, connections=None, opt_disordered=True):
         """Optimize position of water molecules."""
         ad_map = self._water_box.map
+        water_model = self._water_box.water_model
         receptor = self._water_box.molecules_in_shell(0)[0]
         shell_id = self._water_box.number_of_shells(ignore_xray=True)
 
@@ -301,7 +302,7 @@ class WaterOptimizer():
             """
             if energy_position < self._energy_cutoff:
                 # Build the TIP5
-                water.build_explicit_water(model="tip5p")
+                water.build_explicit_water(water_model)
                 # Optimize the orientation
                 energy_orientation = self._optimize_orientation_grid(water)
 

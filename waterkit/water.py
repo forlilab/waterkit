@@ -20,17 +20,27 @@ from molecule import Molecule
 
 class Water(Molecule):
 
-    def __init__(self, xyz, atom_type='Ow', partial_charge=-0.411, anchor_xyz=None, vector_xyz=None, anchor_type=None):
+    def __init__(self, xyz, atom_type='OW', partial_charge=-0.834, anchor_xyz=None, vector_xyz=None, anchor_type=None):
         self._OBMol = ob.OBMol()
+        self._anchor = None
+        self._anchor_type = anchor_type
+        self.hydrogen_bond_anchors = None
+        self.rotatable_bonds = None
+
+        self._models = {
+            "tip3p": {"atom_type": ["OW", "HW", "HW"],
+                      "partial_charges": [-0.834, 0.417, 0.417]
+                     },
+            "tip5p": {"atom_type": ["OT", "HT", "HT", "LP", "LP"],
+                      "partial_charges": [0.0, 0.241, 0.241, -0.241, -0.241]
+                     }
+            }
+
         # Add the oxygen atom
         self.add_atom(xyz, atom_type, partial_charge, atom_num=8)
         # Store all the informations about the anchoring
-        if all(v is not None for v in [anchor_xyz, vector_xyz, anchor_type]):
-            self.set_anchor(anchor_xyz, vector_xyz, anchor_type)
-
-        self._previous = None
-        self.hydrogen_bond_anchors = None
-        self.rotatable_bonds = None
+        if all(v is not None for v in [anchor_xyz, vector_xyz]):
+            self.set_anchor(anchor_xyz, vector_xyz)
 
     def __copy__(self):
         """Create a copy of Water object."""
@@ -55,7 +65,7 @@ class Water(Molecule):
         return result
 
     @classmethod
-    def from_file(cls, fname, atom_type='Ow', partial_charge=-0.411):
+    def from_file(cls, fname, atom_type='OW', partial_charge=-0.411):
         """Create list of Water object from a PDB file."""
         waters = []
 
@@ -104,12 +114,11 @@ class Water(Molecule):
         """Delete OBAtom from OBMol using atom id."""
         self._OBMol.DeleteAtom(self.atom(atom_id))
 
-    def set_anchor(self, anchor_xyz, vector_xyz, anchor_type):
+    def set_anchor(self, anchor_xyz, vector_xyz):
         """Add information about the anchoring."""
         # IDEA: This info should be accessible with attributes hba, hbv and type
         anchor_vector = anchor_xyz + utils.normalize(utils.vector(vector_xyz, anchor_xyz))
         self._anchor = np.array([anchor_xyz, anchor_vector])
-        self._anchor_type = anchor_type
 
     def update_coordinates(self, atom_xyz, atom_id):
         """
@@ -128,6 +137,12 @@ class Water(Molecule):
             return True
         return False
 
+    def is_tip3p(self):
+        """Tell if water is TIP3P or not."""
+        if self._OBMol.NumAtoms() == 3:
+            return True
+        return False
+
     def is_tip5p(self):
         """Tell if water is TIP5P or not."""
         if self._OBMol.NumAtoms() == 5:
@@ -135,7 +150,7 @@ class Water(Molecule):
         return False
 
     def tip3p(self):
-        """Return tip3p Water."""
+        """Return a tip3p Water."""
         if self.is_tip5p():
             w = copy.deepcopy(self)
             w.delete_atom(3)
@@ -145,21 +160,30 @@ class Water(Molecule):
             
         return self
 
-    def build_explicit_water(self, model="tip3p"):
+    def build_explicit_water(self, water_model="tip3p"):
         """
         Construct hydrogen atoms (H) and lone-pairs (Lp)
         TIP5P parameters: http://www1.lsbu.ac.uk/water/water_models.html
         """
-        if model == "tip3p":
-            atom_types = ["Hw", "Hw"]
-            partial_charges = [0.417, 0.417]
-        elif model == "tip5p":
-            atom_types = ["Hw", "Hw", "Lp", "Lp"]
-            partial_charges = [0.241, 0.241, -0.241, -0.241]
+        i = 2
+
+        if water_model in self._models:
+            atom_types = self._models[water_model]["atom_types"]
+            partial_charges = self._models[water_model]["partial_charges"]
         else:
+            print "Error: water model %s unknown." % water_model
             return False
 
-        # Order in which we will build H/Lp
+        """ If no anchor information was defined, we define
+        it as a donor water molecule with the hydrogen atom
+        pointing to the a random direction.
+        """
+        if self._anchor_type is None:
+            self._anchor_type = 'acceptor'
+        if self._anchor is None:
+            self._anchor = [np.random.rand(3), None]
+
+        # Order in which we will build HD/LP
         if self._anchor_type == "acceptor":
             d = [0.9572, 0.9572, 0.7, 0.7]
             a = [104.52, 109.47]
@@ -174,13 +198,11 @@ class Water(Molecule):
         v = utils.normalize(v)
         # Compute a vector perpendicular to v
         p = coord_oxygen + utils.get_perpendicular_vector(v)
-
         # H/Lp between O and Acceptor/Donor atom
         a1 = coord_oxygen + (d[0] * v)
         # Build the second H/Lp using the perpendicular vector p
         a2 = utils.rotate_point(a1, coord_oxygen, p, np.radians(a[0]))
         a2 = utils.resize_vector(a2, d[1], coord_oxygen)
-
         # ... and rotate it to build the last H/Lp
         p = utils.atom_to_move(coord_oxygen, [a1, a2])
         r = coord_oxygen + utils.normalize(utils.vector(a1, a2))
@@ -189,14 +211,33 @@ class Water(Molecule):
         a4 = utils.rotate_point(p, coord_oxygen, r, -np.radians(a[1] / 2))
         a4 = utils.resize_vector(a4, d[3], coord_oxygen)
 
-        # Add them in this order: H, H, Lp, Lp
+        """ Only now we do all the modifications to the 
+        OBMol object. We never know, we might have an error 
+        before while calculating positions of the new atoms.
+        So no need to revert to the previous state if 
+        something is happening.
+        """
+
+        # Change the type and partial charges of the oxygen atom
+        oxygen = self.atom(0)
+        oxygen.SetPartialCharge(partial_charges[0])
+        oxygen.SetType(atom_types[0])
+        oxygen.GetPartialCharge() # To Force OB
+        oxygen.GetType() # To Force OB
+
+        # Remove any existing atoms (except oxygen of course)
+        if not self.is_spherical():
+            for i in range(1, self._OBMol.NumAtoms()):
+                self.delete_atom(i)
+
+        # Order them: H, H, Lp, Lp, we want hydrogen atoms first
         if self._anchor_type == "acceptor":
             atoms = [a1, a2, a3, a4]
         else:
             atoms = [a3, a4, a1, a2]
 
-        i = 2
-        for atom, atom_type, partial_charge in zip(atoms, atom_types, partial_charges):
+        # ... and add the new ones
+        for atom, atom_type, partial_charge in zip(atoms, atom_types[1:], partial_charges[1:]):
             self.add_atom(atom, atom_type, partial_charge, atom_num=1, bond=(1, i, 1))
             i += 1
 
