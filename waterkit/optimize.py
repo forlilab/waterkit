@@ -193,14 +193,14 @@ class WaterOptimizer():
 
         if energy_sphere.size:
             if self._how == 'best':
-                i = energy_sphere.argmin()
+                idx = energy_sphere.argmin()
             elif self._how == 'boltzmann':
-                i = self._boltzmann_choice(energy_sphere)
+                idx = self._boltzmann_choice(energy_sphere)
 
             # Update the coordinates
-            water.translate(utils.vector(water.coordinates(0), coord_sphere[i]))
+            water.translate(utils.vector(water.coordinates(0), coord_sphere[idx]))
 
-            return energy_sphere[i]
+            return energy_sphere[idx]
         else:
             """If we don't find anything, at least we return the energy
             of the current water molecule. """
@@ -212,46 +212,53 @@ class WaterOptimizer():
         coordinates = []
 
         ad_map = self._water_box.map
-        coordinates_water = water.coordinates()
-        xyz_oxygen = water.coordinates(0)
+        oxygen_xyz = water.coordinates(0)
+        water_xyz = water.coordinates()
+        num_atoms = water_xyz.shape[0]
+        atom_ids = list(range(0, num_atoms))
+        water_info = water.atom_informations()
 
         # Translate the water to the origin for the rotation
-        coordinates_water -= xyz_oxygen
+        water_xyz -= oxygen_xyz
 
-        for x, q in enumerate(self._quaternions):
-            coor_tmp = np.zeros(shape=(4, 3))
+        for q in self._quaternions:
+            # num_atoms - 1, because oxygen does not rotate
+            tmp_xyz = np.zeros(shape=(num_atoms - 1, 3))
 
-            # Rotate each atoms by the quaternion
-            for i, u in enumerate(coordinates_water[1:]):
-                coor_tmp[i] = utils.rotate_vector_by_quaternion(u, q)
+            # Rotate each atoms by the quaternion, except oxygen
+            for i, u in enumerate(water_xyz[1:]):
+                tmp_xyz[i] = utils.rotate_vector_by_quaternion(u, q)
 
             # Change coordinates by the new ones and
             # we translate it back the original oxygen position
-            coor_tmp += xyz_oxygen
+            tmp_xyz += oxygen_xyz
 
-            # Get energy from the grid and save the coordinates
-            [water.update_coordinates(coor_tmp[i - 1], i) for i in range(1,5)]
-            info_water = water.atom_informations([1, 2, 3, 4])
+            # Instead of updating the Water object and loosing time, 
+            # we just update the coordinates of water_info, except oxygen
+            water_info.loc[1:, ['x', 'y', 'z']] = tmp_xyz
 
-            energies.append(ad_map.energy(info_water, ignore_electrostatic=True, ignore_desolvation=True))
-            coordinates.append(coor_tmp)
+            energies.append(ad_map.energy(water_info, ignore_electrostatic=True, ignore_desolvation=True))
+            coordinates.append(tmp_xyz)
 
         if self._how == 'best':
-            i = np.argmin(energies)
+            idx = np.argmin(energies)
         elif self._how == 'boltzmann':
-            i = self._boltzmann_choice(energies)
+            idx = self._boltzmann_choice(energies)
 
-        # Update the coordinates with the selected orientation
-        [water.update_coordinates(coordinates[i][j - 1], j) for j in range(1,5)]
+        # Update the coordinates with the selected orientation, except oxygen
+        for i, j in enumerate(atom_ids[1:]):
+            water.update_coordinates(coordinates[idx][i], j)
 
-        return energies[i]
+        return energies[idx]
 
     def optimize_grid(self, waters, connections=None, opt_disordered=True):
         """Optimize position of water molecules."""
         ad_map = self._water_box.map
-        water_model = self._water_box.water_model
+        water_model = self._water_box._water_model
         receptor = self._water_box.molecules_in_shell(0)[0]
         shell_id = self._water_box.number_of_shells(ignore_xray=True)
+
+        print ad_map
 
         df = {}
         data = []
@@ -260,23 +267,24 @@ class WaterOptimizer():
         boxsize = np.array([7, 7, 7])
         npts = np.round(boxsize / spacing).astype(np.int)
 
-        type_lp = "Lp"
-        type_hd = "Hw"
-        type_w = "Ow"
+        type_lp = "LP"
+        type_w = "OW"
         type_e = "Electrostatics"
 
         if water_model == "tip3p":
+            type_hd = "HW"
             hw_q = 0.417
             ow_q = -0.834
-            atom_types = ["Ow"]
-            atom_types_replaced = ["Ow", "Hw"]
+            atom_types = ["OW"]
+            atom_types_replaced = ["OW", "HW"]
         elif water_model == "tip5p":
+            type_hd = "HT"
             hw_q = 0.241
             lp_q = -0.241
             # Need to put a charge for the placement of the spherical water
             ow_q = -0.482
-            atom_types = ["Ow"]
-            atom_types_replaced = ["Ow", "Hw", "Lp"]
+            atom_types = ["OW"]
+            atom_types_replaced = ["OW", "HT", "LP"]
 
         ag = AutoGrid()
 
@@ -295,6 +303,7 @@ class WaterOptimizer():
             water = waters[i]
 
             energy_position = self._optimize_position_grid(water, ad_map, add_noise=True, from_edges=1.)
+            print energy_position
 
             """ Before going further we check the energy. If the spherical water 
             has already a bad energy there is no point of going further and try to
@@ -305,6 +314,10 @@ class WaterOptimizer():
                 water.build_explicit_water(water_model)
                 # Optimize the orientation
                 energy_orientation = self._optimize_orientation_grid(water)
+                print energy_orientation
+
+                print water.atom_informations()
+                print ""
 
                 # The last great energy filter
                 if energy_orientation < self._energy_cutoff:

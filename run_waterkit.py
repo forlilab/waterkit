@@ -56,7 +56,7 @@ def main():
 
     # Go waterkit!!
     k = Waterkit()
-    k.hydrate(molecule, ad_map, waters, n_layer, how, temperature)
+    k.hydrate(molecule, ad_map, 'tip5p', n_layer=n_layer, how=how, temperature=temperature)
 
     # Write output files
     k.write_shells(output_prefix)

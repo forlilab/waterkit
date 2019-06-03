@@ -334,6 +334,8 @@ class Map():
 
         """
         energy = 0.
+        elec = 0.
+        desolv = 0.
 
         if ignore_atom_types is None:
             ignore_atom_types = []
@@ -341,14 +343,16 @@ class Map():
         if not isinstance(ignore_atom_types, (list, tuple)):
             ignore_atom_types = [ignore_atom_types]
 
-        se = df.groupby('atom_type', as_index=False)['atom_xyz', 'atom_q'].agg(lambda x: list(x)).values
+        se = df.groupby('t', as_index=False)['x', 'y', 'z', 'q'].agg(lambda x: list(x)).values
 
-        for atom_type, xyz, q in se:
+        for atom_type, x, y, z, q in se:
+            xyz = np.stack([x, y, z], axis=1)
+
             if not atom_type in ignore_atom_types:
                 vdw_hb = self._maps_interpn[atom_type](xyz, method=method)
 
             if not ignore_electrostatic:
-                elec = self._maps_interpn['Electrostatic'](xyz, method=method) * np.array(q)
+                elec = self._maps_interpn['Electrostatics'](xyz, method=method) * np.array(q)
 
             if not ignore_desolvation:
                 desolv = self._maps_interpn['Desolvation'](xyz, method=method)

@@ -27,15 +27,6 @@ class Water(Molecule):
         self.hydrogen_bond_anchors = None
         self.rotatable_bonds = None
 
-        self._models = {
-            "tip3p": {"atom_type": ["OW", "HW", "HW"],
-                      "partial_charges": [-0.834, 0.417, 0.417]
-                     },
-            "tip5p": {"atom_type": ["OT", "HT", "HT", "LP", "LP"],
-                      "partial_charges": [0.0, 0.241, 0.241, -0.241, -0.241]
-                     }
-            }
-
         # Add the oxygen atom
         self.add_atom(xyz, atom_type, partial_charge, atom_num=8)
         # Store all the informations about the anchoring
@@ -166,10 +157,21 @@ class Water(Molecule):
         TIP5P parameters: http://www1.lsbu.ac.uk/water/water_models.html
         """
         i = 2
+        distances = [0.9572, 0.9572, 0.7, 0.7]
+        angles = [104.52, 109.47]
 
-        if water_model in self._models:
-            atom_types = self._models[water_model]["atom_types"]
-            partial_charges = self._models[water_model]["partial_charges"]
+        models = {
+            "tip3p": {"atom_types": ["OW", "HW", "HW"],
+                      "partial_charges": [-0.834, 0.417, 0.417]
+                     },
+            "tip5p": {"atom_types": ["OT", "HT", "HT", "LP", "LP"],
+                      "partial_charges": [0.0, 0.241, 0.241, -0.241, -0.241]
+                     }
+            }
+
+        if water_model in models:
+            atom_types = models[water_model]["atom_types"]
+            partial_charges = models[water_model]["partial_charges"]
         else:
             print "Error: water model %s unknown." % water_model
             return False
@@ -179,17 +181,14 @@ class Water(Molecule):
         pointing to the a random direction.
         """
         if self._anchor_type is None:
-            self._anchor_type = 'acceptor'
+            self._anchor_type = "acceptor"
         if self._anchor is None:
             self._anchor = [np.random.rand(3), None]
 
-        # Order in which we will build HD/LP
-        if self._anchor_type == "acceptor":
-            d = [0.9572, 0.9572, 0.7, 0.7]
-            a = [104.52, 109.47]
-        else:
-            d = [0.7, 0.7, 0.9572, 0.9572]
-            a = [109.47, 104.52]
+        # If donor, we started by building the lone-pairs first
+        if self._anchor_type == "donor":
+            distances.reverse()
+            angles.reverse()
 
         coord_oxygen = self.coordinates(0)[0]
 
@@ -199,17 +198,17 @@ class Water(Molecule):
         # Compute a vector perpendicular to v
         p = coord_oxygen + utils.get_perpendicular_vector(v)
         # H/Lp between O and Acceptor/Donor atom
-        a1 = coord_oxygen + (d[0] * v)
+        a1 = coord_oxygen + (distances[0] * v)
         # Build the second H/Lp using the perpendicular vector p
-        a2 = utils.rotate_point(a1, coord_oxygen, p, np.radians(a[0]))
-        a2 = utils.resize_vector(a2, d[1], coord_oxygen)
+        a2 = utils.rotate_point(a1, coord_oxygen, p, np.radians(angles[0]))
+        a2 = utils.resize_vector(a2, distances[1], coord_oxygen)
         # ... and rotate it to build the last H/Lp
         p = utils.atom_to_move(coord_oxygen, [a1, a2])
         r = coord_oxygen + utils.normalize(utils.vector(a1, a2))
-        a3 = utils.rotate_point(p, coord_oxygen, r, np.radians(a[1] / 2))
-        a3 = utils.resize_vector(a3, d[3], coord_oxygen)
-        a4 = utils.rotate_point(p, coord_oxygen, r, -np.radians(a[1] / 2))
-        a4 = utils.resize_vector(a4, d[3], coord_oxygen)
+        a3 = utils.rotate_point(p, coord_oxygen, r, np.radians(angles[1] / 2.))
+        a3 = utils.resize_vector(a3, distances[3], coord_oxygen)
+        a4 = utils.rotate_point(p, coord_oxygen, r, -np.radians(angles[1] / 2.))
+        a4 = utils.resize_vector(a4, distances[3], coord_oxygen)
 
         """ Only now we do all the modifications to the 
         OBMol object. We never know, we might have an error 
@@ -219,7 +218,7 @@ class Water(Molecule):
         """
 
         # Change the type and partial charges of the oxygen atom
-        oxygen = self.atom(0)
+        oxygen = self.atom(1)
         oxygen.SetPartialCharge(partial_charges[0])
         oxygen.SetType(atom_types[0])
         oxygen.GetPartialCharge() # To Force OB

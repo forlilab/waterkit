@@ -245,7 +245,7 @@ class WaterBox():
 
         return best_hba, best_hbv_id
 
-    def place_optimal_spherical_waters(self, molecules, atom_type='Ow', partial_charge=-0.411):
+    def place_optimal_spherical_waters(self, molecules, atom_type='OW', partial_charge=-0.834):
         """ Place one or multiple water molecules 
         in the ideal position above an acceptor or donor atom
         """
@@ -273,6 +273,9 @@ class WaterBox():
 
     def build_next_shell(self, how='best', temperature=300.):
         """Build the next hydration shell."""
+        type_ow = 'OW'
+        partial_charge = -0.834
+
         shell_id = self.number_of_shells(ignore_xray=True)
         molecules = self.molecules_in_shell(shell_id)
         n = WaterOptimizer(self, how, angle=90, temperature=temperature)
@@ -286,7 +289,7 @@ class WaterBox():
         else:
             opt_disordered = False
 
-        waters, connections = self.place_optimal_spherical_waters(molecules)
+        waters, connections = self.place_optimal_spherical_waters(molecules, type_ow, partial_charge)
         waters, df = n.optimize_grid(waters, connections, opt_disordered=opt_disordered)
 
         if len(waters):

@@ -170,7 +170,7 @@ class Molecule():
 
     def atom_informations(self, atom_ids=None):
         """Get atom informations (xyz, q, type)."""
-        columns = ['atom_i', 'atom_xyz', 'atom_q', 'atom_type']
+        columns = ['i', 'x', 'y', 'z', 'q', 't']
 
         if atom_ids is not None:
             if not isinstance(atom_ids, (list, tuple)):
@@ -178,11 +178,11 @@ class Molecule():
         else:
             atom_ids = range(0, self._OBMol.NumAtoms())
 
-        coordinates = self.coordinates(atom_ids)
-        partial_charges = self.partial_charges(atom_ids)
-        atom_types = self.atom_types(atom_ids)
+        xs, ys, zs = self.coordinates(atom_ids).T
+        qs = self.partial_charges(atom_ids)
+        ts = self.atom_types(atom_ids)
 
-        data = [(i, c, p, t) for i, c, p, t in zip(atom_ids, coordinates, partial_charges, atom_types)]
+        data = [(i, x, y, z, p, t) for i, x, y, z, p, t in zip(atom_ids, xs, ys, zs, qs, ts)]
         df = pd.DataFrame(data=data, columns=columns)
 
         return df

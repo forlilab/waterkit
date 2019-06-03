@@ -69,7 +69,7 @@ class Waterkit():
             hw_q = 0.417
             ow_q = -0.834
         elif water_model == 'tip5p':
-            type_ow = 'OT'
+            type_ow = 'OW'
             type_hd = 'HT'
             type_lp = 'LP'
             hw_q = 0.241
@@ -147,13 +147,18 @@ class Waterkit():
                     except:
                         e = 0.0
 
-                    w.write(line % (j, 'O', chain, i, c[0][0], c[0][1], c[0][2], e, 0, 'OA'))
+                    if c.shape[0] == 3:
+                        w.write(line % (j, 'O', chain, i, c[0][0], c[0][1], c[0][2], e, -0.834, 'OW'))
+                        w.write(line % (j + 1, 'H', chain, i, c[1][0], c[1][1], c[1][2], e,0.417, 'HW'))
+                        w.write(line % (j + 2, 'H', chain, i, c[2][0], c[2][1], c[2][2], e, 0.417, 'HW'))
+                        j += 2
 
                     if c.shape[0] == 5:
-                        w.write(line % (j + 1, 'H', chain, i, c[1][0], c[1][1], c[1][2], e, 0.2410, 'HD'))
-                        w.write(line % (j + 2, 'H', chain, i, c[2][0], c[2][1], c[2][2], e, 0.2410, 'HD'))
-                        w.write(line % (j + 3, 'H', chain, i, c[3][0], c[3][1], c[3][2], e, -0.2410, 'Lp'))
-                        w.write(line % (j + 4, 'H', chain, i, c[4][0], c[4][1], c[4][2], e, -0.2410, 'Lp'))
+                        w.write(line % (j, 'O', chain, i, c[0][0], c[0][1], c[0][2], e, 0, 'OT'))
+                        w.write(line % (j + 1, 'H', chain, i, c[1][0], c[1][1], c[1][2], e, 0.241, 'HT'))
+                        w.write(line % (j + 2, 'H', chain, i, c[2][0], c[2][1], c[2][2], e, 0.241, 'HT'))
+                        w.write(line % (j + 3, 'H', chain, i, c[3][0], c[3][1], c[3][2], e, -0.241, 'LP'))
+                        w.write(line % (j + 4, 'H', chain, i, c[4][0], c[4][1], c[4][2], e, -0.241, 'LP'))
                         j += 4
 
                     i += 1
