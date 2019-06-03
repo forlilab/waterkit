@@ -258,8 +258,6 @@ class WaterOptimizer():
         receptor = self._water_box.molecules_in_shell(0)[0]
         shell_id = self._water_box.number_of_shells(ignore_xray=True)
 
-        print ad_map
-
         df = {}
         data = []
         to_be_removed = []
@@ -267,23 +265,19 @@ class WaterOptimizer():
         boxsize = np.array([7, 7, 7])
         npts = np.round(boxsize / spacing).astype(np.int)
 
-        type_lp = "LP"
-        type_w = "OW"
-        type_e = "Electrostatics"
+        e_type = 'Electrostatics'
+        ow_q = -0.834
+        ow_type = "OW"
 
         if water_model == "tip3p":
-            type_hd = "HW"
+            hw_type = "HW"
             hw_q = 0.417
-            ow_q = -0.834
-            atom_types = ["OW"]
             atom_types_replaced = ["OW", "HW"]
         elif water_model == "tip5p":
-            type_hd = "HT"
+            hw_type = "HT"
+            lpw_type = "LP"
             hw_q = 0.241
-            lp_q = -0.241
-            # Need to put a charge for the placement of the spherical water
-            ow_q = -0.482
-            atom_types = ["OW"]
+            lpw_q = -0.241
             atom_types_replaced = ["OW", "HT", "LP"]
 
         if self._how == 'best':
@@ -307,12 +301,7 @@ class WaterOptimizer():
         for i in water_orders:
             water = waters[i]
 
-            print "Spherical"
-            print water.atom_informations()
-
             energy_position = self._optimize_position_grid(water, ad_map, add_noise, from_edges=1.)
-            print "Spherical optimized", energy_position
-            print water.atom_informations()
 
             """ Before going further we check the energy. If the spherical water 
             has already a bad energy there is no point of going further and try to
@@ -322,14 +311,8 @@ class WaterOptimizer():
                 # Build the TIP5
                 water.build_explicit_water(water_model)
 
-                print "Explicit"
-                print water.atom_informations()
-
                 # Optimize the orientation
                 energy_orientation = self._optimize_orientation_grid(water)
-                print "Explicit optimized", energy_orientation
-                print water.atom_informations()
-                print ""
 
                 # The last great energy filter
                 if energy_orientation < self._energy_cutoff:
@@ -353,14 +336,16 @@ class WaterOptimizer():
                     receptor.to_file(receptor_file, "pdbqt", "rcp")
 
                     # Fire off AutoGrid
-                    water_map = ag.run(receptor_file, atom_types, center, npts, spacing, clean=True)
+                    water_map = ag.run(receptor_file, ow_type, center, npts, spacing, clean=True)
 
                     # Modify electrostatics map and add it
-                    water_map.apply_operation_on_maps(type_hd, type_e, 'x * %f' % hw_q)
+                    # For the TIP3P and TIP5P models
+                    water_map.apply_operation_on_maps(hw_type, e_type, 'x * %f' % q_hw)
                     if water_model == 'tip5p':
-                        water_map.apply_operation_on_maps(type_lp, type_e, 'x * %f' % lp_q)
-                    water_map.apply_operation_on_maps(type_e, type_e, '-np.abs(x * %f)' % ow_q)
-                    water_map.combine(type_w, [type_w, type_e], how='add')
+                        water_map.apply_operation_on_maps(lpw_type, e_type, 'x * %f' % q_lpw)
+                    # For the spherical model and TIP3P model
+                    water_map.apply_operation_on_maps(_type, e_type, '-np.abs(x * %f)' % q_ow)
+                    water_map.combine(ow_type, [ow_type, e_type], how='add')
 
                     # And we update the receptor map
                     for atom_type in atom_types_replaced:

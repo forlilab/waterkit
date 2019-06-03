@@ -217,6 +217,31 @@ class Map():
         """
         return self._npts.prod()
 
+    def create_empty_map(self, name, fill_value=None):
+        """Initialize an empty map
+
+        Args:
+            name (str): name of the new map
+            fill_value (float): fill value (default: None)
+
+        Returns:
+            bool: True if succeeded or False otherwise
+
+        """
+        if not name in self._maps:
+            if value is None:
+                new_map = np.zeros(self._npts)
+            else:
+                new_map = np.full(self._npts, fill_value)
+
+            self._maps[label] = new_map
+            self._maps_interpn[label] = self._generate_affinity_map_interpn(new_map)
+
+            return True
+        else:
+            print "Error: map %s already exists." % name
+            return False
+
     def atoms_in_map(self, molecule):
         """List of index of all the atoms in the map.
 

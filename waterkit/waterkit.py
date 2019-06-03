@@ -27,7 +27,7 @@ class Waterkit():
             hb_forcefield (Waterfield): Hydrogen Bond forcefield (default: None)
 
         """
-        self.water_boxes = []
+        self.water_box = None
         self._hb_forcefield = hb_forcefield
 
         """If the user does not provide any of these elements,
@@ -53,11 +53,13 @@ class Waterkit():
             temperature (float): Temperature in Kelvin, only used for Boltzmann sampling (default: 300)
 
         Returns:
-            None
+            bool: True if succeeded or False otherwise
 
         """
         i = 1
-        type_e = 'Electrostatics'
+        e_type = 'Electrostatics'
+        ow_q = -0.834
+        ow_type = "OW"
 
         """In TIP3P and TIP5P models, hydrogen atoms and lone-pairs does not
         have VdW radius, so their interactions with the receptor are purely
@@ -66,27 +68,27 @@ class Waterkit():
         look-up table to get the energy for each water molecule.
         """
         if water_model == "tip3p":
-            type_ow = "OW"
-            type_hd = "HW"
+            hw_type = "HW"
             hw_q = 0.417
-            ow_q = -0.834
         elif water_model == "tip5p":
-            type_ow = "OW"
-            type_hd = "HT"
-            type_lp = "LP"
+            ot_type = "OT"
+            hw_type = "HT"
+            lpw_type = "LP"
             hw_q = 0.241
-            lp_q = -0.241
-            # Need to put a charge for the placement of the spherical water
-            ow_q = -0.482
+            lpw_q = -0.241
         else:
             print "Error: water model %s unknown." % water_model
             return False
 
-        ad_map.apply_operation_on_maps(type_hd, type_e, "x * %f" % hw_q)
+        # For the TIP3P and TIP5P models
+        ad_map.apply_operation_on_maps(hw_type, e_type, "x * %f" % q_hw)
         if water_model == "tip5p":
-            ad_map.apply_operation_on_maps(type_lp, type_e, "x * %f" % lp_q)
-        ad_map.apply_operation_on_maps(type_e, type_e, "-np.abs(x * %f)" % ow_q)
-        ad_map.combine(type_ow, [type_ow, type_e], how="add")
+            ad_map.apply_operation_on_maps(lpw_type, e_type, "x * %f" % q_lpw)
+            # Necessary for the TIP5P oxygen
+            ad_map.create_empty_map(ot_type)
+        # For the spherical model and TIP3P model
+        ad_map.apply_operation_on_maps(e_type, e_type, "-np.abs(x * %f)" % q_ow)
+        ad_map.combine(ow_type, [ow_type, e_type], how="add")
 
         #w_copy = copy.deepcopy(w_ori)
         w = WaterBox(self._hb_forcefield, water_model)
