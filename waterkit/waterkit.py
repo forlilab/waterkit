@@ -11,6 +11,8 @@ import copy
 import imp
 from string import ascii_uppercase
 
+import numpy as np
+
 from autodock_map import Map
 from forcefield import AutoDockForceField
 from water_box import WaterBox
@@ -63,15 +65,15 @@ class Waterkit():
         map. Each map is multiplied by the partial charge. So it is just a
         look-up table to get the energy for each water molecule.
         """
-        if water_model == 'tip3p':
-            type_ow = 'OW'
-            type_hd = 'HW'
+        if water_model == "tip3p":
+            type_ow = "OW"
+            type_hd = "HW"
             hw_q = 0.417
             ow_q = -0.834
-        elif water_model == 'tip5p':
-            type_ow = 'OW'
-            type_hd = 'HT'
-            type_lp = 'LP'
+        elif water_model == "tip5p":
+            type_ow = "OW"
+            type_hd = "HT"
+            type_lp = "LP"
             hw_q = 0.241
             lp_q = -0.241
             # Need to put a charge for the placement of the spherical water
@@ -80,11 +82,11 @@ class Waterkit():
             print "Error: water model %s unknown." % water_model
             return False
 
-        ad_map.apply_operation_on_maps(type_hd, type_e, 'x * %f' % hw_q)
-        if water_model == 'tip5p':
-            ad_map.apply_operation_on_maps(type_lp, type_e, 'x * %f' % lp_q)
-        ad_map.apply_operation_on_maps(type_e, type_e, '-np.abs(x * %f)' % ow_q)
-        ad_map.combine(type_ow, [type_ow, type_e], how='add')
+        ad_map.apply_operation_on_maps(type_hd, type_e, "x * %f" % hw_q)
+        if water_model == "tip5p":
+            ad_map.apply_operation_on_maps(type_lp, type_e, "x * %f" % lp_q)
+        ad_map.apply_operation_on_maps(type_e, type_e, "-np.abs(x * %f)" % ow_q)
+        ad_map.combine(type_ow, [type_ow, type_e], how="add")
 
         #w_copy = copy.deepcopy(w_ori)
         w = WaterBox(self._hb_forcefield, water_model)
@@ -148,17 +150,17 @@ class Waterkit():
                         e = 0.0
 
                     if c.shape[0] == 3:
-                        w.write(line % (j, 'O', chain, i, c[0][0], c[0][1], c[0][2], e, -0.834, 'OW'))
-                        w.write(line % (j + 1, 'H', chain, i, c[1][0], c[1][1], c[1][2], e,0.417, 'HW'))
-                        w.write(line % (j + 2, 'H', chain, i, c[2][0], c[2][1], c[2][2], e, 0.417, 'HW'))
+                        w.write(line % (j, 'O', chain, i, c[0][0], c[0][1], c[0][2], e, -0.834, 'O'))
+                        w.write(line % (j + 1, 'H', chain, i, c[1][0], c[1][1], c[1][2], e,0.417, 'H'))
+                        w.write(line % (j + 2, 'H', chain, i, c[2][0], c[2][1], c[2][2], e, 0.417, 'H'))
                         j += 2
 
                     if c.shape[0] == 5:
-                        w.write(line % (j, 'O', chain, i, c[0][0], c[0][1], c[0][2], e, 0, 'OT'))
-                        w.write(line % (j + 1, 'H', chain, i, c[1][0], c[1][1], c[1][2], e, 0.241, 'HT'))
-                        w.write(line % (j + 2, 'H', chain, i, c[2][0], c[2][1], c[2][2], e, 0.241, 'HT'))
-                        w.write(line % (j + 3, 'H', chain, i, c[3][0], c[3][1], c[3][2], e, -0.241, 'LP'))
-                        w.write(line % (j + 4, 'H', chain, i, c[4][0], c[4][1], c[4][2], e, -0.241, 'LP'))
+                        w.write(line % (j, 'O', chain, i, c[0][0], c[0][1], c[0][2], e, 0, 'O'))
+                        w.write(line % (j + 1, 'H', chain, i, c[1][0], c[1][1], c[1][2], e, 0.241, 'H'))
+                        w.write(line % (j + 2, 'H', chain, i, c[2][0], c[2][1], c[2][2], e, 0.241, 'H'))
+                        w.write(line % (j + 3, 'H', chain, i, c[3][0], c[3][1], c[3][2], e, -0.241, 'L'))
+                        w.write(line % (j + 4, 'H', chain, i, c[4][0], c[4][1], c[4][2], e, -0.241, 'L'))
                         j += 4
 
                     i += 1

@@ -278,7 +278,7 @@ class WaterBox():
 
         shell_id = self.number_of_shells(ignore_xray=True)
         molecules = self.molecules_in_shell(shell_id)
-        n = WaterOptimizer(self, how, angle=90, temperature=temperature)
+        n = WaterOptimizer(self, how, angle=110, temperature=temperature)
 
         # Test if we have all the material to continue
         assert len(molecules) > 0, "There is molecule(s) in the shell %s" % shell_id
@@ -306,58 +306,6 @@ class WaterBox():
 
             return True
         else:
-            return False
-
-    def add_crystallographic_waters(self, waters, how='best'):
-        """Add crystallographic waters to the waterbox."""
-        i = 0
-        connections = []
-        waters_kept = []
-        n = WaterOptimizer(self, how, energy_cutoff=np.inf)
-
-        if 0 in self.molecules:
-            for water in waters:
-                xyz = water.coordinates()[0]
-
-                # We attach the xray water to the closest HBA acceptor/donor
-                if self.map.is_in_map(xyz):
-                    hba, hbv_id = self.closest_hydrogen_bond_anchor(xyz, radius=3.5)
-
-                    # Test if there a HBA around, otherwise it is not a first shell water
-                    if hba is not None:
-                        hba_xyz = self.molecules[0].coordinates(hba.id)[0]
-                        water.set_anchor(hba_xyz, hba.vectors[hbv_id], hba.type)
-
-                        connections.append((0, hba.id, i, None))
-                        waters_kept.append(water)
-
-                        i += 1
-                    else:
-                        # For the moment, ignore n-shell water
-                        continue
-
-            # We just optimize the orientation
-            waters_kept, df = n.optimize(waters_kept, opt_position=False, opt_disordered=False)
-
-            # Guess HBA to be able to put waters on them
-            [water.guess_hydrogen_bond_anchors(self._hb_forcefield) for water in waters_kept]
-
-            # Add X-Ray water molecule to the water box
-            columns = ['molecule_i', 'atom_i', 'molecule_j', 'atom_j']
-            connections = pd.DataFrame(connections, columns=columns)
-            self.add_molecules(waters_kept, connections)
-
-            # Tag all water molecules as X-Ray (for the clustering)
-            df['shells']['xray'] = True
-            df['shells']['active'] = False
-
-            # Add informations about the new shell
-            for key in df.keys():
-                self.add_informations(df[key], key)
-
-            return True
-        else:
-            # The receptor wasn't initialized yet.
             return False
 
     def to_file(self, fname, fformat="pdbqt", options=None):

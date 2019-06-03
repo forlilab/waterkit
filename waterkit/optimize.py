@@ -286,13 +286,18 @@ class WaterOptimizer():
             atom_types = ["OW"]
             atom_types_replaced = ["OW", "HT", "LP"]
 
+        if self._how == 'best':
+            add_noise = False
+        else:
+            add_noise = True
+
         ag = AutoGrid()
 
         if opt_disordered and connections is not None:
             self._optimize_disordered_waters(receptor, waters, connections, ad_map)
 
         # The placement order is based on the best energy around each hydrogen anchor point
-        water_orders = self._optimize_placement_order_grid(waters, ad_map, from_edges=1.)
+        water_orders = self._optimize_placement_order_grid(waters, ad_map, add_noise, from_edges=1.)
         to_be_removed.extend(set(np.arange(len(waters))) - set(water_orders))
 
         """ And now we optimize all water individually. All the
@@ -302,8 +307,12 @@ class WaterOptimizer():
         for i in water_orders:
             water = waters[i]
 
-            energy_position = self._optimize_position_grid(water, ad_map, add_noise=True, from_edges=1.)
-            print energy_position
+            print "Spherical"
+            print water.atom_informations()
+
+            energy_position = self._optimize_position_grid(water, ad_map, add_noise, from_edges=1.)
+            print "Spherical optimized", energy_position
+            print water.atom_informations()
 
             """ Before going further we check the energy. If the spherical water 
             has already a bad energy there is no point of going further and try to
@@ -312,10 +321,13 @@ class WaterOptimizer():
             if energy_position < self._energy_cutoff:
                 # Build the TIP5
                 water.build_explicit_water(water_model)
+
+                print "Explicit"
+                print water.atom_informations()
+
                 # Optimize the orientation
                 energy_orientation = self._optimize_orientation_grid(water)
-                print energy_orientation
-
+                print "Explicit optimized", energy_orientation
                 print water.atom_informations()
                 print ""
 
