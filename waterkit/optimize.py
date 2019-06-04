@@ -340,11 +340,11 @@ class WaterOptimizer():
 
                     # Modify electrostatics map and add it
                     # For the TIP3P and TIP5P models
-                    water_map.apply_operation_on_maps(hw_type, e_type, 'x * %f' % q_hw)
+                    water_map.apply_operation_on_maps(hw_type, e_type, 'x * %f' % hw_q)
                     if water_model == 'tip5p':
-                        water_map.apply_operation_on_maps(lpw_type, e_type, 'x * %f' % q_lpw)
+                        water_map.apply_operation_on_maps(lpw_type, e_type, 'x * %f' % lpw_q)
                     # For the spherical model and TIP3P model
-                    water_map.apply_operation_on_maps(_type, e_type, '-np.abs(x * %f)' % q_ow)
+                    water_map.apply_operation_on_maps(e_type, e_type, '-np.abs(x * %f)' % ow_q)
                     water_map.combine(ow_type, [ow_type, e_type], how='add')
 
                     # And we update the receptor map

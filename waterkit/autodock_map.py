@@ -229,13 +229,13 @@ class Map():
 
         """
         if not name in self._maps:
-            if value is None:
+            if fill_value is None:
                 new_map = np.zeros(self._npts)
             else:
                 new_map = np.full(self._npts, fill_value)
 
-            self._maps[label] = new_map
-            self._maps_interpn[label] = self._generate_affinity_map_interpn(new_map)
+            self._maps[name] = new_map
+            self._maps_interpn[name] = self._generate_affinity_map_interpn(new_map)
 
             return True
         else:

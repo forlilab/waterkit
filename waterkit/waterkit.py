@@ -81,13 +81,13 @@ class Waterkit():
             return False
 
         # For the TIP3P and TIP5P models
-        ad_map.apply_operation_on_maps(hw_type, e_type, "x * %f" % q_hw)
+        ad_map.apply_operation_on_maps(hw_type, e_type, "x * %f" % hw_q)
         if water_model == "tip5p":
-            ad_map.apply_operation_on_maps(lpw_type, e_type, "x * %f" % q_lpw)
+            ad_map.apply_operation_on_maps(lpw_type, e_type, "x * %f" % lpw_q)
             # Necessary for the TIP5P oxygen
             ad_map.create_empty_map(ot_type)
         # For the spherical model and TIP3P model
-        ad_map.apply_operation_on_maps(e_type, e_type, "-np.abs(x * %f)" % q_ow)
+        ad_map.apply_operation_on_maps(e_type, e_type, "-np.abs(x * %f)" % ow_q)
         ad_map.combine(ow_type, [ow_type, e_type], how="add")
 
         #w_copy = copy.deepcopy(w_ori)
