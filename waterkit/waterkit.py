@@ -39,7 +39,7 @@ class Waterkit():
 
     def hydrate(self, receptor, ad_map, water_model="tip3p", n_layer=1, 
                 how="best", temperature=300.):
-        """ Hydrate the molecule with water molecucules.
+        """Hydrate the molecule with water molecules.
 
         The receptor is hydrated by adding successive layers
         of water molecules until the box is complety full.

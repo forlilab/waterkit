@@ -348,7 +348,7 @@ class Map():
         """Get energy interaction of a molecule based of the grid.
 
         Args:
-            df (DataFrame): Pandas DatFrame with columns ('atom_i', 'atom_xyz', 'atom_q', 'atom_type')
+            df (DataFrame): Pandas DatFrame with columns ("i", "x", "y", "z", "q", "t")
             ignore_atom_types (list): list of atom types/terms to ignore (default: None)
             ignore_electrostatic (bool): to ignore electrostatic term (default: False)
             ignore_desolvation (bool): to ignore desolvation term (default: False)
