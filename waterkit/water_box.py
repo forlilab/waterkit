@@ -32,7 +32,7 @@ class WaterBox():
         # All the informations are stored into a dict of df
         columns = ['molecule_i', 'atom_i', 'molecule_j', 'atom_j']
         self.df['connections'] = pd.DataFrame(columns=columns)
-        columns = ['shell_id', 'active', 'xray']
+        columns = ['shell_id']
         self.df['shells'] = pd.DataFrame(columns=columns)
         columns = ['molecule_i', 'atom_i']
         self.df['kdtree_relations'] = pd.DataFrame(columns=columns)
@@ -56,7 +56,7 @@ class WaterBox():
             self.add_molecules(receptor)
             self.map = ad_map.copy()
             # Add informations about the receptor
-            data = pd.DataFrame([[0, True, None]], columns=['shell_id', 'active', 'xray'])
+            data = pd.DataFrame([[0]], columns=['shell_id'])
             self.add_informations(data, 'shells')
 
             return True
@@ -149,7 +149,7 @@ class WaterBox():
         index = self.df['shells']['shell_id'] == shell_id
         self.df['shells'].loc[index, key] = data
 
-    def molecules_in_shell(self, shell_ids=None, active_only=True, xray_only=False):
+    def molecules_in_shell(self, shell_ids=None):
         """ Get all the molecule in shell """
         if shell_ids is not None:
             if not isinstance(shell_ids, (list, tuple)):
@@ -158,19 +158,17 @@ class WaterBox():
         else:
             df = self.df['shells']
 
-        if active_only:
-            df = df[df['active'] == True]
-
-        if xray_only:
-            df = df[df['xray'] == True]
-
         molecules = [self.molecules[i] for i in df.index.tolist()]
 
         return molecules
 
-    def closest_atoms(self, xyz, radius, exclude=None, active_only=True):
+    def closest_atoms(self, xyz, radius, exclude=None):
         """ Retrieve indices of the closest atoms around x 
         at a certain radius """
+        if self._kdtree is None:
+            print "Warning: KDTree is empty."
+            return pd.DataFrame(columns=['molecule_i', 'atom_i'])
+
         index = self._kdtree.query_ball_point(xyz, radius)
         df = self.df['kdtree_relations'].loc[index]
 
@@ -178,22 +176,6 @@ class WaterBox():
             if not isinstance(exclude, (list, tuple)):
                 exclude = [exclude]
             df = df[-df['molecule_i'].isin(exclude)]
-
-        if active_only:
-            index = self.df['shells'][self.df['shells']['active'] == True].index
-            df = df[df['molecule_i'].isin(index)]
-
-        return df
-
-    def atom_informations(self, df):
-        """Get atom informations (xyz, q, type)."""
-        data = []
-        se = df.groupby('molecule_i')['atom_i'].apply(list)
-
-        for molecule_i, atom_ids in se.iteritems():
-            data.append(self.molecules[molecule_i].atom_informations(atom_ids))
-
-        df = pd.concat(data, ignore_index=True)
 
         return df
 
@@ -203,51 +185,67 @@ class WaterBox():
         # Return a copy to avoid a SettingWithCopyWarning flag
         return df.loc[df['shell_id'] == shell_id].copy()
 
-    def number_of_shells(self, ignore_xray=False):
+    def number_of_shells(self):
         """Total number of shells in the WaterBox."""
-        shells = self.df['shells']
-        
-        if ignore_xray:
-            shells = shells.loc[shells['xray'] != True]
-
         # df['column'].max() faster than np.max(df['column'])
-        return shells['shell_id'].max()
+        return self.df['shells'].max()
 
-    def closest_hydrogen_bond_anchor(self, xyz, radius, exclude=None, active_only=True):
-        """Find the closest hydrogen bond anchors."""
+    def closest_hydrogen_bond_anchor(self, xyz, radius, exclude=None):
+        """Find the closest hydrogen bond anchors.
+        
+        Args:
+            xyz (array_like): array of 3D coordinates
+            radius (float): max radius in Angström
+            exclude (list): list of index of molecules to exclude
+
+        Returns:
+            best_hba 
+            best_hbv_id
+
+        """
         best_hba = None
         best_hbv_id = None
-        best_hbv_distance = 999.
+        best_hbv_distance = np.inf
 
-        df = self.closest_atoms(xyz, radius, exclude, active_only)
+        df = self.closest_atoms(xyz, radius, exclude)
 
-        for index, row in df.iterrows():
-            try:
-                hba = self.molecules[row['molecule_i']].hydrogen_bond_anchors[row['atom_i']]
-                hba_xyz = self.molecules[row['molecule_i']].coordinates(row['atom_i'])
+        if not df.empty:
+            for index, row in df.iterrows():
+                try:
+                    hba = self.molecules[row["molecule_i"]].hydrogen_bond_anchors[row["atom_i"]]
+                    hba_xyz = self.molecules[row["molecule_i"]].coordinates(row["atom_i"])
 
-                hba_distance = utils.get_euclidean_distance(xyz, hba_xyz)[0]
-                hbv_distances = utils.get_euclidean_distance(xyz, hba.vectors)
-                hbv_min_distance = np.min(hbv_distances)
-                hbv_min_id = np.argmin(hbv_distances)
+                    hba_distance = utils.get_euclidean_distance(xyz, hba_xyz)[0]
+                    hbv_distances = utils.get_euclidean_distance(xyz, hba.vectors)
+                    hbv_min_distance = np.min(hbv_distances)
+                    hbv_min_id = np.argmin(hbv_distances)
 
-                # We add 1 A to interpolate the distance to the heavy atom
-                if hba.type == 'donor':
-                    hba_distance += 1.
+                    # We add 1 A to interpolate the distance to the heavy atom
+                    if hba.type == "donor":
+                        hba_distance += 1.
 
-                # Select the closest HBV and make sure that the heavy atom is close enough
-                if hbv_min_distance < best_hbv_distance and hba_distance <= radius:
-                    best_hba = hba
-                    best_hbv_id = hbv_min_id
-                    best_hbv_distance = hbv_min_distance
-            except KeyError:
-                continue
+                    # Select the closest HBV and make sure that the heavy atom is close enough
+                    if hbv_min_distance < best_hbv_distance and hba_distance <= radius:
+                        best_hba = hba
+                        best_hbv_id = hbv_min_id
+                        best_hbv_distance = hbv_min_distance
+                except KeyError:
+                    continue
 
         return best_hba, best_hbv_id
 
     def place_optimal_spherical_waters(self, molecules, atom_type='OW', partial_charge=-0.834):
-        """ Place one or multiple water molecules 
-        in the ideal position above an acceptor or donor atom
+        """Place spherical water molecules in the optimal position.
+
+        Args:
+            molecules (Molecule): molecules on which spherical water molecules will be placed
+            atom_type (str): atom type of the spherical water molecules (default: OW)
+            partial_charges (float): partial charges of the spherical water molecules (default: -0.834)
+
+        Returns:
+            waters (list): list of water molecules
+            connections (DataFrame): contains connections between molecules
+
         """
         waters = []
         data = []
@@ -271,38 +269,44 @@ class WaterBox():
 
         return (waters, connections)
 
-    def build_next_shell(self, how='best', temperature=300.):
-        """Build the next hydration shell."""
+    def build_next_shell(self, how='boltzmann', temperature=300.):
+        """Build the next hydration shell.
+        
+        Args:
+            how (str): method used to place water molecules (choice: best, boltzmann)(default: boltzmann)
+            temperature (float): sampling temperature in Kelvin (default: 300)
+
+        Returns:
+            bool: True if water molecules were added or False otherwise
+
+        """
         type_ow = 'OW'
         partial_charge = -0.834
-
-        shell_id = self.number_of_shells(ignore_xray=True)
+        shell_id = self.number_of_shells()
         molecules = self.molecules_in_shell(shell_id)
-        n = WaterOptimizer(self, how, angle=110, temperature=temperature)
 
         # Test if we have all the material to continue
         assert len(molecules) > 0, "There is molecule(s) in the shell %s" % shell_id
 
-        # Only the receptor contains disordered hydrogens
-        if shell_id == 0:
-            opt_disordered = True
-        else:
-            opt_disordered = False
+        wopt = WaterOptimizer(self, how, angle=110, temperature=temperature)
 
         waters, connections = self.place_optimal_spherical_waters(molecules, type_ow, partial_charge)
-        waters, df = n.optimize_grid(waters, connections, opt_disordered=opt_disordered)
+
+        # Only the receptor contains disordered hydrogens
+        if shell_id == 0:
+            waters, df = wopt.optimize_grid(waters, connections, opt_disordered=True)
+        else:
+            waters, df = wopt.optimize_grid(waters, opt_disordered=False)
 
         if len(waters):
-            # And add all the waters
-            self.add_molecules(waters, df['connections'])
-
-            # Tag as non-Xray waters, and are active
-            df['shells']['xray'] = False
-            df['shells']['active'] = True
-
+            """And add all the waters, but not df['connections']
+            because we don't care anymore, it was only useful
+            for the disordered hydrogen atoms.
+            """
+            self.add_molecules(waters, add_KDTree=False)
             # Add informations about the new shell
-            for key in df.keys():
-                self.add_informations(df[key], key)
+            if "shell" in df.keys():
+                self.add_informations(df["shell"], "shell")
 
             return True
         else:

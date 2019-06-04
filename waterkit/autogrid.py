@@ -30,7 +30,8 @@ class AutoGrid():
         self._param_file = param_file
 
     def run(self, receptor_file, atom_types, center=(0., 0., 0.),
-            npts=(32, 32, 32), spacing=0.375, smooth=0.5, clean=False):
+            npts=(32, 32, 32), spacing=0.375, smooth=0.5, dieletric=-0.1465,
+            clean=False):
         """Execute AutoGrid on receptor file.
 
         Args:
@@ -66,7 +67,7 @@ class AutoGrid():
             ag_str += 'map %s.%s.map\n' % (receptor_name, atom_type)
         ag_str += 'elecmap %s.e.map\n' % receptor_name
         ag_str += 'dsolvmap %s.d.map\n' % receptor_name
-        ag_str += 'dielectric -0.1465\n'
+        ag_str += 'dielectric %.3f\n' % dielectric
 
         gpf_file = '%s.gpf' % receptor_name
         glg_file = '%s.glg' % receptor_name
