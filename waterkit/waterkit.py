@@ -90,6 +90,8 @@ class Waterkit():
         ad_map.apply_operation_on_maps(e_type, e_type, "-np.abs(x * %f)" % ow_q)
         ad_map.combine(ow_type, [ow_type, e_type], how="add")
 
+        ad_map.add_bias(ow_type, [36.236,  23.731,  46.352], -50., 3.0)
+
         #w_copy = copy.deepcopy(w_ori)
         w = WaterBox(self._hb_forcefield, water_model, smooth, dielectric)
         w.add_receptor(receptor, ad_map)
