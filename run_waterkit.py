@@ -30,6 +30,13 @@ def cmd_lineparser():
     parser.add_argument("-c", "--choice", dest="how", default='boltzmann',
                         choices=['all', 'best', 'boltzmann'], action="store",
                         help="how water molecules are choosed")
+    parser.add_argument("-w", "--water", dest="water_model", default='tip3p',
+                        choices=['tip3p', 'tip5p'], action="store",
+                        help="how water molecules are choosed")
+    parser.add_argument("-s", "--smooth", dest="smooth", default=0.5, type=float,
+                        action="store", help="smooth parameter of AutoDock FF")
+    parser.add_argument("-d", "--dielectric", dest="dielectric", default=-0.1465, type=float,
+                        action="store", help="dielectric parameter of AutoDock FF")
     parser.add_argument("-o", "--output", dest="output_prefix", default='water',
                         action="store", help="prefix add to output files")
     return parser.parse_args()
@@ -39,24 +46,22 @@ def main():
     args = cmd_lineparser()
     mol_file = args.mol_file
     fld_file = args.fld_file
-    wat_file = args.wat_file
+    water_model = args.water_model
     n_layer = args.n_layer
     temperature = args.temperature
     how = args.how
+    smooth = args.smooth
+    dielectric = args.dielectric
     output_prefix = args.output_prefix
 
     # Read PDBQT/MOL2 file, Waterfield file and AutoDock grid map
     molecule = Molecule.from_file(mol_file)
     ad_map = Map.from_fld(fld_file)
 
-    if wat_file is not None:
-        waters = Water.from_file(wat_file)
-    else:
-        waters = None
-
     # Go waterkit!!
     k = Waterkit()
-    k.hydrate(molecule, ad_map, 'tip3p', n_layer=n_layer, how=how, temperature=temperature)
+    k.hydrate(molecule, ad_map, water_model, n_layer, 
+              how, temperature, smooth, dielectric)
 
     # Write output files
     k.write_shells(output_prefix)

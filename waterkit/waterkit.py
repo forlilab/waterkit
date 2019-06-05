@@ -38,7 +38,7 @@ class Waterkit():
             self._hb_forcefield = Waterfield(hb_forcefield_file)
 
     def hydrate(self, receptor, ad_map, water_model="tip3p", n_layer=1, 
-                how="best", temperature=300.):
+                how="best", temperature=300., smooth=0.5, dielectric=-0.1465):
         """Hydrate the molecule with water molecules.
 
         The receptor is hydrated by adding successive layers
@@ -91,7 +91,7 @@ class Waterkit():
         ad_map.combine(ow_type, [ow_type, e_type], how="add")
 
         #w_copy = copy.deepcopy(w_ori)
-        w = WaterBox(self._hb_forcefield, water_model)
+        w = WaterBox(self._hb_forcefield, water_model, smooth, dielectric)
         w.add_receptor(receptor, ad_map)
 
         while True:
@@ -116,12 +116,11 @@ class Waterkit():
 
         return True
 
-    def write_shells(self, prefix='water', only_active=True):
+    def write_shells(self, prefix='water'):
         """Export hydration shells in a PDBQT format.
 
         Args:
             prefix (str): prefix name of the files
-            only_active (bool): Write only active water molecules
 
         Returns:
             None
@@ -129,18 +128,13 @@ class Waterkit():
         """
         line = "ATOM  %5d  %-3s HOH%2s%4d    %8.3f%8.3f%8.3f%6.2f 1.00    %6.3f %2s\n"
 
-        if not only_active:
-            active = '_all'
-        else:
-            active = ''
-
         shell_id = self.water_box.number_of_shells()
-        waters = [self.water_box.molecules_in_shell(i, only_active) for i in range(1, shell_id+1)]
+        waters = [self.water_box.molecules_in_shell(i) for i in range(1, shell_id + 1)]
 
         for shell, chain in zip(waters, ascii_uppercase):
             i, j = 1, 1
 
-            fname = '%s_%s%s.pdbqt' % (prefix, chain, active)
+            fname = '%s_%s.pdbqt' % (prefix, chain)
 
             with open(fname, 'w') as w:
                 for water in shell:

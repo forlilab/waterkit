@@ -30,7 +30,7 @@ class AutoGrid():
         self._param_file = param_file
 
     def run(self, receptor_file, atom_types, center=(0., 0., 0.),
-            npts=(32, 32, 32), spacing=0.375, smooth=0.5, dieletric=-0.1465,
+            npts=(32, 32, 32), spacing=0.375, smooth=0.5, dielectric=-0.1465,
             clean=False):
         """Execute AutoGrid on receptor file.
 

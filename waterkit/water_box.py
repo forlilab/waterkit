@@ -9,6 +9,7 @@
 import copy
 
 import numpy as np
+import openbabel as ob
 import pandas as pd
 from scipy import spatial
 
@@ -19,15 +20,17 @@ from optimize import WaterOptimizer
 
 class WaterBox():
 
-    def __init__(self, hb_forcefield, water_model="tip3p"):
+    def __init__(self, hb_forcefield, water_model="tip3p", smooth=0.5, dielectric=-0.1465):
         self.df = {}
         self._kdtree = None
         self.molecules = {}
         self.map = None
 
-        # Forcefields and water model
+        # Forcefields, forcefield parameters and water model
         self._hb_forcefield = hb_forcefield
         self._water_model = water_model
+        self._dielectric = dielectric
+        self._smooth = smooth
 
         # All the informations are stored into a dict of df
         columns = ['molecule_i', 'atom_i', 'molecule_j', 'atom_j']
@@ -188,7 +191,7 @@ class WaterBox():
     def number_of_shells(self):
         """Total number of shells in the WaterBox."""
         # df['column'].max() faster than np.max(df['column'])
-        return self.df['shells'].max()
+        return self.df['shells']['shell_id'].max()
 
     def closest_hydrogen_bond_anchor(self, xyz, radius, exclude=None):
         """Find the closest hydrogen bond anchors.
@@ -296,45 +299,63 @@ class WaterBox():
         if shell_id == 0:
             waters, df = wopt.optimize_grid(waters, connections, opt_disordered=True)
         else:
+            """After the first hydration layer, we don't care anymore about 
+            connections. It was only useful for the disordered hydrogen atoms.
+            """
             waters, df = wopt.optimize_grid(waters, opt_disordered=False)
 
         if len(waters):
-            """And add all the waters, but not df['connections']
-            because we don't care anymore, it was only useful
-            for the disordered hydrogen atoms.
-            """
             self.add_molecules(waters, add_KDTree=False)
             # Add informations about the new shell
-            if "shell" in df.keys():
-                self.add_informations(df["shell"], "shell")
+            if "shells" in df.keys():
+                self.add_informations(df["shells"], "shells")
 
             return True
         else:
             return False
 
-    def to_file(self, fname, fformat="pdbqt", options=None):
-        """Write all the content of the water box in a file.
+    def to_pdbqt(self, fname):
+        """Write all the content of the water box in a PDBQT file.
+
+        We cannot use OpenBabel to write the PDBQT file of water molecules 
+        because it is using the default AutoDock atom types (OA, HD, ...).
+        But it is used for the receptor.
 
         Args:
             fname (str): name of the output file
-            fformat (str): output format (example: pdbqt)
-            options (str): Open Babel writing options
 
         Returns:
             None
 
         """
-        str_output = ""
+        i = 1
+        j = 1
+        pdbqt_options = "rcp"
+        output_str = ""
+        pdbqt_str = "ATOM  %5d  %-3s HOH  %4d    %8.3f%8.3f%8.3f  0.00 0.00     %6.3f %2s\n"
 
         obconv = ob.OBConversion()
-        obconv.SetOutFormat(fformat)
+        obconv.SetOutFormat("pdbqt")
 
-        if options is not None:
-            for option in options:
-                obconv.AddOption(option)
+        for option in pdbqt_options:
+            obconv.AddOption(option)
 
-        for molecule in self.molecules:
-            str_output += obconv.WriteString(molecule).split("\n", 3)[3][:-5]
+        # We use OpenBabel for the receptor
+        # By default we remove the TER keyword...
+        output_str = obconv.WriteString(self.molecules[0]._OBMol)[:-5]
+
+        # And we do it manually for the water molecules
+        for key in self.molecules.keys()[1:]:
+            df = self.molecules[key].atom_informations()
+
+            for row in df.itertuples():
+                output_str += pdbqt_str % (i, row.t[0], j, row.x, row.y, row.z, row.q, row.t)
+                i += 1
+
+            j += 1
+
+        # ... but we add it again at the end
+        output_str += 'TER\n'
 
         with open(fname, 'w') as w:
-            w.write(str_output)
+            w.write(output_str)

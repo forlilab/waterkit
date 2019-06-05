@@ -308,3 +308,33 @@ class Water(Molecule):
             for index, vector in self.hydrogen_bond_anchors.iterrows():
                 vector_xyz = utils.rotate_point(vector['vector_xyz'], oxygen_xyz, r, np.radians(angle))
                 self.hydrogen_bond_anchors.at[index, 'vector_xyz'] = vector_xyz
+
+    def to_pdbqt(self, fname, append=False):
+        """Write PDBQT file of the water molecule.
+    
+        We cannot use OpenBabel to write the PDBQT file because
+        it is using the default AutoDock atom types (OA, HD, ...).
+
+        Args:
+            fname (str): name of the PDBQT file
+            append (bool): append to existing PDBQT file (default: False)
+
+        Returns:
+            None
+
+        """
+        output_str = ""
+        pdbqt_str = "ATOM  %5d  %-3s HOH  %4d    %8.3f%8.3f%8.3f  0.00 0.00     %6.3f %2s\n"
+
+        df = self.atom_informations()
+
+        for row in df.itertuples():
+            output_str += pdbqt_str % (row.i + 1, row.t[0], 1, row.x, row.y, row.z, row.q, row.t)
+
+        if append and os.path.isfile(fname):
+            writing_mode = 'a'
+        else:
+            writing_mode = 'w'
+
+        with open(fname, writing_mode) as w:
+            w.write(output_str)

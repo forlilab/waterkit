@@ -461,16 +461,24 @@ class Molecule():
 
         return vectors
 
-    def to_file(self, fname, fformat, options=None):
+    def to_file(self, fname, fformat, options=None, append=False):
         """
         Write OBMolecule to a file
         """
         obconv = ob.OBConversion()
         obconv.SetOutFormat(fformat)
+
         if options is not None:
             for option in options:
                 obconv.AddOption(option)
-        obconv.WriteFile(self._OBMol, fname)
+
+        if append and os.path.isfile(fname):
+            str_output = obconv.WriteString(self._OBMol)
+
+            with open(fname, 'a') as a:
+                a.write(str_output)
+        else:
+            obconv.WriteFile(self._OBMol, fname)
 
     def export_hb_vectors(self, fname):
         """ Export all the hb vectors to PDB file. """

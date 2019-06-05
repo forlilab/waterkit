@@ -254,6 +254,8 @@ class WaterOptimizer():
     def optimize_grid(self, waters, connections=None, opt_disordered=True):
         """Optimize position of water molecules."""
         ad_map = self._water_box.map
+        dielectric = self._water_box._dielectric
+        smooth = self._water_box._smooth
         water_model = self._water_box._water_model
         receptor = self._water_box.molecules_in_shell(0)[0]
         shell_id = self._water_box.number_of_shells()
@@ -284,6 +286,11 @@ class WaterOptimizer():
             add_noise = False
         else:
             add_noise = True
+
+        # We don't want name overlap between different replicates
+        short_uuid = str(uuid.uuid4())[0:8]
+        receptor_file = "%s.pdbqt" % short_uuid
+        self._water_box.to_pdbqt(receptor_file)
 
         ag = AutoGrid()
 
@@ -320,9 +327,8 @@ class WaterOptimizer():
                     water.energy = energy_orientation
                     data.append((shell_id + 1, energy_position, energy_orientation))
 
-                    # We don't want name overlap between different replicates
-                    short_uuid = str(uuid.uuid4())[0:8]
-                    receptor_file = "%s.pdbqt" % short_uuid
+                    # Add water water to the receptor before calculating the new map
+                    water.to_pdbqt(receptor_file, append=True)
 
                     """ If we choose the closest point in the grid and not the coordinates of the
                     oxygen as the center of the grid, it is because we want to avoid any edge effect
@@ -331,12 +337,9 @@ class WaterOptimizer():
                     """
                     center = ad_map.neighbor_points(water.coordinates(0)[0], spacing)[0]
 
-                    # Dirty hack to write the receptor with all the water molecules
-                    receptor.add_molecule(water.tip3p())
-                    receptor.to_file(receptor_file, "pdbqt", "rcp")
-
                     # Fire off AutoGrid
-                    water_map = ag.run(receptor_file, ow_type, center, npts, spacing, clean=True)
+                    water_map = ag.run(receptor_file, ow_type, center, npts, 
+                                       spacing, smooth, dielectric, clean=True)
 
                     # Modify electrostatics map and add it
                     # For the TIP3P and TIP5P models
@@ -351,12 +354,12 @@ class WaterOptimizer():
                     for atom_type in atom_types_replaced:
                         ad_map.combine(atom_type, atom_type, "replace", water_map)
 
-                    os.remove(receptor_file)
-
                 else:
                     to_be_removed.append(i)
             else:
                 to_be_removed.append(i)
+
+        os.remove(receptor_file)
 
         # Keep only the good waters
         waters = [waters[i] for i in water_orders if not i in to_be_removed]
