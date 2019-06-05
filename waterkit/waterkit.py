@@ -142,6 +142,9 @@ class Waterkit():
 
                     try:
                         e = water.energy
+                        # Truncate energy 
+                        e = np.clip(e, -99.99, 99.99)
+
                     except:
                         e = 0.0
 
