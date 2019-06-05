@@ -401,8 +401,8 @@ class Map():
         coordinates = self._kdtree.data[self._kdtree.query_ball_point(xyz, radius)]
         
         if min_radius > 0:
-            distance = spatial.distance.cdist([xyz], coordinates, 'euclidean')[0]
-            coordinates = coordinates[distance >= min_radius]
+            distances = spatial.distance.cdist([xyz], coordinates, 'euclidean')[0]
+            coordinates = coordinates[distances >= min_radius]
 
         return coordinates
 
@@ -442,6 +442,40 @@ class Map():
             except:
                 print "Warning: This map %s does not exist." % (atom_type)
                 continue
+
+    def add_bias(self, name, coordinates, bias_value, radius):
+        """Add energy bias to map using Juan's  method.
+
+        Args:
+            name (str): name of the new or existing map
+            coordinates (array_like): 3D coordinates
+            bias_value (float): energy bias value to add (in kcal/mol)
+            radius (float): radius of the bias (in Angtrom)
+
+        Returns:
+            None
+
+        """
+        coordinates = np.atleast_2d(coordinates)
+
+        if name in self._maps:
+            new_map = self._maps[name]
+        else:
+            new_map = np.zeros(self._npts)
+
+        # We add all the bias one by one in the new map
+        for coordinate in coordinates:
+            sphere_xyz = self.neighbor_points(coordinate, radius)
+            indexes = self._cartesian_to_index(sphere_xyz)
+
+            distances = spatial.distance.cdist([coordinate], sphere_xyz, 'euclidean')[0]
+            bias_energy = bias_value * np.exp(-1. * (distances ** 2) / (radius ** 2))
+
+            new_map[indexes[:,0], indexes[:,1], indexes[:,2]] += bias_energy
+
+        # And we replace the original one only at the end, it's faster
+        self._maps[name] = new_map
+        self._maps_interpn[name] = self._generate_affinity_map_interpn(new_map)
 
     def combine(self, name, atom_types, how='best', ad_map=None):
         """Funtion to combine Autoock map together.
