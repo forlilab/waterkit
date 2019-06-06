@@ -20,7 +20,7 @@ from molecule import Molecule
 
 class Water(Molecule):
 
-    def __init__(self, xyz, atom_type='OW', partial_charge=-0.834, anchor_xyz=None, vector_xyz=None, anchor_type=None):
+    def __init__(self, xyz, atom_type="OW", partial_charge=-0.834, anchor_xyz=None, vector_xyz=None, anchor_type=None):
         self._OBMol = ob.OBMol()
         self._anchor = None
         self._anchor_type = anchor_type
@@ -49,22 +49,22 @@ class Water(Molecule):
         result = cls([0, 0, 0])
         memo[id(self)] = result
         for k, v in self.__dict__.items():
-            if not k == '_OBMol':
+            if not k == "_OBMol":
                 setattr(result, k, copy.deepcopy(v, memo))
         # Explicitly create a new copy of the OBMol
         result._OBMol = ob.OBMol(self._OBMol)
         return result
 
     @classmethod
-    def from_file(cls, fname, atom_type='OW', partial_charge=-0.411):
+    def from_file(cls, fname, atom_type="OW", partial_charge=-0.411):
         """Create list of Water object from a PDB file."""
         waters = []
 
         # Get name and file extension
         name, file_extension = os.path.splitext(fname)
 
-        if file_extension == '.pdbqt':
-            file_extension = 'pdb'
+        if file_extension == ".pdbqt":
+            file_extension = "pdb"
 
         # Read PDB file
         obconv = ob.OBConversion()
@@ -244,27 +244,27 @@ class Water(Molecule):
 
     def guess_hydrogen_bond_anchors(self, waterfield):
         """ Guess all the hydrogen bond anchors in the
-        TIP5P water molecule. We don't need the waterfield here. """
+        TIP5P water molecule. We do not need the waterfield here. """
         columns = ["atom_i", "vector_xyz", "anchor_type", "anchor_name"]
         data = []
 
         # Get all the available hb types
         atom_types = waterfield.get_atom_types()
 
-        if self._anchor_type == 'acceptor':
+        if self._anchor_type == "acceptor":
             atom_ids = [3, 4, 5]
-            names = ['H_O_004', 'O_L_000', 'O_L_000']
+            names = ["H_O_004", "O_L_000", "O_L_000"]
         else:
             atom_ids = [2, 3, 5]
-            names = ['H_O_004', 'H_O_004', 'O_L_000']
+            names = ["H_O_004", "H_O_004", "O_L_000"]
 
         for name, idx in zip(names, atom_ids):
             atom_type = atom_types[name]
 
             if atom_type.hb_type == 1:
-                hb_type = 'donor'
+                hb_type = "donor"
             elif atom_type.hb_type == 2:
-                hb_type = 'acceptor'
+                hb_type = "acceptor"
 
             vectors = self._hb_vectors(idx-1, atom_type.hyb, atom_type.n_water, atom_type.hb_length)
             for vector in vectors:
@@ -281,7 +281,7 @@ class Water(Molecule):
 
         # We have also to translate the hydrogen bond vectors if present
         if self.hydrogen_bond_anchors is not None:
-            self.hydrogen_bond_anchors['vector_xyz'] += vector
+            self.hydrogen_bond_anchors["vector_xyz"] += vector
 
     def rotate(self, angle, ref_id=1):
         """Rotate water molecule.
@@ -306,8 +306,8 @@ class Water(Molecule):
         # We have also to rotate the hydrogen bond vectors if present
         if self.hydrogen_bond_anchors is not None:
             for index, vector in self.hydrogen_bond_anchors.iterrows():
-                vector_xyz = utils.rotate_point(vector['vector_xyz'], oxygen_xyz, r, np.radians(angle))
-                self.hydrogen_bond_anchors.at[index, 'vector_xyz'] = vector_xyz
+                vector_xyz = utils.rotate_point(vector["vector_xyz"], oxygen_xyz, r, np.radians(angle))
+                self.hydrogen_bond_anchors.at[index, "vector_xyz"] = vector_xyz
 
     def to_pdbqt(self, fname, append=False):
         """Write PDBQT file of the water molecule.
@@ -332,9 +332,9 @@ class Water(Molecule):
             output_str += pdbqt_str % (row.i + 1, row.t[0], 1, row.x, row.y, row.z, row.q, row.t)
 
         if append and os.path.isfile(fname):
-            writing_mode = 'a'
+            writing_mode = "a"
         else:
-            writing_mode = 'w'
+            writing_mode = "w"
 
         with open(fname, writing_mode) as w:
             w.write(output_str)

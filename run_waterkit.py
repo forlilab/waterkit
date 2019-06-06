@@ -16,7 +16,7 @@ from waterkit.water import Water
 
 
 def cmd_lineparser():
-    parser = argparse.ArgumentParser(description='waterkit')
+    parser = argparse.ArgumentParser(description="waterkit")
     parser.add_argument("-i", "--mol", dest="mol_file", required=True,
                         action="store", help="receptor file")
     parser.add_argument("-x", "--wat", dest="wat_file", default=None,
@@ -27,17 +27,17 @@ def cmd_lineparser():
                         action="store", help="number of layer to add")
     parser.add_argument("-t", "--temperature", dest="temperature", default=300., type=float,
                         action="store", help="temperature")
-    parser.add_argument("-c", "--choice", dest="how", default='boltzmann',
-                        choices=['all', 'best', 'boltzmann'], action="store",
+    parser.add_argument("-c", "--choice", dest="how", default="boltzmann",
+                        choices=["all", "best", "boltzmann"], action="store",
                         help="how water molecules are choosed")
-    parser.add_argument("-w", "--water", dest="water_model", default='tip3p',
-                        choices=['tip3p', 'tip5p'], action="store",
+    parser.add_argument("-w", "--water", dest="water_model", default="tip3p",
+                        choices=["tip3p", "tip5p"], action="store",
                         help="how water molecules are choosed")
     parser.add_argument("-s", "--smooth", dest="smooth", default=0.5, type=float,
                         action="store", help="smooth parameter of AutoDock FF")
     parser.add_argument("-d", "--dielectric", dest="dielectric", default=-0.1465, type=float,
                         action="store", help="dielectric parameter of AutoDock FF")
-    parser.add_argument("-o", "--output", dest="output_prefix", default='water',
+    parser.add_argument("-o", "--output", dest="output_prefix", default="water",
                         action="store", help="prefix add to output files")
     return parser.parse_args()
 
@@ -66,5 +66,5 @@ def main():
     # Write output files
     k.write_shells(output_prefix)
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

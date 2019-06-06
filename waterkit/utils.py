@@ -87,7 +87,7 @@ def dihedral(p, degree=False):
     w = b2 - np.dot(b2, b1)*b1
 
     # angle between v and w in a plane is the torsion angle
-    # v and w may not be normalized but that's fine since tan is y/x
+    # v and w may not be normalized but that is fine since tan is y/x
     x = np.dot(v, w)
     y = np.dot(np.cross(b1, v), w)
 
@@ -132,7 +132,7 @@ def atom_to_move(o, p):
     """
     Return the coordinates xyz of an atom just above acceptor/donor atom o
     """
-    # It won't work if there is just one dimension
+    # It will not work if there is just one dimension
     p = np.atleast_2d(p)
     return o + normalize(-1. * vector(o, np.mean(p, axis=0)))
 

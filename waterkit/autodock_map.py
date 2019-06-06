@@ -37,7 +37,7 @@ class Map():
             if not isinstance(labels, (list, tuple)):
                 labels = [labels]
 
-            assert (len(map_files) == len(labels)), 'map files and labels must have the same number of elements'
+            assert (len(map_files) == len(labels)), "map files and labels must have the same number of elements"
 
             # Get information (center, spacing, nelements) from each grid
             # and make sure they are all identical
@@ -46,7 +46,7 @@ class Map():
 
                 if prv_grid_information is not None:
                     if not cmp(prv_grid_information, grid_information):
-                        raise Exception('grid %s is different from the previous one.' % label)
+                        raise Exception("grid %s is different from the previous one." % label)
 
                     prv_grid_information = grid_information
 
@@ -54,9 +54,9 @@ class Map():
 
             self._maps = {}
             self._maps_interpn = {}
-            self._spacing = grid_information['spacing']
-            self._npts = grid_information['nelements']
-            self._center = grid_information['center']
+            self._spacing = grid_information["spacing"]
+            self._npts = grid_information["nelements"]
+            self._center = grid_information["center"]
 
             # Compute min and max coordinates
             # Half of each side
@@ -77,12 +77,12 @@ class Map():
     def __str__(self):
         """Print basic information about the maps"""
         try:
-            info = 'SPACING %s\n' % self._spacing
-            info += 'NELEMENTS %s\n' % ' '.join(self._npts.astype(str))
-            info += 'CENTER %s\n' % ' '.join(self._center.astype(str))
-            info += 'MAPS %s\n' % ' '.join(self._maps.iterkeys())
+            info = "SPACING %s\n" % self._spacing
+            info += "NELEMENTS %s\n" % " ".join(self._npts.astype(str))
+            info += "CENTER %s\n" % " ".join(self._center.astype(str))
+            info += "MAPS %s\n" % " ".join(self._maps.iterkeys())
         except AttributeError:
-            info = 'AutoDock Map object is not defined.'
+            info = "AutoDock Map object is not defined."
 
         return info
 
@@ -114,37 +114,37 @@ class Map():
 
         path = os.path.dirname(fld_file)
         # If there is nothing, it means we are in the current directory
-        if path == '':
-            path = '.'
+        if path == "":
+            path = "."
 
         with open(fld_file) as f:
             for line in f:
-                if re.search('^label=', line):
-                    labels.append(line.split('=')[1].split('#')[0].split('-')[0].strip())
-                elif re.search('^variable', line):
-                    map_files.append(path + os.sep + line.split(' ')[2].split('=')[1].split('/')[-1])
+                if re.search("^label=", line):
+                    labels.append(line.split("=")[1].split("#")[0].split("-")[0].strip())
+                elif re.search("^variable", line):
+                    map_files.append(path + os.sep + line.split(" ")[2].split("=")[1].split("/")[-1])
 
         if map_files and labels:
             return cls(map_files, labels)
 
     def _grid_information_from_map(self, map_file):
         """Read grid information in the map file"""
-        grid_information = {'spacing': None,
-                            'nelements': None,
-                            'center': None}
+        grid_information = {"spacing": None,
+                            "nelements": None,
+                            "center": None}
 
         with open(map_file) as f:
             for line in f:
-                if re.search('^SPACING', line):
-                    grid_information['spacing'] = np.float(line.split(' ')[1])
-                elif re.search('^NELEMENTS', line):
-                    nelements = np.array(line.split(' ')[1:4], dtype=np.int)
+                if re.search("^SPACING", line):
+                    grid_information["spacing"] = np.float(line.split(" ")[1])
+                elif re.search("^NELEMENTS", line):
+                    nelements = np.array(line.split(" ")[1:4], dtype=np.int)
                     # Transform even numbers to the nearest odd integer
                     nelements = nelements // 2 * 2 + 1
-                    grid_information['nelements'] = nelements
-                elif re.search('CENTER', line):
-                    grid_information['center'] = np.array(line.split(' ')[1:4], dtype=np.float)
-                elif re.search('^[0-9]', line):
+                    grid_information["nelements"] = nelements
+                elif re.search("CENTER", line):
+                    grid_information["center"] = np.array(line.split(" ")[1:4], dtype=np.float)
+                elif re.search("^[0-9]", line):
                     # If the line starts with a number, we stop
                     break
 
@@ -158,7 +158,7 @@ class Map():
             # Read all the lines directly
             lines = f.readlines()
 
-            npts = np.array(lines[4].split(' ')[1:4], dtype=np.int) + 1
+            npts = np.array(lines[4].split(" ")[1:4], dtype=np.int) + 1
 
             # Get the energy for each grid element
             affinity = [np.float(line) for line in lines[6:]]
@@ -329,7 +329,7 @@ class Map():
 
         return close_to
 
-    def energy_coordinates(self, xyz, atom_type, method='linear'):
+    def energy_coordinates(self, xyz, atom_type, method="linear"):
         """Grid energy of each coordinates xyz.
 
         Args:
@@ -344,7 +344,7 @@ class Map():
         return self._maps_interpn[atom_type](xyz, method=method)
 
     def energy(self, df, ignore_atom_types=None, ignore_electrostatic=False, 
-               ignore_desolvation=False, method='linear'):
+               ignore_desolvation=False, method="linear"):
         """Get energy interaction of a molecule based of the grid.
 
         Args:
@@ -368,7 +368,7 @@ class Map():
         if not isinstance(ignore_atom_types, (list, tuple)):
             ignore_atom_types = [ignore_atom_types]
 
-        se = df.groupby('t', as_index=False)['x', 'y', 'z', 'q'].agg(lambda x: list(x)).values
+        se = df.groupby("t", as_index=False)["x", "y", "z", "q"].agg(lambda x: list(x)).values
 
         for atom_type, x, y, z, q in se:
             xyz = np.stack([x, y, z], axis=1)
@@ -377,10 +377,10 @@ class Map():
                 vdw_hb = self._maps_interpn[atom_type](xyz, method=method)
 
             if not ignore_electrostatic:
-                elec = self._maps_interpn['Electrostatics'](xyz, method=method) * np.array(q)
+                elec = self._maps_interpn["Electrostatics"](xyz, method=method) * np.array(q)
 
             if not ignore_desolvation:
-                desolv = self._maps_interpn['Desolvation'](xyz, method=method)
+                desolv = self._maps_interpn["Desolvation"](xyz, method=method)
 
             energy += np.sum(vdw_hb + elec + desolv)
 
@@ -401,7 +401,7 @@ class Map():
         coordinates = self._kdtree.data[self._kdtree.query_ball_point(xyz, radius)]
         
         if min_radius > 0:
-            distances = spatial.distance.cdist([xyz], coordinates, 'euclidean')[0]
+            distances = spatial.distance.cdist([xyz], coordinates, "euclidean")[0]
             coordinates = coordinates[distances >= min_radius]
 
         return coordinates
@@ -426,14 +426,14 @@ class Map():
 
         assert len(atom_types) == len(names), "Names and atom_types lengths are not matching."
 
-        if not 'x' in expression:
+        if not "x" in expression:
             print "Error: operation cannot be applied, x is not defined."
             return None
 
         for name, atom_type in zip(names, atom_types):
             try:
                 x = self._maps[atom_type]
-                # When 'eval' a new copy of the map is created
+                # When "eval" a new copy of the map is created
                 x = eval(expression)
 
                 # Update map and interpolator
@@ -444,7 +444,7 @@ class Map():
                 continue
 
     def add_bias(self, name, coordinates, bias_value, radius):
-        """Add energy bias to map using Juan's  method.
+        """Add energy bias to map using Juan method.
 
         Args:
             name (str): name of the new or existing map
@@ -468,16 +468,16 @@ class Map():
             sphere_xyz = self.neighbor_points(coordinate, radius)
             indexes = self._cartesian_to_index(sphere_xyz)
 
-            distances = spatial.distance.cdist([coordinate], sphere_xyz, 'euclidean')[0]
+            distances = spatial.distance.cdist([coordinate], sphere_xyz, "euclidean")[0]
             bias_energy = bias_value * np.exp(-1. * (distances ** 2) / (radius ** 2))
 
             new_map[indexes[:,0], indexes[:,1], indexes[:,2]] += bias_energy
 
-        # And we replace the original one only at the end, it's faster
+        # And we replace the original one only at the end, it is faster
         self._maps[name] = new_map
         self._maps_interpn[name] = self._generate_affinity_map_interpn(new_map)
 
-    def combine(self, name, atom_types, how='best', ad_map=None):
+    def combine(self, name, atom_types, how="best", ad_map=None):
         """Funtion to combine Autoock map together.
 
         Args:
@@ -497,7 +497,7 @@ class Map():
         if not isinstance(atom_types, (list, tuple)):
             atom_types = [atom_types]
 
-        if how == 'replace':
+        if how == "replace":
             assert ad_map is not None, "Another map has to be specified for the replace mode."
             assert len(atom_types) == 1, "Multiple atom types cannot replace the same atom type."
 
@@ -517,7 +517,7 @@ class Map():
             print "Warning: no maps were selected from %s list." % atom_types
             return False
         if unselected_types:
-            print "Warning: %s maps can't be combined." % ' '.join(unselected_types)
+            print "Warning: %s maps can not be combined." % " ".join(unselected_types)
         
         """ Check if the grid are the same between the two ad_maps.
         And we do it like this because grid are tuples of numpy array.
@@ -552,7 +552,7 @@ class Map():
 
         # Select maps
         for selected_type in selected_types:
-            if how != 'replace':
+            if how != "replace":
                 selected_maps.append(self._maps[selected_type][indices])
 
             if ad_map is not None:
@@ -569,11 +569,11 @@ class Map():
 
         if selected_types:
             # Combine all the maps
-            if how == 'best':
+            if how == "best":
                 self._maps[name][indices] = np.nanmin(selected_maps, axis=0)
-            elif how == 'add':
+            elif how == "add":
                 self._maps[name][indices] = np.nansum(selected_maps, axis=0)
-            elif how == 'replace':
+            elif how == "replace":
                 self._maps[name][indices] = selected_maps[0]
 
             # Update the interpolate energy function
@@ -598,7 +598,7 @@ class Map():
         i = 0
         line = "ATOM  %5d  D   DUM Z%4d    %8.3f%8.3f%8.3f  1.00%6.2f           D\n"
 
-        with open(fname, 'w') as w:
+        with open(fname, "w") as w:
             for j in range(idx.shape[0]):
 
                 v = self._maps[atom_type][idx[j][0], idx[j][1], idx[j][2]]
@@ -609,8 +609,8 @@ class Map():
                 w.write(line % (i, i, self._edges[0][idx[j][0]], self._edges[1][idx[j][1]], self._edges[2][idx[j][2]], v))
                 i += 1
 
-    def to_map(self, map_types=None, prefix=None, grid_parameter_file='grid.gpf',
-               grid_data_file='maps.fld', macromolecule='molecule.pdbqt'):
+    def to_map(self, map_types=None, prefix=None, grid_parameter_file="grid.gpf",
+               grid_data_file="maps.fld", macromolecule="molecule.pdbqt"):
         """Export AutoDock maps.
 
         Args:
@@ -631,22 +631,22 @@ class Map():
 
         for map_type in map_types:
             if map_type in self._maps:
-                filename = '%s.map' % map_type
+                filename = "%s.map" % map_type
                 if prefix is not None:
-                    filename = '%s.%s' % (prefix, filename)
+                    filename = "%s.%s" % (prefix, filename)
 
-                with open(filename, 'w') as w:
+                with open(filename, "w") as w:
                     npts = np.array([n if not n % 2 else n - 1 for n in self._npts])
 
                     # Write header
-                    w.write('GRID_PARAMETER_FILE %s\n' % grid_parameter_file)
-                    w.write('GRID_DATA_FILE %s\n' % grid_data_file)
-                    w.write('MACROMOLECULE %s\n' % macromolecule)
-                    w.write('SPACING %s\n' % self._spacing)
-                    w.write('NELEMENTS %s\n' % ' '.join(npts.astype(str)))
-                    w.write('CENTER %s\n' % ' '.join(self._center.astype(str)))
+                    w.write("GRID_PARAMETER_FILE %s\n" % grid_parameter_file)
+                    w.write("GRID_DATA_FILE %s\n" % grid_data_file)
+                    w.write("MACROMOLECULE %s\n" % macromolecule)
+                    w.write("SPACING %s\n" % self._spacing)
+                    w.write("NELEMENTS %s\n" % " ".join(npts.astype(str)))
+                    w.write("CENTER %s\n" % " ".join(self._center.astype(str)))
                     # Write grid (swap x and z axis before)
                     m = np.swapaxes(self._maps[map_type], 0, 2).flatten()
-                    w.write('\n'.join(m.astype(str)))
+                    w.write("\n".join(m.astype(str)))
             else:
-                print 'Error: Map %s does not exist.' % map_type
+                print "Error: Map %s does not exist." % map_type

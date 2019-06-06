@@ -43,7 +43,7 @@ class Molecule():
         # Initialize a dumb Molecule
         result = cls(self._OBMol)
         for k, v in self.__dict__.items():
-            if not k == '_OBMol':
+            if not k == "_OBMol":
                 setattr(result, k, copy.copy(v))
         return result
 
@@ -53,7 +53,7 @@ class Molecule():
         result = cls(self._OBMol)
         memo[id(self)] = result
         for k, v in self.__dict__.items():
-            if not k == '_OBMol':
+            if not k == "_OBMol":
                 setattr(result, k, copy.deepcopy(v, memo))
         return result
 
@@ -73,7 +73,7 @@ class Molecule():
         # OpenBabel do chemical perception to define the type
         # So we override the types with AutoDock atom types
         # from the PDBQT file
-        if file_extension == '.pdbqt':
+        if file_extension == ".pdbqt":
             qs, ts = m._qt_from_pdbqt_file(fname)
 
             for a, q, t in zip(ob.OBMolAtomIter(m._OBMol), qs, ts):
@@ -95,7 +95,7 @@ class Molecule():
         with open(fname) as f:
             lines = f.readlines()
             for line in lines:
-                if re.search('^ATOM', line) or re.search('^HETATM', line):
+                if re.search("^ATOM", line) or re.search("^HETATM", line):
                     atom_types.append(line[77:79].strip())
                     partial_charges.append(np.float(line[70:77].strip()))
 
@@ -125,7 +125,7 @@ class Molecule():
     def coordinates(self, atom_ids=None):
         """
         Return coordinates of all atoms or a certain atom
-        We do it like this because OBMol.GetCoordinates isn't working
+        We do it like this because OBMol.GetCoordinates is not working
         ... and it never will (https://github.com/openbabel/openbabel/issues/1367)
         """
         if atom_ids is not None:
@@ -170,7 +170,7 @@ class Molecule():
 
     def atom_informations(self, atom_ids=None):
         """Get atom informations (xyz, q, type)."""
-        columns = ['i', 'x', 'y', 'z', 'q', 't']
+        columns = ["i", "x", "y", "z", "q", "t"]
 
         if atom_ids is not None:
             if not isinstance(atom_ids, (list, tuple)):
@@ -291,14 +291,14 @@ class Molecule():
 
         # Find all the hydroxyl
         ob_smarts = ob.OBSmartsPattern()
-        success = ob_smarts.Init('[#1][#8;X2;v2;H1][!#1][!#1]')
+        success = ob_smarts.Init("[#1][#8;X2;v2;H1][!#1][!#1]")
         ob_smarts.Match(self._OBMol)
         matches = list(ob_smarts.GetUMapList())
 
         for match in matches:
-            """ We check if the SMART pattern wasn't match twice on
+            """ We check if the SMART pattern was not matching twice on
             the same rotatable bonds, like hydroxyl in tyrosine. The
-            GetUMapList function doesn't work on that specific case
+            GetUMapList function does not work on that specific case
             """
             if not match[0] in unique:
                 atom_i = match[0] - 1
@@ -330,9 +330,9 @@ class Molecule():
             matches = waterfield.get_matches(name, self)
 
             if atom_type.hb_type == 1:
-                hb_type = 'donor'
+                hb_type = "donor"
             elif atom_type.hb_type == 2:
-                hb_type = 'acceptor'
+                hb_type = "acceptor"
             else:
                 hb_type = None
 
@@ -475,27 +475,27 @@ class Molecule():
         if append and os.path.isfile(fname):
             str_output = obconv.WriteString(self._OBMol)
 
-            with open(fname, 'a') as a:
+            with open(fname, "a") as a:
                 a.write(str_output)
         else:
             obconv.WriteFile(self._OBMol, fname)
 
     def export_hb_vectors(self, fname):
         """ Export all the hb vectors to PDB file. """
-        pdb_line = "ATOM  %5d  %-3s ANC%2s%4d    %8.3f%8.3f%8.3f%6.2f 1.00    %6.3f %2s\n"
+        pdbqt_str = "ATOM  %5d  %-3s ANC%2s%4d    %8.3f%8.3f%8.3f%6.2f 1.00    %6.3f %2s\n"
 
         if self.hydrogen_bond_anchors is not None:
             i = 1
-            str_out = ""
+            output_str = ""
 
             for index, anchor in self.hydrogen_bond_anchors.iterrows():
                 x, y, z = anchor.vector_xyz
                 atom_type = anchor.anchor_type[0].upper()
 
-                str_out += pdb_line % (i, atom_type, 'A', index, x, y, z, 1, 1, atom_type)
+                output_str += pdbqt_str % (i, atom_type, "A", index, x, y, z, 1, 1, atom_type)
                 i += 1
 
-            with open(fname, 'w') as w:
-                w.write(str_out)
+            with open(fname, "w") as w:
+                w.write(output_str)
         else:
             print "Error: There is no hydrogen bond anchors."

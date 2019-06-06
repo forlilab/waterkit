@@ -33,13 +33,13 @@ class WaterBox():
         self._smooth = smooth
 
         # All the informations are stored into a dict of df
-        columns = ['molecule_i', 'atom_i', 'molecule_j', 'atom_j']
-        self.df['connections'] = pd.DataFrame(columns=columns)
-        columns = ['shell_id']
-        self.df['shells'] = pd.DataFrame(columns=columns)
-        columns = ['molecule_i', 'atom_i']
-        self.df['kdtree_relations'] = pd.DataFrame(columns=columns)
-        self.df['profiles'] = pd.DataFrame()
+        columns = ["molecule_i", "atom_i", "molecule_j", "atom_j"]
+        self.df["connections"] = pd.DataFrame(columns=columns)
+        columns = ["shell_id"]
+        self.df["shells"] = pd.DataFrame(columns=columns)
+        columns = ["molecule_i", "atom_i"]
+        self.df["kdtree_relations"] = pd.DataFrame(columns=columns)
+        self.df["profiles"] = pd.DataFrame()
 
     def copy(self):
         """Return deepcopy of WaterBox."""
@@ -59,8 +59,8 @@ class WaterBox():
             self.add_molecules(receptor)
             self.map = ad_map.copy()
             # Add informations about the receptor
-            data = pd.DataFrame([[0]], columns=['shell_id'])
-            self.add_informations(data, 'shells')
+            data = pd.DataFrame([[0]], columns=["shell_id"])
+            self.add_informations(data, "shells")
 
             return True
         else:
@@ -91,16 +91,16 @@ class WaterBox():
     def _add_connections(self, connections):
         """ Add connections between molecules """
         try:
-            last_connections = self.df['connections'].tail(1)
-            last_molecule_i = last_connections['molecule_i'].values[0]
-            last_molecule_j = last_connections['molecule_j'].values[0]
+            last_connections = self.df["connections"].tail(1)
+            last_molecule_i = last_connections["molecule_i"].values[0]
+            last_molecule_j = last_connections["molecule_j"].values[0]
         except:
             last_molecule_i = -1
             last_molecule_j = 0
 
-        connections['molecule_i'] += last_molecule_i + 1
-        connections['molecule_j'] += last_molecule_j + 1
-        self.add_informations(connections, 'connections')
+        connections["molecule_i"] += last_molecule_i + 1
+        connections["molecule_j"] += last_molecule_j + 1
+        self.add_informations(connections, "connections")
 
     def _add_molecules_to_kdtree(self, molecules):
         """ Build or update the cKDTree of all the atoms in
@@ -110,8 +110,8 @@ class WaterBox():
             molecules = [molecules]
 
         try:
-            last_kdtree_relations = self.df['kdtree_relations'].tail(1)
-            last_molecule_i = last_kdtree_relations['molecule_i'].values[0]
+            last_kdtree_relations = self.df["kdtree_relations"].tail(1)
+            last_molecule_i = last_kdtree_relations["molecule_i"].values[0]
         except:
             # We initliaze at -1, make first molecule at index 0
             last_molecule_i = -1
@@ -126,10 +126,10 @@ class WaterBox():
             data.append(coordinates)
 
         # Update the KDTree relation database
-        columns = ['molecule_i', 'atom_i']
+        columns = ["molecule_i", "atom_i"]
         relations = np.vstack(relations)
         relations = pd.DataFrame(relations, columns=columns)
-        self.add_informations(relations, 'kdtree_relations')
+        self.add_informations(relations, "kdtree_relations")
 
         # Update the KDTree
         data = np.vstack(data)
@@ -149,17 +149,17 @@ class WaterBox():
 
     def update_informations_in_shell(self, data, shell_id, key):
         """Update shell information."""
-        index = self.df['shells']['shell_id'] == shell_id
-        self.df['shells'].loc[index, key] = data
+        index = self.df["shells"]["shell_id"] == shell_id
+        self.df["shells"].loc[index, key] = data
 
     def molecules_in_shell(self, shell_ids=None):
         """ Get all the molecule in shell """
         if shell_ids is not None:
             if not isinstance(shell_ids, (list, tuple)):
                 shell_ids = [shell_ids]
-            df = self.df['shells'][self.df['shells']['shell_id'].isin(shell_ids)]
+            df = self.df["shells"][self.df["shells"]["shell_id"].isin(shell_ids)]
         else:
-            df = self.df['shells']
+            df = self.df["shells"]
 
         molecules = [self.molecules[i] for i in df.index.tolist()]
 
@@ -170,28 +170,28 @@ class WaterBox():
         at a certain radius """
         if self._kdtree is None:
             print "Warning: KDTree is empty."
-            return pd.DataFrame(columns=['molecule_i', 'atom_i'])
+            return pd.DataFrame(columns=["molecule_i", "atom_i"])
 
         index = self._kdtree.query_ball_point(xyz, radius)
-        df = self.df['kdtree_relations'].loc[index]
+        df = self.df["kdtree_relations"].loc[index]
 
         if exclude is not None:
             if not isinstance(exclude, (list, tuple)):
                 exclude = [exclude]
-            df = df[-df['molecule_i'].isin(exclude)]
+            df = df[-df["molecule_i"].isin(exclude)]
 
         return df
 
     def molecule_informations_in_shell(self, shell_id):
         """Get information of shell."""
-        df = self.df['shells']
+        df = self.df["shells"]
         # Return a copy to avoid a SettingWithCopyWarning flag
-        return df.loc[df['shell_id'] == shell_id].copy()
+        return df.loc[df["shell_id"] == shell_id].copy()
 
     def number_of_shells(self):
         """Total number of shells in the WaterBox."""
-        # df['column'].max() faster than np.max(df['column'])
-        return self.df['shells']['shell_id'].max()
+        # df["column"].max() faster than np.max(df["column"])
+        return self.df["shells"]["shell_id"].max()
 
     def closest_hydrogen_bond_anchor(self, xyz, radius, exclude=None):
         """Find the closest hydrogen bond anchors.
@@ -237,7 +237,7 @@ class WaterBox():
 
         return best_hba, best_hbv_id
 
-    def place_optimal_spherical_waters(self, molecules, atom_type='OW', partial_charge=-0.834):
+    def place_optimal_spherical_waters(self, molecules, atom_type="OW", partial_charge=-0.834):
         """Place spherical water molecules in the optimal position.
 
         Args:
@@ -267,12 +267,12 @@ class WaterBox():
                     data.append((i, row.atom_i, len(waters) - 1, None))
 
         # Convert list of tuples into dataframe
-        columns = ['molecule_i', 'atom_i', 'molecule_j', 'atom_j']
+        columns = ["molecule_i", "atom_i", "molecule_j", "atom_j"]
         connections = pd.DataFrame(data, columns=columns)
 
         return (waters, connections)
 
-    def build_next_shell(self, how='boltzmann', temperature=300.):
+    def build_next_shell(self, how="boltzmann", temperature=300.):
         """Build the next hydration shell.
         
         Args:
@@ -283,7 +283,7 @@ class WaterBox():
             bool: True if water molecules were added or False otherwise
 
         """
-        type_ow = 'OW'
+        type_ow = "OW"
         partial_charge = -0.834
         shell_id = self.number_of_shells()
         molecules = self.molecules_in_shell(shell_id)
@@ -355,7 +355,7 @@ class WaterBox():
             j += 1
 
         # ... but we add it again at the end
-        output_str += 'TER\n'
+        output_str += "TER\n"
 
-        with open(fname, 'w') as w:
+        with open(fname, "w") as w:
             w.write(output_str)
