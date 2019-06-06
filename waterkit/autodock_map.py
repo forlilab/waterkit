@@ -291,7 +291,7 @@ class Map():
         """Check if coordinates are in the map.
 
         Args:
-            xyz (ndarray): 2d Numpy array of the coordinates
+            xyz (array_like): 2d array of the 3d coordinates
 
         Returns:
             ndarray: 1d Numpy array of boolean
@@ -312,7 +312,7 @@ class Map():
         """Check if the points xyz is at a certain distance of the edge of the box.
 
         Args:
-            xyz (ndarray): 2n Numpy array of the coordinates
+            xyz (array_like): 2d array of the 3d coordinates
             distance (float): distance
 
         Returns:
@@ -333,7 +333,7 @@ class Map():
         """Grid energy of each coordinates xyz.
 
         Args:
-            xyz (ndarray): 2d Numpy array of coordinates
+            xyz (array_like): 2d array of 3d coordinates
             atom_type (str): name of the atom type
             method (str): Interpolate method (default: linear)
 
@@ -390,12 +390,12 @@ class Map():
         """Grid coordinates around a point at a certain distance.
 
         Args:
-            xyz (array_like): 3D coordinates of a point
+            xyz (array_like): 3d coordinate of a point
             radius (float): max radius
             min_radius (float): min radius (default: 0)
 
         Returns:
-            ndarray: 2D Numpy array of coordinates
+            ndarray: 2d Numpy array of coordinates
 
         """
         coordinates = self._kdtree.data[self._kdtree.query_ball_point(xyz, radius)]
@@ -448,7 +448,7 @@ class Map():
 
         Args:
             name (str): name of the new or existing map
-            coordinates (array_like): 3D coordinates
+            coordinates (array_like): 2d array of 3d coordinates
             bias_value (float): energy bias value to add (in kcal/mol)
             radius (float): radius of the bias (in Angtrom)
 

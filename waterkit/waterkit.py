@@ -51,6 +51,8 @@ class Waterkit():
             n_layer (int): Number of hydration layer to add (default: 1)
             how (str): Method for water placement: "best" or "boltzmann" (default: best)
             temperature (float): Temperature in Kelvin, only used for Boltzmann sampling (default: 300)
+            smooth (float): AutoDock smooth parameter (default: 0.5)
+            dielectric (float): AutoDock dielectric constant (default: -0.1465)
 
         Returns:
             bool: True if succeeded or False otherwise
