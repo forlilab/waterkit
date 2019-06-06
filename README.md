@@ -47,8 +47,7 @@ ligand_types OW
 receptor protein.pdbqt          
 gridcenter 0.0 0.0 0.0      
 smooth 0.5                           
-map protein_OA.map
-map protein_OD.map
+map protein_OW.map
 elecmap protein_e.map
 dsolvmap protein_d.map
 dielectric -0.1465
