@@ -30,13 +30,13 @@ conda install sphinx sphinx_rtd_theme
 
 ## Documentation
 
-1. Build documentation with Sphinx
+Build documentation with Sphinx
 ```bash
 cd docs
 make html
 ```
 
-2. Open the file ```build/html/index.html``` with your favorite browser (Google Chrome is evil).
+Open the file ```build/html/index.html``` with your favorite browser (Google Chrome is evil).
 
 ## Quick tutorial
 
