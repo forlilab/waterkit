@@ -13,7 +13,7 @@ with open(REQUIREMENTS_FILE) as f:
 install_reqs.append('setuptools')
 
 setup(name='waterkit',
-      version=0.1,
+      version=0.2,
       description='WaterKit',
       author='Jerome Eberhardt',
       author_email='jerome@scripps.edu',
