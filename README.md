@@ -23,13 +23,22 @@ python setup.py install
 
 ## Documentation
 
-Build documentation with Sphinx
+Requirements:
+* Sphinx
+* Sphinx_rtd_theme
+
+1. Dependencies installation
+```bash
+conda install sphinx sphinx_rtd_theme
+```
+
+2. Build documentation with Sphinx
 ```bash
 cd docs
 make html
 ```
 
-Open file ```build/html/index.html``` with your favorite browser (not Google Chrome).
+3. Open the file ```build/html/index.html``` with your favorite browser (Google Chrome is evil).
 
 ## Quick tutorial
 
