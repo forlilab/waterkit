@@ -8,6 +8,8 @@ You need, at a minimum (requirements):
 * OpenBabel
 * Numpy 
 * Scipy
+* Sphinx (documentation)
+* Sphinx_rtd_theme (documentation)
 
 ## Installation
 
@@ -21,24 +23,20 @@ To install the `WaterKit` package
 python setup.py install
 ```
 
-## Documentation
-
-Requirements:
-* Sphinx
-* Sphinx_rtd_theme
-
-1. Dependencies installation
+For the documentation only
 ```bash
 conda install sphinx sphinx_rtd_theme
 ```
 
-2. Build documentation with Sphinx
+## Documentation
+
+1. Build documentation with Sphinx
 ```bash
 cd docs
 make html
 ```
 
-3. Open the file ```build/html/index.html``` with your favorite browser (Google Chrome is evil).
+2. Open the file ```build/html/index.html``` with your favorite browser (Google Chrome is evil).
 
 ## Quick tutorial
 
