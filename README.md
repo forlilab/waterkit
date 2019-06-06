@@ -18,6 +18,16 @@ conda install openbabel
 
 ## Documentation
 
+Build documentation with Sphinx
+```bash
+cd docs
+make html
+```
+
+Open file ```build/html/index.html``` with your favorite browser (not Google Chrome).
+
+## Quick tutorial
+
 ### Receptor preparation
 Conversion to PDBQT using AutoDock Tools
 ```bash
