@@ -16,7 +16,7 @@ I highly recommand you to install the Anaconda distribution (https://www.continu
 conda install openbabel
 ```
 
-To install the `WaterKit`package
+To install the `WaterKit` package
 ```bash
 python setup.py install
 ```
