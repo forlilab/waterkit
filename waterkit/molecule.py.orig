@@ -9,10 +9,11 @@
 import copy
 import os
 import re
+from collections import namedtuple
 
 import numpy as np
-import pandas as pd
 import openbabel as ob
+import pandas as pd
 from scipy import spatial
 
 import utils
@@ -20,58 +21,45 @@ import utils
 
 class Molecule():
 
-    def __init__(self, OBMol, waterfield=None):
-        """Initialize a Molecule object.
-
-        Args:
-            OBMol (OBMol): OpenBabel molecule object
-            waterfield (Waterfield): Waterfield object for HB typing
-
-        """
-        i = 0
-        j = 0
-        dtype = [("i", "i4"), ("name", "S4"), ("resname", "S3"), ("resnum", "i4"),
-                 ("xyz", "f4", (3)), ("q", "f4"), ("t", "S5")]
-        self.atoms = np.zeros(OBMol.NumAtoms(), dtype)
-        self.hydrogen_bond_anchors = None
-        self.rotatable_bonds = None
-
+    def __init__(self, OBMol):
+        """Initialize a Molecule object."""
+        # Explicitly create a new copy of the OBMol
+        self._OBMol = ob.OBMol(OBMol)
         # Remove all implicit hydrogens because OpenBabel
         # is doing chemical perception, and we want to read the
         # molecule as is.
-        for x in ob.OBMolAtomIter(OBMol):
+        for x in ob.OBMolAtomIter(self._OBMol):
             if not x.IsHydrogen() and x.ImplicitHydrogenCount() != 0:
                 x.SetImplicitValence(x.GetValence())
                 # Really, there is no implicit hydrogen
                 x.ForceImplH()
 
-        for r in ob.OBResidueIter(OBMol):
-            for a in ob.OBResidueAtomIter(r):
-                atom_type = a.GetType()
-                xyz = (a.GetX(), a.GetY(), a.GetZ())
-                atom = (i+1, atom_type[0], r.GetName(), j+1, xyz, a.GetPartialCharge(), atom_type)
-                self.atoms[i] = atom
-                
-                i += 1
-            j += 1
+        self.hydrogen_bond_anchors = None
+        self.rotatable_bonds = None
 
-        # Do the typing for hydrogen bonds and disordered hydrogen atoms
-        if waterfield is not None:
-            self._guess_hydrogen_bond_anchors(OBMol, waterfield)
-        self._guess_rotatable_bonds(OBMol)
+    def __copy__(self):
+        """Create a copy of Molecule object."""
+        cls = self.__class__
+        # Initialize a dumb Molecule
+        result = cls(self._OBMol)
+        for k, v in self.__dict__.items():
+            if not k == "_OBMol":
+                setattr(result, k, copy.copy(v))
+        return result
+
+    def __deepcopy__(self, memo):
+        """Create a deep copy of Molecule object."""
+        cls = self.__class__
+        result = cls(self._OBMol)
+        memo[id(self)] = result
+        for k, v in self.__dict__.items():
+            if not k == "_OBMol":
+                setattr(result, k, copy.deepcopy(v, memo))
+        return result
 
     @classmethod
-    def from_file(cls, fname, waterfield):
-        """Create Molecule object from a PDB file.
-
-        Args:
-            fname (str): molecule filename
-            waterfield (Waterfield): Waterfield object for HB typing
-
-        Returns:
-            Molecule
-
-        """
+    def from_file(cls, fname):
+        """Create Molecule object from a PDB file."""
         # Get name and file extension
         name, file_extension = os.path.splitext(fname)
         # Read PDB file
@@ -80,29 +68,27 @@ class Molecule():
         OBMol = ob.OBMol()
         obconv.ReadFile(OBMol, fname)
 
-        m = cls(OBMol, waterfield)
+        m = cls(OBMol)
 
         # OpenBabel do chemical perception to define the type
         # So we override the types with AutoDock atom types
         # from the PDBQT file
         if file_extension == ".pdbqt":
             qs, ts = m._qt_from_pdbqt_file(fname)
-            m.atoms['q'] = qs
-            m.atoms['t'] = ts
+
+            for a, q, t in zip(ob.OBMolAtomIter(m._OBMol), qs, ts):
+                # Weird thing appends here...
+                # If I remove a.GetType(), the oxygen type become O3 instead of OA/HO
+                for _ in range(2):
+                    a.SetType(t)
+                    a.SetPartialCharge(q)
+                    a.GetType()
+                    a.GetPartialCharge()
 
         return m
 
     def _qt_from_pdbqt_file(self, fname):
-        """Get partial charges and atom types from PDBQT file.
-
-        Args:
-            fname (str): molecule filename
-
-        Returns:
-            list: partial charges
-            list: AutoDock atom types
-
-        """
+        """Get partial charges and atom types from PDBQT file."""
         atom_types = []
         partial_charges = []
 
@@ -115,15 +101,26 @@ class Molecule():
 
         return partial_charges, atom_types
 
+    def add_molecule(self, molecule):
+        """Add Molecule to self."""
+        if isinstance(molecule, Molecule):
+            self._OBMol += molecule._OBMol
+
     def is_water(self):
         """Tell if it is a water or not."""
         return False
 
     def atom(self, i):
         """
-        Return the atom i
+        Return the OBAtom i
         """
-        return self.atoms[i]
+        return self._OBMol.GetAtom(i)
+
+    def residue(self, i):
+        """
+        Return the OBResidue i
+        """
+        return self._OBMol.GetResidue(i)
 
     def coordinates(self, atom_ids=None):
         """
@@ -131,70 +128,86 @@ class Molecule():
         We do it like this because OBMol.GetCoordinates is not working
         ... and it never will (https://github.com/openbabel/openbabel/issues/1367)
         """
-        if atom_ids is not None and self.atoms.size > 1:
-            atoms = self.atoms[atom_ids]["xyz"]
+        if atom_ids is not None:
+            if not isinstance(atom_ids, (list, tuple)):
+                atom_ids = [atom_ids]
         else:
-            atoms = self.atoms["xyz"]
+            atom_ids = range(0, self._OBMol.NumAtoms())
 
-        return np.atleast_2d(atoms)
+        ob_atoms = [self._OBMol.GetAtomById(i) for i in atom_ids]
+        coordinates = [[x.GetX(), x.GetY(), x.GetZ()] for x in ob_atoms]
+        coordinates = np.atleast_2d(np.array(coordinates))
+
+        return coordinates
 
     def atom_types(self, atom_ids=None):
         """
         Return atom types of all atoms or a certain atom
         """
         if atom_ids is not None:
-            return self.atoms[atom_ids]['t']
+            if not isinstance(atom_ids, (list, tuple)):
+                atom_ids = [atom_ids]
         else:
-            return self.atoms['t']
+            atom_ids = range(0, self._OBMol.NumAtoms())
+
+        ob_atoms = [self._OBMol.GetAtomById(i) for i in atom_ids]
+        atom_types = [x.GetType() for x in ob_atoms]
+
+        return atom_types
 
     def partial_charges(self, atom_ids=None):
         """Get partial charges."""
         if atom_ids is not None:
-            return self.atoms[atom_ids]['q']
+            if not isinstance(atom_ids, (list, tuple)):
+                atom_ids = [atom_ids]
         else:
-            return self.atoms['q']
+            atom_ids = range(0, self._OBMol.NumAtoms())
+
+        ob_atoms = [self._OBMol.GetAtomById(i) for i in atom_ids]
+        partial_charges = [x.GetPartialCharge() for x in ob_atoms]
+
+        return partial_charges
 
     def atom_informations(self, atom_ids=None):
         """Get atom informations (xyz, q, type)."""
         columns = ["i", "x", "y", "z", "q", "t"]
 
         if atom_ids is not None:
-            return self.atoms[atom_ids][['i', 'xyz', 'q', 't']]
+            if not isinstance(atom_ids, (list, tuple)):
+                atom_ids = [atom_ids]
         else:
-            return self.atoms[['i', 'xyz', 'q', 't']]
+            atom_ids = range(0, self._OBMol.NumAtoms())
 
-    def _guess_rotatable_bonds(self, OBMol):
-        """ Guess all the rotatable bonds in the molecule
-        based the rotatable forcefield """
-        columns = ["atom_i", "atom_j", "atom_i_xyz", "atom_j_xyz",
-                   "atom_k_xyz", "atom_l_xyz", "name"]
-        data = []
-        unique = []
+        xs, ys, zs = self.coordinates(atom_ids).T
+        qs = self.partial_charges(atom_ids)
+        ts = self.atom_types(atom_ids)
 
-        # Find all the hydroxyl
-        ob_smarts = ob.OBSmartsPattern()
-        success = ob_smarts.Init("[#1][#8;X2;v2;H1][!#1][!#1]")
-        ob_smarts.Match(OBMol)
-        matches = list(ob_smarts.GetUMapList())
+        data = [(i, x, y, z, p, t) for i, x, y, z, p, t in zip(atom_ids, xs, ys, zs, qs, ts)]
+        df = pd.DataFrame(data=data, columns=columns)
 
-        for match in matches:
-            """ We check if the SMART pattern was not matching twice on
-            the same rotatable bonds, like hydroxyl in tyrosine. The
-            GetUMapList function does not work on that specific case
-            """
-            if not match[0] in unique:
-                atom_i = match[0] - 1
-                atom_j = match[1] - 1
-                atom_i_xyz = self.coordinates(match[0] - 1)[0]
-                atom_j_xyz = self.coordinates(match[1] - 1)[0]
-                atom_k_xyz = self.coordinates(match[2] - 1)[0]
-                atom_l_xyz = self.coordinates(match[3] - 1)[0]
-                data.append([atom_i, atom_j, atom_i_xyz, atom_j_xyz,
-                             atom_k_xyz, atom_l_xyz, "hydroxyl"])
-                unique.append(match[0])
+        return df
 
-        self.rotatable_bonds = pd.DataFrame(data=data, columns=columns)
-        self.rotatable_bonds.sort_values(by="atom_i", inplace=True)
+    def is_clash(self, xyz, molecule=None, radius=None):
+        """
+        Check if there is a clash between a coordinate xyz and itself or another molecule
+        """
+        if molecule is not None:
+            atoms = molecule.coordinates()
+        else:
+            atoms = self.coordinates()
+
+        # Compute all distances between atom and all other atoms
+        d = utils.get_euclidean_distance(xyz, atoms)
+
+        # Remove radius
+        if radius is not None:
+            d -= radius
+
+        # Strictly inferior, otherwise it is always False because of itself
+        if (d < 0.).any():
+            return True
+
+        return False
 
     def _push_atom_to_end(self, lst, atomic_nums):
         """
@@ -214,12 +227,12 @@ class Molecule():
 
         return lst
 
-    def _neighbor_atoms(self, OBMol, start_index=1, depth=1, hydrogen=True):
+    def neighbor_atoms(self, start_index=1, depth=1, hydrogen=True):
         """
         Return a nested list of all the neighbor OBAtoms by following the bond connectivity
         https://baoilleach.blogspot.com/2008/02/calculate-circular-fingerprints-with.html
         """
-        visited = [False] * (OBMol.NumAtoms() + 1)
+        visited = [False] * (self._OBMol.NumAtoms() + 1)
         neighbors = []
         queue = list([(start_index, 0)])
         atomic_num_to_keep = 1
@@ -230,7 +243,7 @@ class Molecule():
         while queue:
             i, d = queue.pop(0)
 
-            ob_atom = OBMol.GetAtomById(np.int(i))
+            ob_atom = self._OBMol.GetAtomById(np.int(i))
 
             # If we construct the data structure before [[n], [n1, n2, ...], ...]
             # and because the depth is too large compared to the molecule
@@ -253,14 +266,14 @@ class Molecule():
 
         return neighbors
 
-    def _neighbor_atom_coordinates(self, OBMol, id_atom, depth=1, hydrogen=True):
+    def neighbor_atom_coordinates(self, id_atom, depth=1, hydrogen=True):
         """
         Return a nested list of all the coordinates of all the neighbor
         atoms by following the bond connectivity
         """
         coords = []
 
-        atoms = self._neighbor_atoms(OBMol, id_atom, depth, hydrogen)
+        atoms = self.neighbor_atoms(id_atom, depth, hydrogen)
 
         for level in atoms:
             tmp = [[ob_atom.GetX(), ob_atom.GetY(), ob_atom.GetZ()] for ob_atom in level]
@@ -268,7 +281,40 @@ class Molecule():
 
         return coords
 
-    def _guess_hydrogen_bond_anchors(self, OBMol, waterfield):
+    def guess_rotatable_bonds(self):
+        """ Guess all the rotatable bonds in the molecule
+        based the rotatable forcefield """
+        columns = ["atom_i", "atom_j", "atom_i_xyz", "atom_j_xyz",
+                   "atom_k_xyz", "atom_l_xyz", "name"]
+        data = []
+        unique = []
+
+        # Find all the hydroxyl
+        ob_smarts = ob.OBSmartsPattern()
+        success = ob_smarts.Init("[#1][#8;X2;v2;H1][!#1][!#1]")
+        ob_smarts.Match(self._OBMol)
+        matches = list(ob_smarts.GetUMapList())
+
+        for match in matches:
+            """ We check if the SMART pattern was not matching twice on
+            the same rotatable bonds, like hydroxyl in tyrosine. The
+            GetUMapList function does not work on that specific case
+            """
+            if not match[0] in unique:
+                atom_i = match[0] - 1
+                atom_j = match[1] - 1
+                atom_i_xyz = self.coordinates(match[0] - 1)[0]
+                atom_j_xyz = self.coordinates(match[1] - 1)[0]
+                atom_k_xyz = self.coordinates(match[2] - 1)[0]
+                atom_l_xyz = self.coordinates(match[3] - 1)[0]
+                data.append([atom_i, atom_j, atom_i_xyz, atom_j_xyz,
+                             atom_k_xyz, atom_l_xyz, "hydroxyl"])
+                unique.append(match[0])
+
+        self.rotatable_bonds = pd.DataFrame(data=data, columns=columns)
+        self.rotatable_bonds.sort_values(by="atom_i", inplace=True)
+
+    def guess_hydrogen_bond_anchors(self, waterfield):
         """ Guess all the hydrogen bonds anchors (donor/acceptor)
         in the molecule based on the hydrogen bond forcefield """
         columns = ["atom_i", "vector_xyz", "anchor_type", "anchor_name"]
@@ -277,11 +323,11 @@ class Molecule():
         # Get all the available hb types
         atom_types = waterfield.get_atom_types()
         # Keep track of all the visited atom
-        visited = [False] * (OBMol.NumAtoms() + 1)
+        visited = [False] * (self._OBMol.NumAtoms() + 1)
 
         for name in atom_types.keys()[::-1]:
             atom_type = atom_types[name]
-            matches = waterfield.get_matches(name, OBMol)
+            matches = waterfield.get_matches(name, self)
 
             if atom_type.hb_type == 1:
                 hb_type = "donor"
@@ -299,9 +345,11 @@ class Molecule():
                 if not visited[idx]:
                     visited[idx] = True
 
+                    print name
+
                     try:
                         # Calculate the vectors on the anchor
-                        vectors = self._hb_vectors(OBMol, idx - 1, atom_type.hyb, atom_type.n_water, atom_type.hb_length)
+                        vectors = self._hb_vectors(idx - 1, atom_type.hyb, atom_type.n_water, atom_type.hb_length)
                         for vector in vectors:
                             data.append([idx - 1, vector, hb_type, name])
                     except:
@@ -310,15 +358,17 @@ class Molecule():
         self.hydrogen_bond_anchors = pd.DataFrame(data=data, columns=columns)
         self.hydrogen_bond_anchors.sort_values(by="atom_i", inplace=True)
 
-    def _hb_vectors(self, OBMol, idx, hyb, n_hbond, hb_length):
-        """Return all the hydrogen bond vectors the atom idx."""
+    def _hb_vectors(self, idx, hyb, n_hbond, hb_length):
+        """ Return all the hydrogen bond vectors the atom idx """
         vectors = []
 
         # Get origin atom
         anchor_xyz = self.coordinates(idx)[0]
         # Get coordinates of all the neihbor atoms
-        neighbors_xyz = self._neighbor_atom_coordinates(OBMol, idx, depth=2)
+        neighbors_xyz = self.neighbor_atom_coordinates(idx, depth=2)
         neighbor1_xyz = neighbors_xyz[1][0]
+
+        print idx, anchor_xyz, neighbors_xyz
 
         if hyb == 1:
             # Position of water is linear
@@ -416,48 +466,23 @@ class Molecule():
         return vectors
 
     def to_file(self, fname, fformat, options=None, append=False):
-        """Write PDBQT file of the water molecule.
-    
-        OpenBabel is used to write in format other than PDBQT file because
-        it is using the default AutoDock atom types (OA, HD, ...). And so
-        it is not working for our special water atom types.
-
-        Args:
-            fname (str): name of the PDBQT file
-            fformat (str): molecule file format
-            options (str): OpenBabel wrting options
-            append (bool): append to existing PDBQT file (default: False)
-
-        Returns:
-            None
-
         """
-        pdbqt_str = "ATOM  %5d %-4s %-3s  %4d    %8.3f%8.3f%8.3f  0.00 0.00     %6.3f %-2s\n"
-        output_str = ""
+        Write OBMolecule to a file
+        """
+        obconv = ob.OBConversion()
+        obconv.SetOutFormat(fformat)
 
-        for atom in self.atoms:
-            x, y, z = atom["xyz"]
-            output_str += pdbqt_str % (atom["i"], atom["name"], atom["resname"], atom["resnum"],
-                                       x, y, z, atom["q"], atom["t"])
-
-        if fformat != "pdbqt":
-            OBMol = ob.OBMol()
-            obconv = ob.OBConversion()
-            obconv.SetInAndOutFormats("pdbqt", fformat)
-            obconv.ReadString(OBMol, output_str)
-
-            if options is not None:
-                for option in options:
-                    obconv.AddOption(option)
-
-            output_str = obconv.WriteString(OBMol)
+        if options is not None:
+            for option in options:
+                obconv.AddOption(option)
 
         if append and os.path.isfile(fname):
+            str_output = obconv.WriteString(self._OBMol)
+
             with open(fname, "a") as a:
-                a.write(output_str)
+                a.write(str_output)
         else:
-            with open(fname, "w") as w:
-                w.write(output_str)
+            obconv.WriteFile(self._OBMol, fname)
 
     def export_hb_vectors(self, fname):
         """ Export all the hb vectors to PDB file. """

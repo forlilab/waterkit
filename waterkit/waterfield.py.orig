@@ -91,14 +91,14 @@ class Waterfield():
         else:
             return None
 
-    def get_matches(self, name, OBMol):
+    def get_matches(self, name, molecule):
         """Return matches using smarts on the molecule
         """
         if name in self._atom_types:
             atom_type = self._atom_types[name]
 
             if atom_type.ob_smarts is not None:
-                atom_type.ob_smarts.Match(OBMol)
+                atom_type.ob_smarts.Match(molecule._OBMol)
                 matches = list(atom_type.ob_smarts.GetMapList())
             else:
                 matches = []

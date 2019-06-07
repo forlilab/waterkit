@@ -8,10 +8,11 @@
 
 import copy
 import os
+from collections import namedtuple
 
 import numpy as np
-import pandas as pd
 import openbabel as ob
+import pandas as pd
 
 import utils
 from molecule import Molecule
@@ -20,44 +21,43 @@ from molecule import Molecule
 class Water(Molecule):
 
     def __init__(self, xyz, atom_type="OW", partial_charge=-0.834, anchor_xyz=None, vector_xyz=None, anchor_type=None):
-        """Initialize a Water object.
-    
-        Args:
-            xyz (array_like): 3d coordinates
-            atom_type (str): atom types of the spherical water molecule (default: OW)
-            partial_charge (float): partial charge of the spherical water molecule (default: -0.834)
-            anchor_xyz (array_like): 3d coordinates of the anchor point
-            vector_xyz (array_like): 3d coordinates of HB vector
-            anchor_type (str): type of anchor point (acceptor or donor)
-
-        """
-        self.atoms = None
-        self.hydrogen_bond_anchors = None
-        self.rotatable_bonds = None
+        self._OBMol = ob.OBMol()
         self._anchor = None
         self._anchor_type = anchor_type
+        self.hydrogen_bond_anchors = None
+        self.rotatable_bonds = None
 
         # Add the oxygen atom
-        self._add_atom(xyz, atom_type, partial_charge)
+        self.add_atom(xyz, atom_type, partial_charge, atom_num=8)
         # Store all the informations about the anchoring
         if all(v is not None for v in [anchor_xyz, vector_xyz]):
-            self._set_anchor(anchor_xyz, vector_xyz)
+            self.set_anchor(anchor_xyz, vector_xyz)
+
+    def __copy__(self):
+        """Create a copy of Water object."""
+        cls = self.__class__
+        # Initialize a dumb Water
+        result = cls([0, 0, 0])
+        result.__dict__.update(self.__dict__)
+        # Explicitly create a new copy of the OBMol
+        result._OBMol = ob.OBMol(self._OBMol)
+        return result
+
+    def __deepcopy__(self, memo):
+        """Create a deep copy of Water object."""
+        cls = self.__class__
+        result = cls([0, 0, 0])
+        memo[id(self)] = result
+        for k, v in self.__dict__.items():
+            if not k == "_OBMol":
+                setattr(result, k, copy.deepcopy(v, memo))
+        # Explicitly create a new copy of the OBMol
+        result._OBMol = ob.OBMol(self._OBMol)
+        return result
 
     @classmethod
-    def from_file(cls, fname, atom_type="OW", partial_charge=-0.834):
-        """Create list of Water objects from a PDB file.
-        
-        The water molecules created are spherical.
-
-        Args:
-            fname (str): molecule filename
-            atom_type (str): atom types of the spherical water molecules (default: OW)
-            partial_charge (float): partial charge of the spherical water molecules (default: -0.834)
-
-        Returns:
-            list: list of Water molecule objects
-
-        """
+    def from_file(cls, fname, atom_type="OW", partial_charge=-0.411):
+        """Create list of Water object from a PDB file."""
         waters = []
 
         # Get name and file extension
@@ -79,40 +79,44 @@ class Water(Molecule):
 
         return waters
 
-    def _add_atom(self, xyz, atom_type, partial_charge):
-        """Add an OBAtom to the molecule."""
-        dtype = [("i", "i4"), ("name", "S4"), ("resname", "S3"), ("resnum", "i4"),
-                 ("xyz", "f4", (3)), ("q", "f4"), ("t", "S5")]
-        resname = "HOH"
-        resnum = 1
+    def add_atom(self, xyz, atom_type, partial_charge, atom_num=1, bond=None):
+        """
+        Add an OBAtom to the molecule
+        """
+        a = self._OBMol.NewAtom()
+        a.SetVector(xyz[0], xyz[1], xyz[2])
+        """Weird stuffs happen here... I have to Set, Get 
+        and re-Set the partial charge. Otherwise it does
+        not work correctly. Also weird thing appends here... 
+        If I remove a.GetType(), the oxygen type become 
+        O3 instead of OA/HO."""
+        for _ in range(2):
+            a.SetPartialCharge(partial_charge)
+            a.SetType(atom_type)
+            a.GetPartialCharge()
+            a.GetType()
 
-        if self.atoms is None:
-            num_atoms = -1
-        else:
-            num_atoms = np.max(self.atoms['i'])
+        a.SetAtomicNum(np.int(atom_num))
 
-        new_atom = (num_atoms + 1, atom_type[0], resname, resnum, xyz, partial_charge, atom_type)
-        new_atom = np.array(new_atom, dtype)
+        if bond is not None and self._OBMol.NumAtoms() >= 1:
+            self._OBMol.AddBond(bond[0], bond[1], bond[2])
 
-        if self.atoms is not None:
-            self.atoms = np.hstack((self.atoms, new_atom))
-        else:
-            self.atoms = new_atom
-
-    def _delete_atoms(self, atom_ids):
+    def delete_atom(self, atom_id):
         """Delete OBAtom from OBMol using atom id."""
-        if self.atoms.size > 1:
-            self.atoms = np.delete(self.atoms, atom_ids)
-            self.atoms["i"] = np.arange(0, self.atoms.shape[0])
-            return True
-        else:
-            return False
+        self._OBMol.DeleteAtom(self.atom(atom_id))
 
-    def _set_anchor(self, anchor_xyz, vector_xyz):
+    def set_anchor(self, anchor_xyz, vector_xyz):
         """Add information about the anchoring."""
         # IDEA: This info should be accessible with attributes hba, hbv and type
         anchor_vector = anchor_xyz + utils.normalize(utils.vector(vector_xyz, anchor_xyz))
         self._anchor = np.array([anchor_xyz, anchor_vector])
+
+    def update_coordinates(self, atom_xyz, atom_id):
+        """
+        Update the coordinates of an OBAtom
+        """
+        ob_atom = self._OBMol.GetAtomById(atom_id)
+        ob_atom.SetVector(atom_xyz[0], atom_xyz[1], atom_xyz[2])
 
     def is_water(self):
         """Tell if it is a water or not."""
@@ -120,43 +124,37 @@ class Water(Molecule):
 
     def is_spherical(self):
         """Tell if water is spherical or not."""
-        if self.atoms.size == 1:
+        if self._OBMol.NumAtoms() == 1:
             return True
         return False
 
     def is_tip3p(self):
         """Tell if water is TIP3P or not."""
-        if self.atoms.size == 3:
+        if self._OBMol.NumAtoms() == 3:
             return True
         return False
 
     def is_tip5p(self):
         """Tell if water is TIP5P or not."""
-        if self.atoms.size == 5:
+        if self._OBMol.NumAtoms() == 5:
             return True
         return False
 
     def tip3p(self):
-        """Return a tip3p version of the Water (deepcopy)."""
+        """Return a tip3p Water."""
         if self.is_tip5p():
             w = copy.deepcopy(self)
-            w._delete_atoms([3, 4])
-            w.hydrogen_bond_anchors.drop([2, 3], inplace=True)
+            w.delete_atom(3)
+            w.delete_atom(4)
 
             return w
             
         return self
 
     def build_explicit_water(self, water_model="tip3p"):
-        """ Construct hydrogen atoms (H) and lone-pairs (Lp)
-        TIP3P or TIP5P parameters: http://www1.lsbu.ac.uk/water/water_models.html
-        
-        Args:
-            water_model (str): water model (choice: tip3p or tip5)(default: tip3p)
-
-        Returns:
-            bool: True if successfull, False otherwise
-
+        """
+        Construct hydrogen atoms (H) and lone-pairs (Lp)
+        TIP5P parameters: http://www1.lsbu.ac.uk/water/water_models.html
         """
         i = 2
         distances = [0.9572, 0.9572, 0.7, 0.7]
@@ -213,21 +211,23 @@ class Water(Molecule):
         a4 = utils.resize_vector(a4, distances[3], coord_oxygen)
 
         """ Only now we do all the modifications to the 
-        atoms. We never know, we might have an error 
+        OBMol object. We never know, we might have an error 
         before while calculating positions of the new atoms.
         So no need to revert to the previous state if 
         something is happening.
         """
 
         # Change the type and partial charges of the oxygen atom
-        # And remove any existing atoms (except oxygen of course)
-        if self.is_spherical():
-            self.atoms["q"] = partial_charges[0]
-            self.atoms["t"] = atom_types[0]
+        oxygen = self.atom(1)
+        oxygen.SetPartialCharge(partial_charges[0])
+        oxygen.SetType(atom_types[0])
+        oxygen.GetPartialCharge() # To Force OB
+        oxygen.GetType() # To Force OB
+
+        # Remove any existing atoms (except oxygen of course)
         if not self.is_spherical():
-            self.atoms[0]["q"] = partial_charges[0]
-            self.atoms[0]["t"] = atom_types[0]
-            self._delete_atoms(range(1, self.atoms.size))
+            for i in range(1, self._OBMol.NumAtoms()):
+                self.delete_atom(i)
 
         # Order them: H, H, Lp, Lp, we want hydrogen atoms first
         if self._anchor_type == "acceptor":
@@ -237,67 +237,47 @@ class Water(Molecule):
 
         # ... and add the new ones
         for atom, atom_type, partial_charge in zip(atoms, atom_types[1:], partial_charges[1:]):
-            self._add_atom(atom, atom_type, partial_charge)
-
-        # Do the HB typing at the end
-        self._guess_hydrogen_bond_anchors()
+            self.add_atom(atom, atom_type, partial_charge, atom_num=1, bond=(1, i, 1))
+            i += 1
 
         return True
 
-    def _guess_hydrogen_bond_anchors(self):
-        """Guess all the hydrogen bond anchors in the
+    def guess_hydrogen_bond_anchors(self, waterfield):
+        """ Guess all the hydrogen bond anchors in the
         TIP5P water molecule. We do not need the waterfield here. """
-        hyb = 1
-        n_water = 1
-        hb_length = 2.8
         columns = ["atom_i", "vector_xyz", "anchor_type", "anchor_name"]
         data = []
 
-        oxygen_xyz = self.coordinates(0)[0]
+        # Get all the available hb types
+        atom_types = waterfield.get_atom_types()
 
-        for i, atom in enumerate(self.atoms[1:]):
-            if atom["name"] == "H":
+        if self._anchor_type == "acceptor":
+            atom_ids = [3, 4, 5]
+            names = ["H_O_004", "O_L_000", "O_L_000"]
+        else:
+            atom_ids = [2, 3, 5]
+            names = ["H_O_004", "H_O_004", "O_L_000"]
+
+        for name, idx in zip(names, atom_ids):
+            atom_type = atom_types[name]
+
+            if atom_type.hb_type == 1:
                 hb_type = "donor"
-                hb_name = "H_O_004"
-            else:
+            elif atom_type.hb_type == 2:
                 hb_type = "acceptor"
-                hb_name = "O_L_000"
 
-            vector_xyz = utils.resize_vector(atom["xyz"], hb_length, oxygen_xyz)
-            data.append((i + 1, vector_xyz, hb_type, hb_name))
+            vectors = self._hb_vectors(idx-1, atom_type.hyb, atom_type.n_water, atom_type.hb_length)
+            for vector in vectors:
+                data.append([idx - 1, vector, hb_type, name])
 
         self.hydrogen_bond_anchors = pd.DataFrame(data=data, columns=columns)
 
-    def update_coordinates(self, xyz, atom_id):
-        """Update the coordinates of an atom.
-
-        Args:
-            xyz (array_like): 3d coordinates of the new atomic position
-            atom_id (int): atom id
-
-        Returns:
-            bool: True if successfull, False otherwise
-
-        """
-        if atom_id < self.atoms.size:
-            self.atoms[atom_id]["xyz"] = xyz
-            return True
-        else:
-            return False
-
     def translate(self, vector):
-        """Translate the water molecule.
-        
-        Args:
-            vector (array_like): 3d vector
-
-        Returns:
-            None
-
-        """
+        """Translate the water molecule."""
         water_xyz = self.coordinates() + vector
         for atom_id, coord_xyz in enumerate(water_xyz):
             self.update_coordinates(coord_xyz, atom_id)
+        #self._OBMol.Translate(vector)
 
         # We have also to translate the hydrogen bond vectors if present
         if self.hydrogen_bond_anchors is not None:
@@ -307,16 +287,7 @@ class Water(Molecule):
         """Rotate water molecule.
 
         The rotation is along the axis Oxygen 
-        and a choosen atom (H or Lp).
-        
-        Args:
-            angle (float): rotation angle
-            ref_id (int): atom index for the rotation axis
-
-        Returns:
-            None
-
-        """
+        and a choosen atom (H or Lp)."""
         water_xyz = self.coordinates()
 
         # Get the rotation between the oxygen and the atom ref
@@ -337,3 +308,33 @@ class Water(Molecule):
             for index, vector in self.hydrogen_bond_anchors.iterrows():
                 vector_xyz = utils.rotate_point(vector["vector_xyz"], oxygen_xyz, r, np.radians(angle))
                 self.hydrogen_bond_anchors.at[index, "vector_xyz"] = vector_xyz
+
+    def to_pdbqt(self, fname, append=False):
+        """Write PDBQT file of the water molecule.
+    
+        We cannot use OpenBabel to write the PDBQT file because
+        it is using the default AutoDock atom types (OA, HD, ...).
+
+        Args:
+            fname (str): name of the PDBQT file
+            append (bool): append to existing PDBQT file (default: False)
+
+        Returns:
+            None
+
+        """
+        output_str = ""
+        pdbqt_str = "ATOM  %5d  %-3s HOH  %4d    %8.3f%8.3f%8.3f  0.00 0.00     %6.3f %2s\n"
+
+        df = self.atom_informations()
+
+        for row in df.itertuples():
+            output_str += pdbqt_str % (row.i + 1, row.t[0], 1, row.x, row.y, row.z, row.q, row.t)
+
+        if append and os.path.isfile(fname):
+            writing_mode = "a"
+        else:
+            writing_mode = "w"
+
+        with open(fname, writing_mode) as w:
+            w.write(output_str)
