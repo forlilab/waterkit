@@ -136,7 +136,7 @@ class WaterOptimizer():
         return disordered_energies
 
     def _neighbor_points_grid(self, water, ad_map, add_noise=False, from_edges=None):
-        oxygen_type = water.atom_types([0])[0]
+        oxygen_type = water.atom_types(0)
         """This is how we select the allowed positions:
         1. Get all the point coordinates on the grid around the anchor (sphere). If the anchor type 
         is donor, we have to reduce the radius by 1 angstrom. Because the hydrogen atom is closer
@@ -232,12 +232,13 @@ class WaterOptimizer():
             # Change coordinates by the new ones and
             # we translate it back the original oxygen position
             tmp_xyz += oxygen_xyz
-
             # Instead of updating the Water object and loosing time, 
             # we just update the coordinates of water_info, except oxygen
-            water_info.loc[1:, ["x", "y", "z"]] = tmp_xyz
+            water_info[1:]["xyz"] = tmp_xyz
 
-            energies.append(ad_map.energy(water_info, ignore_electrostatic=True, ignore_desolvation=True))
+            energy = ad_map.energy(water_info, ignore_electrostatic=True, ignore_desolvation=True)
+
+            energies.append(energy)
             coordinates.append(tmp_xyz)
 
         if self._how == "best":
@@ -328,7 +329,7 @@ class WaterOptimizer():
                     data.append((shell_id + 1, energy_position, energy_orientation))
 
                     # Add water water to the receptor before calculating the new map
-                    water.to_pdbqt(receptor_file, append=True)
+                    water.to_file(receptor_file, "pdbqt", append=True)
 
                     """ If we choose the closest point in the grid and not the coordinates of the
                     oxygen as the center of the grid, it is because we want to avoid any edge effect

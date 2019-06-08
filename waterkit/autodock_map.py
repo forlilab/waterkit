@@ -343,12 +343,12 @@ class Map():
         """
         return self._maps_interpn[atom_type](xyz, method=method)
 
-    def energy(self, df, ignore_atom_types=None, ignore_electrostatic=False, 
-               ignore_desolvation=False, method="linear"):
+    def energy(self, nd, ignore_atom_types=None, ignore_vdw_hb=False, 
+               ignore_electrostatic=False, ignore_desolvation=False, method="linear"):
         """Get energy interaction of a molecule based of the grid.
 
         Args:
-            df (DataFrame): Pandas DatFrame with columns ("i", "x", "y", "z", "q", "t")
+            nd (ndarray): Structure numpy array with columns (i, xyz, q, t)
             ignore_atom_types (list): list of atom types/terms to ignore (default: None)
             ignore_electrostatic (bool): to ignore electrostatic term (default: False)
             ignore_desolvation (bool): to ignore desolvation term (default: False)
@@ -359,6 +359,7 @@ class Map():
 
         """
         energy = 0.
+        vdw_hb = 0.
         elec = 0.
         desolv = 0.
 
@@ -368,16 +369,27 @@ class Map():
         if not isinstance(ignore_atom_types, (list, tuple)):
             ignore_atom_types = [ignore_atom_types]
 
-        se = df.groupby("t", as_index=False)["x", "y", "z", "q"].agg(lambda x: list(x)).values
+        atom_types = np.unique(nd["t"])
+        atom_types = set(atom_types).difference(ignore_atom_types)
 
-        for atom_type, x, y, z, q in se:
-            xyz = np.stack([x, y, z], axis=1)
+        for atom_type in atom_types:
+            index = np.where(nd["t"] == atom_type)[0]
 
-            if not atom_type in ignore_atom_types:
+            if index.size > 1:
+                xyz = nd[index]["xyz"]
+            else:
+                xyz = nd["xyz"]
+
+            if not ignore_vdw_hb:
                 vdw_hb = self._maps_interpn[atom_type](xyz, method=method)
 
             if not ignore_electrostatic:
-                elec = self._maps_interpn["Electrostatics"](xyz, method=method) * np.array(q)
+                if index.size > 1:
+                    q = nd[index]["q"]
+                else:
+                    q = nd["q"]
+
+                elec = self._maps_interpn["Electrostatics"](xyz, method=method) * q
 
             if not ignore_desolvation:
                 desolv = self._maps_interpn["Desolvation"](xyz, method=method)

@@ -6,6 +6,8 @@
 # Launch waterkit
 #
 
+import os
+import imp
 import argparse
 
 from waterkit import utils
@@ -13,6 +15,7 @@ from waterkit.waterkit import Waterkit
 from waterkit.autodock_map import Map
 from waterkit.molecule import Molecule
 from waterkit.water import Water
+from waterkit.waterfield import Waterfield
 
 
 def cmd_lineparser():
@@ -28,7 +31,7 @@ def cmd_lineparser():
     parser.add_argument("-t", "--temperature", dest="temperature", default=300., type=float,
                         action="store", help="temperature")
     parser.add_argument("-c", "--choice", dest="how", default="boltzmann",
-                        choices=["all", "best", "boltzmann"], action="store",
+                        choices=["best", "boltzmann"], action="store",
                         help="how water molecules are choosed")
     parser.add_argument("-w", "--water", dest="water_model", default="tip3p",
                         choices=["tip3p", "tip5p"], action="store",
@@ -54,8 +57,14 @@ def main():
     dielectric = args.dielectric
     output_prefix = args.output_prefix
 
+    """If the user does not provide any of these elements,
+    we take those available per default in waterkit."""
+    d = imp.find_module("waterkit")[1]
+    hb_forcefield_file = os.path.join(d, "data/waterfield.par")
+    hb_forcefield = Waterfield(hb_forcefield_file)
+
     # Read PDBQT/MOL2 file, Waterfield file and AutoDock grid map
-    molecule = Molecule.from_file(mol_file)
+    molecule = Molecule.from_file(mol_file, hb_forcefield)
     ad_map = Map.from_fld(fld_file)
 
     # Go waterkit!!

@@ -16,26 +16,12 @@ import numpy as np
 from autodock_map import Map
 from forcefield import AutoDockForceField
 from water_box import WaterBox
-from waterfield import Waterfield
 
 class Waterkit():
 
-    def __init__(self, hb_forcefield=None):
-        """Initialize WaterKit.
-
-        Args:
-            hb_forcefield (Waterfield): Hydrogen Bond forcefield (default: None)
-
-        """
+    def __init__(self):
+        """Initialize WaterKit."""
         self.water_box = None
-        self._hb_forcefield = hb_forcefield
-
-        """If the user does not provide any of these elements,
-        we take those available per default in waterkit."""
-        if self._hb_forcefield is None:
-            d = imp.find_module("waterkit")[1]
-            hb_forcefield_file = os.path.join(d, "data/waterfield.par")
-            self._hb_forcefield = Waterfield(hb_forcefield_file)
 
     def hydrate(self, receptor, ad_map, water_model="tip3p", n_layer=1, 
                 how="best", temperature=300., smooth=0.5, dielectric=-0.1465):
@@ -93,14 +79,14 @@ class Waterkit():
         ad_map.combine(ow_type, [ow_type, e_type], how="add")
 
         #w_copy = copy.deepcopy(w_ori)
-        w = WaterBox(self._hb_forcefield, water_model, smooth, dielectric)
+        w = WaterBox(how, temperature, water_model, smooth, dielectric)
         w.add_receptor(receptor, ad_map)
 
         while True:
             # build_next_shell returns True if
             # it was able to put water molecules,
             # otherwise it returns False and we break
-            if w.build_next_shell(how, temperature):
+            if w.build_next_shell():
                 pass
             else:
                 break

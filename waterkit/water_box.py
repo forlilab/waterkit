@@ -20,14 +20,16 @@ from optimize import WaterOptimizer
 
 class WaterBox():
 
-    def __init__(self, hb_forcefield, water_model="tip3p", smooth=0.5, dielectric=-0.1465):
+    def __init__(self, how="boltzmann", temperature=300., water_model="tip3p", 
+                 smooth=0.5, dielectric=-0.1465):
         self.df = {}
         self._kdtree = None
         self.molecules = {}
         self.map = None
 
         # Forcefields, forcefield parameters and water model
-        self._hb_forcefield = hb_forcefield
+        self._how = how
+        self._temperature = temperature
         self._water_model = water_model
         self._dielectric = dielectric
         self._smooth = smooth
@@ -48,13 +50,6 @@ class WaterBox():
     def add_receptor(self, receptor, ad_map):
         """Add the receptor and the corresponding ad_map to the waterbox."""
         if not 0 in self.molecules:
-            # Find all the HBA and disordered atoms if necessary
-            if receptor.hydrogen_bond_anchors is None:
-                receptor.guess_hydrogen_bond_anchors(self._hb_forcefield)
-
-            if receptor.rotatable_bonds is None:
-                receptor.guess_rotatable_bonds()
-
             # Add the receptor/map to the waterbox
             self.add_molecules(receptor)
             self.map = ad_map.copy()
@@ -254,9 +249,6 @@ class WaterBox():
         data = []
 
         for i, molecule in enumerate(molecules):
-            if molecule.hydrogen_bond_anchors is None:
-                molecule.guess_hydrogen_bond_anchors(self._hb_forcefield)
-
             for index, row in molecule.hydrogen_bond_anchors.iterrows():
                 # Add water molecule only if it's in the map
                 if self.map.is_in_map(row.vector_xyz):
@@ -272,17 +264,14 @@ class WaterBox():
 
         return (waters, connections)
 
-    def build_next_shell(self, how="boltzmann", temperature=300.):
+    def build_next_shell(self):
         """Build the next hydration shell.
-        
-        Args:
-            how (str): method used to place water molecules (choice: best, boltzmann)(default: boltzmann)
-            temperature (float): sampling temperature in Kelvin (default: 300)
 
         Returns:
             bool: True if water molecules were added or False otherwise
 
         """
+        angle = 110
         type_ow = "OW"
         partial_charge = -0.834
         shell_id = self.number_of_shells()
@@ -291,7 +280,7 @@ class WaterBox():
         # Test if we have all the material to continue
         assert len(molecules) > 0, "There is molecule(s) in the shell %s" % shell_id
 
-        wopt = WaterOptimizer(self, how, angle=110, temperature=temperature)
+        wopt = WaterOptimizer(self, self._how, angle=angle, temperature=self._temperature)
 
         waters, connections = self.place_optimal_spherical_waters(molecules, type_ow, partial_charge)
 
@@ -328,28 +317,27 @@ class WaterBox():
             None
 
         """
-        i = 1
-        j = 1
-        pdbqt_options = "rcp"
         output_str = ""
-        pdbqt_str = "ATOM  %5d  %-3s HOH  %4d    %8.3f%8.3f%8.3f  0.00 0.00     %6.3f %2s\n"
+        pdbqt_str = "ATOM  %5d %-4s %-3s  %4d    %8.3f%8.3f%8.3f  0.00 0.00     %6.3f %-2s\n"
 
-        obconv = ob.OBConversion()
-        obconv.SetOutFormat("pdbqt")
+        atoms = self.molecules[0].atoms
+        for atom in atoms:
+            x, y, z = atom["xyz"]
+            output_str += pdbqt_str % (atom["i"], atom["name"], atom["resname"], atom["resnum"],
+                                       x, y, z, atom["q"], atom["t"])
 
-        for option in pdbqt_options:
-            obconv.AddOption(option)
-
-        # We use OpenBabel for the receptor
-        # By default we remove the TER keyword...
-        output_str = obconv.WriteString(self.molecules[0]._OBMol)[:-5]
+        # Get the index of the nex atom and residue
+        i = atom["i"] + 1
+        j = atom["resnum"] + 1
 
         # And we do it manually for the water molecules
         for key in self.molecules.keys()[1:]:
-            df = self.molecules[key].atom_informations()
+            atoms = self.molecules[key].atoms
 
-            for row in df.itertuples():
-                output_str += pdbqt_str % (i, row.t[0], j, row.x, row.y, row.z, row.q, row.t)
+            for atom in atoms:
+                x, y, z = atom["xyz"]
+                output_str += pdbqt_str % (i, atom["name"], atom["resname"], j,
+                                           x, y, z, atom["q"], atom["t"])
                 i += 1
 
             j += 1

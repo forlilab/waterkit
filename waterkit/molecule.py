@@ -61,7 +61,7 @@ class Molecule():
         self._guess_rotatable_bonds(OBMol)
 
     @classmethod
-    def from_file(cls, fname, waterfield):
+    def from_file(cls, fname, waterfield=None):
         """Create Molecule object from a PDB file.
 
         Args:
@@ -136,32 +136,38 @@ class Molecule():
         else:
             atoms = self.atoms["xyz"]
 
-        return np.atleast_2d(atoms)
+        return np.atleast_2d(atoms).copy()
 
     def atom_types(self, atom_ids=None):
         """
         Return atom types of all atoms or a certain atom
         """
-        if atom_ids is not None:
-            return self.atoms[atom_ids]['t']
+        if atom_ids is not None and self.atoms.size > 1:
+            t = self.atoms[atom_ids]['t']
         else:
-            return self.atoms['t']
+            t = self.atoms['t']
+
+        return t.tolist()
 
     def partial_charges(self, atom_ids=None):
         """Get partial charges."""
-        if atom_ids is not None:
-            return self.atoms[atom_ids]['q']
+        if atom_ids is not None and self.atoms.size > 1:
+            q = self.atoms[atom_ids]['q']
         else:
-            return self.atoms['q']
+            q =  self.atoms['q']
+
+        return q.copy()
 
     def atom_informations(self, atom_ids=None):
         """Get atom informations (xyz, q, type)."""
         columns = ["i", "x", "y", "z", "q", "t"]
 
         if atom_ids is not None:
-            return self.atoms[atom_ids][['i', 'xyz', 'q', 't']]
+            atoms = self.atoms[atom_ids][['i', 'xyz', 'q', 't']]
         else:
-            return self.atoms[['i', 'xyz', 'q', 't']]
+            atoms = self.atoms[['i', 'xyz', 'q', 't']]
+
+        return atoms.copy()
 
     def _guess_rotatable_bonds(self, OBMol):
         """ Guess all the rotatable bonds in the molecule

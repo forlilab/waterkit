@@ -280,7 +280,10 @@ class Water(Molecule):
 
         """
         if atom_id < self.atoms.size:
-            self.atoms[atom_id]["xyz"] = xyz
+            if self.atoms.size > 1:
+                self.atoms[atom_id]["xyz"] = xyz
+            else:
+                self.atoms["xyz"] = xyz
             return True
         else:
             return False

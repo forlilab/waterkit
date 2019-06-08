@@ -11,6 +11,9 @@ from __future__ import print_function
 import os
 from glob import glob
 
+import numpy as np
+import openbabel as ob
+
 import utils
 from molecule import Molecule
 from autodock_map import Map
