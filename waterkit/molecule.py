@@ -119,9 +119,15 @@ class Molecule():
         """Tell if it is a water or not."""
         return False
 
-    def atom(self, i):
-        """
-        Return the atom i
+    def atom(self, atom_id):
+        """Return the atom i
+
+        Args:
+            atom_id (int): atom id
+        
+        Returns:
+            ndarray: 1d ndarray (i, name, resname, resnum, xyz, q, t)
+
         """
         return self.atoms[i]
 
@@ -491,7 +497,15 @@ class Molecule():
                 w.write(output_str)
 
     def export_hb_vectors(self, fname):
-        """ Export all the hb vectors to PDB file. """
+        """Export all the hb vectors to PDBQT file. 
+        
+        Args:
+            fname (str): filename
+
+        Returns:
+            None
+
+        """
         pdbqt_str = "ATOM  %5d  %-3s ANC%2s%4d    %8.3f%8.3f%8.3f%6.2f 1.00    %6.3f %2s\n"
 
         if self.hydrogen_bond_anchors is not None:
