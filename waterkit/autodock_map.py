@@ -249,7 +249,7 @@ class Map():
             molecule (molecule): Molecule object
 
         Returns:
-            ndarray: atom indexes
+            ndarray: 1d Numpy array of atom indexes
 
         """
         xyz = molecule.atoms["xyz"]
