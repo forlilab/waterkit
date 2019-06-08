@@ -128,8 +128,13 @@ class Molecule():
     def coordinates(self, atom_ids=None):
         """
         Return coordinates of all atoms or a certain atom
-        We do it like this because OBMol.GetCoordinates is not working
-        ... and it never will (https://github.com/openbabel/openbabel/issues/1367)
+        
+        Args:
+            atom_ids (int, list): index of one or multiple atoms
+
+        Returns:
+            ndarray: 2d ndarray of 3d coordinates
+
         """
         if atom_ids is not None and self.atoms.size > 1:
             atoms = self.atoms[atom_ids]["xyz"]
@@ -139,8 +144,14 @@ class Molecule():
         return np.atleast_2d(atoms).copy()
 
     def atom_types(self, atom_ids=None):
-        """
-        Return atom types of all atoms or a certain atom
+        """Return atom types of all atoms or a certain atom.
+        
+        Args:
+            atom_ids (int, list): index of one or multiple atoms
+
+        Returns:
+            list: atom types
+
         """
         if atom_ids is not None and self.atoms.size > 1:
             t = self.atoms[atom_ids]['t']
@@ -150,7 +161,15 @@ class Molecule():
         return t.tolist()
 
     def partial_charges(self, atom_ids=None):
-        """Get partial charges."""
+        """Get partial charges.
+
+        Args:
+            atom_ids (int, list): index of one or multiple atoms
+
+        Returns:
+            ndarray: partial charges
+
+        """
         if atom_ids is not None and self.atoms.size > 1:
             q = self.atoms[atom_ids]['q']
         else:
@@ -159,9 +178,15 @@ class Molecule():
         return q.copy()
 
     def atom_informations(self, atom_ids=None):
-        """Get atom informations (xyz, q, type)."""
-        columns = ["i", "x", "y", "z", "q", "t"]
+        """Get atom informations (xyz, q, type).
+        
+        Args:
+            atom_ids (int, list): index of one or multiple atoms
 
+        Returns:
+            ndarray: atom information (i, xyz, q, t)
+
+        """
         if atom_ids is not None:
             atoms = self.atoms[atom_ids][['i', 'xyz', 'q', 't']]
         else:
