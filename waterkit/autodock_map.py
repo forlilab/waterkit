@@ -249,41 +249,12 @@ class Map():
             molecule (molecule): Molecule object
 
         Returns:
-            list: atom indexes
+            ndarray: atom indexes
 
         """
-        idx = []
-        OBMol = molecule._OBMol
-
-        for ob_atom in ob.OBMolAtomIter(OBMol):
-            x, y, z = ob_atom.GetX(), ob_atom.GetY(), ob_atom.GetZ()
-
-            if self.is_in_map([x, y, z]):
-                idx.append(ob_atom.GetIdx())
-
-        return idx
-
-    def residues_in_map(self, molecule):
-        """List of index of all the residues in the map.
-
-        Args:
-            molecule (Molecule): Molecule object
-
-        Returns:
-            list: residue indexes
-
-        """
-        idx = []
-        OBMol = molecule._OBMol
-
-        for ob_residue in ob.OBResidueIter(OBMol):
-            for ob_atom in ob.OBResidueAtomIter(ob_residue):
-                x, y, z = ob_atom.GetX(), ob_atom.GetY(), ob_atom.GetZ()
-
-                # If at least one atom (whatever the type) is in the grid, add the residue
-                if self.is_in_map([x, y, z]):
-                    idx.append(ob_residue.GetIdx())
-                    break
+        xyz = molecule.atoms["xyz"]
+        in_out = self.is_in_map(xyz)
+        idx = np.arange(0, xyz.size)[in_out]
 
         return idx
 
