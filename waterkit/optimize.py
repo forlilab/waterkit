@@ -340,7 +340,7 @@ class WaterOptimizer():
 
                     # Fire off AutoGrid
                     water_map = ag.run(receptor_file, ow_type, center, npts, 
-                                       spacing, smooth, dielectric, clean=False)
+                                       spacing, smooth, dielectric, clean=True)
 
                     # Modify electrostatics map and add it
                     # For the TIP3P and TIP5P models
