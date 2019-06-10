@@ -187,7 +187,7 @@ class WaterOptimizer():
         
         The movement of the water is contrained by the distance and 
         the angle with the anchor."""
-        oxygen_type = water.atom_types([0])[0]
+        oxygen_type = water.atom_types([0])
         
         coord_sphere, energy_sphere = self._neighbor_points_grid(water, ad_map, add_noise, from_edges)
 
@@ -340,7 +340,7 @@ class WaterOptimizer():
 
                     # Fire off AutoGrid
                     water_map = ag.run(receptor_file, ow_type, center, npts, 
-                                       spacing, smooth, dielectric, clean=True)
+                                       spacing, smooth, dielectric, clean=False)
 
                     # Modify electrostatics map and add it
                     # For the TIP3P and TIP5P models
