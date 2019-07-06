@@ -76,7 +76,16 @@ class Molecule():
         name, file_extension = os.path.splitext(fname)
         # Read PDB file
         obconv = ob.OBConversion()
-        obconv.SetInFormat(file_extension)
+        
+        """ If the file is a PDBQT file, we read it as a simple PDB
+        file. Partial charges and atom types will be read separately. 
+        We have to do that because OB knows only the vanilla AutoDock
+        atom types (HD, OA,...)."""
+        if file_extension == ".pdbqt":
+            obconv.SetInFormat("pdb")
+        else:
+            obconv.SetInFormat(file_extension)
+
         OBMol = ob.OBMol()
         obconv.ReadFile(OBMol, fname)
 
