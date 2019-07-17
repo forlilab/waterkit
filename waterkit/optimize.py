@@ -9,7 +9,6 @@
 import time
 import os
 import uuid
-import warnings
 
 import numpy as np
 import pandas as pd
@@ -38,23 +37,26 @@ class WaterOptimizer():
         coordinates = np.random.random(size=(self._orientation, 3))
         self._quaternions = utils.shoemake(coordinates)
 
-    def _boltzmann_choice(self, energies, all_choices=False):
+    def _boltzmann_choice(self, energies, size=None):
         """Choose state i based on boltzmann probability."""
         energies = np.array(energies)
         
         d = np.exp(-energies / (self._kb * self._temperature))
-        # We ignore divide by zero warning
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
+        d_sum = np.sum(d)
+
+        if d_sum > 0:
             p = d / np.sum(d)
-
-        if all_choices:
-            # If some prob. in p are zero, ValueError: size of nonzero p is lower than size
-            size = np.count_nonzero(p)
-            i = np.random.choice(d.shape[0], size, False, p)
         else:
-            i = np.random.choice(d.shape[0], p=p)
+            # It means that energies are too high
+            return None
 
+        if size > 1:
+            # If some prob. in p are zero, ValueError: size of nonzero p is lower than size
+            non_zero = np.count_nonzero(p)
+            size = non_zero if non_zero < size else size
+
+        i = np.random.choice(d.shape[0], size, False, p)
+        
         return i
 
     def _optimize_disordered_waters(self, receptor, waters, connections, ad_map):
@@ -77,61 +79,65 @@ class WaterOptimizer():
             molecule_j = connections.loc[tmp]["molecule_j"].values
             rot_waters.extend([waters[j] for j in molecule_j])
 
-            # Get energy of the favorable disordered waters
-            energy_waters = np.array([ad_map.energy(w.atom_informations()) for w in rot_waters])
-            energy_waters[energy_waters > 0] = 0
-            energies.append(np.sum(energy_waters))
-            # Current angle of the disordered group
-            current_angle = utils.dihedral(row[["atom_i_xyz", "atom_j_xyz", "atom_k_xyz", "atom_l_xyz"]].values)
-            angles.append(current_angle)
-
-            """ Find all the atoms that depends on these atoms. This
-            will be useful when we will want to rotate a whole sidechain."""
-            # Atom children has to be initialized before
-            # molecule._OBMol.FindChildren(atom_children, match[2], match[3])
-            # print np.array(atom_children)
-
-            # Atoms 3 and 2 define the rotation axis
-            p1 = row["atom_k_xyz"]
-            p2 = row["atom_j_xyz"]
-
-            # Scan all the angles
-            for i in range(n_rotation):
-                """TODO: Performance wise, we should not update water
-                coordinates everytime. Coordinates should be extracted
-                before doing the optimization and only at the end
-                we update the coordinates of the water molecules."""
-                for rot_water in rot_waters:
-                    p0 = rot_water.coordinates([0])[0]
-                    p_new = utils.rotate_point(p0, p1, p2, rotation)
-                    rot_water.update_coordinates(p_new, atom_id=0)
-
-                # Get energy and update the current angle (increment rotation)
-                energy_waters = np.array([ad_map.energy(w.atom_informations()) for w in rot_waters])
+            if rot_waters:
+                # Get energy of the favorable disordered waters
+                energy_waters = np.array([ad_map.energy(w.atom_informations(), ignore_electrostatic=True, 
+                                                        ignore_desolvation=True) for w in rot_waters])
                 energy_waters[energy_waters > 0] = 0
                 energies.append(np.sum(energy_waters))
-                current_angle += rotation
+                # Current angle of the disordered group
+                current_angle = utils.dihedral(row[["atom_i_xyz", "atom_j_xyz", "atom_k_xyz", "atom_l_xyz"]].values)
                 angles.append(current_angle)
 
-            # Choose the best or the best-boltzmann state
-            if self._how == "best":
-                i = np.argmin(energies)
-            elif self._how == "boltzmann":
-                i = self._boltzmann_choice(energies)
+                """ Find all the atoms that depends on these atoms. This
+                will be useful when we will want to rotate a whole sidechain."""
+                # Atom children has to be initialized before
+                # molecule._OBMol.FindChildren(atom_children, match[2], match[3])
+                # print np.array(atom_children)
 
-            disordered_energies.append(energies[i])
+                # Atoms 3 and 2 define the rotation axis
+                p1 = row["atom_k_xyz"]
+                p2 = row["atom_j_xyz"]
 
-            # Calculate the best angle, based on how much we rotated
-            best_angle = np.radians((360. - np.degrees(current_angle)) + np.degrees(angles[i]))
-            # Update coordinates to the choosen state
-            for rot_water in rot_waters:
-                p0 = rot_water.coordinates([0])[0]
-                p_new = utils.rotate_point(p0, p1, p2, best_angle)
-                rot_water.update_coordinates(p_new, atom_id=0)
-                # Update also the anchor point
-                anchor = rot_water._anchor
-                anchor[0] = utils.rotate_point(anchor[0], p1, p2, best_angle)
-                anchor[1] = utils.rotate_point(anchor[1], p1, p2, best_angle)
+                # Scan all the angles
+                for i in range(n_rotation):
+                    """TODO: Performance wise, we should not update water
+                    coordinates everytime. Coordinates should be extracted
+                    before doing the optimization and only at the end
+                    we update the coordinates of the water molecules."""
+                    for rot_water in rot_waters:
+                        p0 = rot_water.coordinates([0])[0]
+                        p_new = utils.rotate_point(p0, p1, p2, rotation)
+                        rot_water.update_coordinates(p_new, atom_id=0)
+
+                    # Get energy and update the current angle (increment rotation)
+                    energy_waters = np.array([ad_map.energy(w.atom_informations(), ignore_electrostatic=True, 
+                                                            ignore_desolvation=True) for w in rot_waters])
+
+                    energy_waters[energy_waters > 0] = 0
+                    energies.append(np.nansum(energy_waters))
+                    current_angle += rotation
+                    angles.append(current_angle)
+
+                # Choose the best or the best-boltzmann state
+                if self._how == "best":
+                    i = np.argmin(energies)
+                elif self._how == "boltzmann":
+                    i = self._boltzmann_choice(energies)
+
+                disordered_energies.append(energies[i])
+
+                # Calculate the best angle, based on how much we rotated
+                best_angle = np.radians((360. - np.degrees(current_angle)) + np.degrees(angles[i]))
+                # Update coordinates to the choosen state
+                for rot_water in rot_waters:
+                    p0 = rot_water.coordinates([0])[0]
+                    p_new = utils.rotate_point(p0, p1, p2, best_angle)
+                    rot_water.update_coordinates(p_new, atom_id=0)
+                    # Update also the anchor point
+                    anchor = rot_water._anchor
+                    anchor[0] = utils.rotate_point(anchor[0], p1, p2, best_angle)
+                    anchor[1] = utils.rotate_point(anchor[1], p1, p2, best_angle)
 
         return disordered_energies
 
@@ -178,7 +184,7 @@ class WaterOptimizer():
         if self._how == "best":
             order = np.argsort(energies)
         elif self._how == "boltzmann":
-            order = self._boltzmann_choice(energies, True)
+            order = self._boltzmann_choice(energies, len(energies))
 
         return order
 
@@ -197,14 +203,14 @@ class WaterOptimizer():
             elif self._how == "boltzmann":
                 idx = self._boltzmann_choice(energy_sphere)
 
-            # Update the coordinates
-            water.translate(utils.vector(water.coordinates(0), coord_sphere[idx]))
+            if idx is not None:
+                # Update the coordinates
+                water.translate(utils.vector(water.coordinates(0), coord_sphere[idx]))
+                return energy_sphere[idx]
 
-            return energy_sphere[idx]
-        else:
-            """If we do not find anything, at least we return the energy
-            of the current water molecule. """
-            return ad_map.energy_coordinates(water.coordinates(0), atom_type=oxygen_type)
+        """If we do not find anything, at least we return the energy
+        of the current water molecule. """
+        return ad_map.energy_coordinates(water.coordinates(0), atom_type=oxygen_type)
 
     def _optimize_orientation_grid(self, water):
         """Optimize the orientation of the TIP5P water molecule using the grid. """
@@ -246,11 +252,15 @@ class WaterOptimizer():
         elif self._how == "boltzmann":
             idx = self._boltzmann_choice(energies)
 
-        # Update the coordinates with the selected orientation, except oxygen
-        for i, j in enumerate(atom_ids[1:]):
-            water.update_coordinates(coordinates[idx][i], j)
+        if idx is not None:
+            # Update the coordinates with the selected orientation, except oxygen
+            for i, j in enumerate(atom_ids[1:]):
+                water.update_coordinates(coordinates[idx][i], j)
+            return energies[idx]
 
-        return energies[idx]
+        """If we do not find anything, at least we return the energy
+        of the current water molecule. """
+        return ad_map.energy(water.atom_informations(), ignore_electrostatic=True, ignore_desolvation=True)
 
     def optimize_grid(self, waters, connections=None, opt_disordered=True):
         """Optimize position of water molecules."""
@@ -288,11 +298,6 @@ class WaterOptimizer():
         else:
             add_noise = True
 
-        # We do not want name overlap between different replicates
-        short_uuid = str(uuid.uuid4())[0:8]
-        receptor_file = "%s.pdbqt" % short_uuid
-        self._water_box.to_pdbqt(receptor_file)
-
         ag = AutoGrid()
 
         if opt_disordered and connections is not None:
@@ -301,6 +306,11 @@ class WaterOptimizer():
         # The placement order is based on the best energy around each hydrogen anchor point
         water_orders = self._optimize_placement_order_grid(waters, ad_map, add_noise, from_edges=1.)
         to_be_removed.extend(set(np.arange(len(waters))) - set(water_orders))
+
+        # We do not want name overlap between different replicates
+        short_uuid = str(uuid.uuid4())[0:8]
+        receptor_file = "%s.pdbqt" % short_uuid
+        self._water_box.to_pdbqt(receptor_file)
 
         """ And now we optimize all water individually. All the
         water molecules are outside the box or with a positive

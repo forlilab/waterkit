@@ -344,9 +344,8 @@ class Map():
         atom_types = set(atom_types).difference(ignore_atom_types)
 
         for atom_type in atom_types:
-            index = np.where(nd["t"] == atom_type)[0]
-
-            if index.size > 1:
+            if nd.size > 1:
+                index = np.where(nd["t"] == atom_type)[0]
                 xyz = nd[index]["xyz"]
             else:
                 xyz = nd["xyz"]
@@ -355,7 +354,7 @@ class Map():
                 vdw_hb = self._maps_interpn[atom_type](xyz, method=method)
 
             if not ignore_electrostatic:
-                if index.size > 1:
+                if nd.size > 1:
                     q = nd[index]["q"]
                 else:
                     q = nd["q"]
