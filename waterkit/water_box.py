@@ -272,7 +272,7 @@ class WaterBox():
 
         """
         angle = 110
-        type_ow = "OW"
+        type_sw = "SW"
         partial_charge = -0.834
         shell_id = self.number_of_shells()
         molecules = self.molecules_in_shell(shell_id)
@@ -282,7 +282,7 @@ class WaterBox():
 
         wopt = WaterOptimizer(self, self._how, angle=angle, temperature=self._temperature)
 
-        waters, connections = self.place_optimal_spherical_waters(molecules, type_ow, partial_charge)
+        waters, connections = self.place_optimal_spherical_waters(molecules, type_sw, partial_charge)
 
         # Only the receptor contains disordered hydrogens
         if shell_id == 0:

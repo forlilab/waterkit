@@ -46,8 +46,7 @@ class Waterkit():
         """
         i = 1
         e_type = "Electrostatics"
-        ow_q = -0.834
-        ow_type = "OW"
+        sw_type = 'SW'
 
         """In TIP3P and TIP5P models, hydrogen atoms and lone-pairs does not
         have VdW radius, so their interactions with the receptor are purely
@@ -56,27 +55,27 @@ class Waterkit():
         look-up table to get the energy for each water molecule.
         """
         if water_model == "tip3p":
+            ow_type = "OW"
             hw_type = "HW"
+            ow_q = -0.834
             hw_q = 0.417
         elif water_model == "tip5p":
             ot_type = "OT"
             hw_type = "HT"
-            lpw_type = "LP"
+            lw_type = "LP"
             hw_q = 0.241
-            lpw_q = -0.241
+            lw_q = -0.241
         else:
             print "Error: water model %s unknown." % water_model
             return False
 
         # For the TIP3P and TIP5P models
         ad_map.apply_operation_on_maps(hw_type, e_type, "x * %f" % hw_q)
-        if water_model == "tip5p":
-            ad_map.apply_operation_on_maps(lpw_type, e_type, "x * %f" % lpw_q)
-            # Necessary for the TIP5P oxygen
-            ad_map.create_empty_map(ot_type)
-        # For the spherical model and TIP3P model
-        ad_map.apply_operation_on_maps(e_type, e_type, "-np.abs(x * %f)" % ow_q)
-        ad_map.combine(ow_type, [ow_type, e_type], how="add")
+        if water_model == "tip3p":
+            ad_map.apply_operation_on_maps(e_type, e_type, "x * %f" % ow_q)
+            ad_map.combine(ow_type, [ow_type, e_type], how="add")
+        elif water_model == "tip5p":
+            ad_map.apply_operation_on_maps(lw_type, e_type, "x * %f" % lw_q)
 
         #w_copy = copy.deepcopy(w_ori)
         w = WaterBox(how, temperature, water_model, smooth, dielectric)

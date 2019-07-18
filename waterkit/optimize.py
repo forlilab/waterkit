@@ -279,19 +279,25 @@ class WaterOptimizer():
         npts = np.round(boxsize / spacing).astype(np.int)
 
         e_type = "Electrostatics"
-        ow_q = -0.834
-        ow_type = "OW"
+        sw_type = "SW"
+        atom_types_replaced = [sw_type]
+        ligand_types = [sw_type]
 
         if water_model == "tip3p":
+            ow_type = "OW"
             hw_type = "HW"
+            ow_q = -0.834
             hw_q = 0.417
-            atom_types_replaced = ["OW", "HW"]
+            atom_types_replaced += [ow_type, hw_type]
+            ligand_types += [ow_type]
         elif water_model == "tip5p":
+            ot_type = "OT"
             hw_type = "HT"
-            lpw_type = "LP"
+            lw_type = "LP"
             hw_q = 0.241
-            lpw_q = -0.241
-            atom_types_replaced = ["OW", "HT", "LP"]
+            lw_q = -0.241
+            atom_types_replaced += [ot_type, hw_type, lw_type]
+            ligand_types += [ot_type]
 
         if self._how == "best":
             add_noise = False
@@ -349,17 +355,16 @@ class WaterOptimizer():
                     center = ad_map.neighbor_points(water.coordinates(0)[0], spacing)[0]
 
                     # Fire off AutoGrid
-                    water_map = ag.run(receptor_file, ow_type, center, npts, 
+                    water_map = ag.run(receptor_file, ligand_types, center, npts, 
                                        spacing, smooth, dielectric, clean=True)
 
-                    # Modify electrostatics map and add it
                     # For the TIP3P and TIP5P models
                     water_map.apply_operation_on_maps(hw_type, e_type, "x * %f" % hw_q)
-                    if water_model == "tip5p":
-                        water_map.apply_operation_on_maps(lpw_type, e_type, "x * %f" % lpw_q)
-                    # For the spherical model and TIP3P model
-                    water_map.apply_operation_on_maps(e_type, e_type, "-np.abs(x * %f)" % ow_q)
-                    water_map.combine(ow_type, [ow_type, e_type], how="add")
+                    if water_model == "tip3p":
+                        water_map.apply_operation_on_maps(e_type, e_type, "x * %f" % ow_q)
+                        water_map.combine(ow_type, [ow_type, e_type], how="add")
+                    elif water_model == "tip5p":
+                        water_map.apply_operation_on_maps(lw_type, e_type, "x * %f" % lw_q)
 
                     # And we update the receptor map
                     for atom_type in atom_types_replaced:
