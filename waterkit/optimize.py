@@ -19,7 +19,7 @@ from autogrid import AutoGrid
 
 class WaterOptimizer():
 
-    def __init__(self, water_box, how="best", min_distance=2.5, max_distance=3.4, angle=90, rotation=10,
+    def __init__(self, water_box, how="best", min_distance=2.4, max_distance=3.2, angle=90, rotation=10,
                  orientation=100, energy_cutoff=0, temperature=298.15):
         self._water_box = water_box
         self._how = how
@@ -279,7 +279,7 @@ class WaterOptimizer():
         npts = np.round(boxsize / spacing).astype(np.int)
 
         e_type = "Electrostatics"
-        sw_type = "SW"
+        sw_type = "OD"
         atom_types_replaced = [sw_type]
         ligand_types = [sw_type]
 

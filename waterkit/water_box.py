@@ -232,7 +232,7 @@ class WaterBox():
 
         return best_hba, best_hbv_id
 
-    def place_optimal_spherical_waters(self, molecules, atom_type="OW", partial_charge=-0.834):
+    def place_optimal_spherical_waters(self, molecules, atom_type="W", partial_charge=0.):
         """Place spherical water molecules in the optimal position.
 
         Args:
@@ -272,8 +272,8 @@ class WaterBox():
 
         """
         angle = 110
-        type_sw = "SW"
-        partial_charge = -0.834
+        type_sw = "OD"
+        partial_charge = 0.0
         shell_id = self.number_of_shells()
         molecules = self.molecules_in_shell(shell_id)
 

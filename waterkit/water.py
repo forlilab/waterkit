@@ -19,7 +19,7 @@ from molecule import Molecule
 
 class Water(Molecule):
 
-    def __init__(self, xyz, atom_type="SW", partial_charge=-0.834, anchor_xyz=None, vector_xyz=None, anchor_type=None):
+    def __init__(self, xyz, atom_type="W", partial_charge=0., anchor_xyz=None, vector_xyz=None, anchor_type=None):
         """Initialize a Water object.
     
         Args:
@@ -44,7 +44,7 @@ class Water(Molecule):
             self._set_anchor(anchor_xyz, vector_xyz)
 
     @classmethod
-    def from_file(cls, fname, atom_type="SW", partial_charge=-0.834):
+    def from_file(cls, fname, atom_type="W", partial_charge=0.):
         """Create list of Water objects from a PDB file.
         
         The water molecules created are spherical.

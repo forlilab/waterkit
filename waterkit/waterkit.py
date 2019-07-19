@@ -46,7 +46,7 @@ class Waterkit():
         """
         i = 1
         e_type = "Electrostatics"
-        sw_type = 'SW'
+        sw_type = "OD"
 
         """In TIP3P and TIP5P models, hydrogen atoms and lone-pairs does not
         have VdW radius, so their interactions with the receptor are purely
