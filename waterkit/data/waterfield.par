@@ -1,5 +1,5 @@
 #
-# Water Forcefield 0.1.1
+# Water Forcefield 0.1.2
 #
 # - Atom types
 # - hb_type = {0: inactive, 1: donor, 2: acceptor} 
@@ -16,13 +16,13 @@
 
 # Hydrogen
 ## H
-#ATOM H_000    1   0.000 1 1 1.8 [#1] # all hydrogens
+#ATOM H_000    0   0.000 1 1 1.8 [#1] # all hydrogens
 
 ## HC
 ATOM H_C_000  0   0.000 1 1 1.8 [#1][#6] # all CH
-ATOM H_C_001  1   0.500 1 1 1.8 [#1][#6;X2] # acetylene
-ATOM H_C_002  1   0.250 1 1 1.8 [#1][#6;X3] # ethylene / benzene
-ATOM H_C_003  1   0.120 1 1 1.8 [#1][#6;X4] # methane
+ATOM H_C_001  0   0.500 1 1 1.8 [#1][#6;X2] # acetylene
+ATOM H_C_002  0   0.250 1 1 1.8 [#1][#6;X3] # ethylene / benzene
+ATOM H_C_003  0   0.120 1 1 1.8 [#1][#6;X4] # methane
 
 ## OH
 ATOM H_O_000  1   0.000 1 1 1.8 [#1][#8] # general hydroxyl (OH)
