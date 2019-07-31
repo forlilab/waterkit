@@ -6,13 +6,11 @@
 # Class for water network optimizer
 #
 
-import time
 import os
 import uuid
 
 import numpy as np
 import pandas as pd
-from scipy.cluster.hierarchy import linkage, fcluster
 
 import utils
 from autogrid import AutoGrid
