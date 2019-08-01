@@ -259,6 +259,11 @@ def shoemake(coordinates):
     return np.dstack((t1 * np.sin(s1), t1 * np.cos(s1), 
                       t2 * np.sin(s2), t2 * np.cos(s2)))[0]
 
+def random_quaternion(n=1):
+    """Create n random quaternions."""
+    u = np.random.random(size=(n, 3))
+    return shoemake(u)
+
 def execute_command(cmd_line):
     """Simple function to execute bash command."""
     args = cmd_line.split()

@@ -15,7 +15,7 @@ from scipy import spatial
 
 import utils
 from water import Water
-from optimize import WaterOptimizer
+from optimize import WaterSampler
 
 
 class WaterBox():
@@ -280,18 +280,18 @@ class WaterBox():
         # Test if we have all the material to continue
         assert len(molecules) > 0, "There is molecule(s) in the shell %s" % shell_id
 
-        wopt = WaterOptimizer(self, self._how, angle=angle, temperature=self._temperature)
+        wopt = WaterSampler(self, self._how, angle=angle, temperature=self._temperature)
 
         waters, connections = self.place_optimal_spherical_waters(molecules, type_sw, partial_charge)
 
         # Only the receptor contains disordered hydrogens
         if shell_id == 0:
-            waters, df = wopt.optimize_grid(waters, connections, opt_disordered=True)
+            waters, df = wopt.sample_grid(waters, connections, opt_disordered=True)
         else:
             """After the first hydration layer, we don't care anymore about 
             connections. It was only useful for the disordered hydrogen atoms.
             """
-            waters, df = wopt.optimize_grid(waters, opt_disordered=False)
+            waters, df = wopt.sample_grid(waters, opt_disordered=False)
 
         if len(waters):
             self.add_molecules(waters, add_KDTree=False)

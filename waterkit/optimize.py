@@ -6,6 +6,7 @@
 # Class for water network optimizer
 #
 
+import imp
 import os
 import uuid
 
@@ -15,25 +16,35 @@ import pandas as pd
 import utils
 from autogrid import AutoGrid
 
-class WaterOptimizer():
+class WaterSampler():
 
     def __init__(self, water_box, how="best", min_distance=2.4, max_distance=3.2, angle=90, rotation=10,
-                 orientation=100, energy_cutoff=0, temperature=298.15):
+                 energy_cutoff=0, temperature=298.15):
         self._water_box = water_box
+        self._water_model = water_box._water_model
         self._how = how
         self._min_distance = min_distance
         self._max_distance = max_distance
         self._angle = angle
         self._rotation = rotation
-        self._orientation = orientation
         self._temperature = temperature
         self._energy_cutoff = energy_cutoff
         # Boltzmann constant (kcal/mol)
         self._kb = 0.0019872041
 
-        # Generate n orientation quaternions
-        coordinates = np.random.random(size=(self._orientation, 3))
-        self._quaternions = utils.shoemake(coordinates)
+        """ Load pre-generated water molecules (only hydrogens)
+        We will use those to sample the orientation."""
+        n_atoms = 2
+        usecols = [0, 1, 2, 3, 4, 5]
+        if self._water_model == "tip5p":
+            usecols += [6, 7, 8, 9, 10, 11]
+            n_atoms += 2
+
+        d = imp.find_module("waterkit")[1]
+        w_orientation_file = os.path.join(d, "data/water_orientations.txt")
+        water_orientations = np.loadtxt(w_orientation_file, usecols=usecols)
+        shape = (water_orientations.shape[0], n_atoms, 3)
+        self._water_orientations = water_orientations.reshape(shape)
 
     def _boltzmann_choice(self, energies, size=None):
         """Choose state i based on boltzmann probability."""
@@ -212,38 +223,24 @@ class WaterOptimizer():
 
     def _optimize_orientation_grid(self, water):
         """Optimize the orientation of the TIP5P water molecule using the grid. """
-        energies = []
-        coordinates = []
-
         ad_map = self._water_box.map
         oxygen_xyz = water.coordinates(0)
-        water_xyz = water.coordinates()
-        num_atoms = water_xyz.shape[0]
-        atom_ids = list(range(0, num_atoms))
         water_info = water.atom_informations()
+        energies = np.zeros(self._water_orientations.shape[0])
 
-        # Translate the water to the origin for the rotation
-        water_xyz -= oxygen_xyz
+        # Choose randomly orientations
+        #total_orientations = self._water_orientations.shape[0]
+        #choices = np.random.choice(total_orientations, size=self._n_orientations)
+        #water_orientations = self._water_orientations[choices]
+        # Translate the coordinates
+        water_orientations = self._water_orientations + oxygen_xyz
 
-        for q in self._quaternions:
-            # num_atoms - 1, because oxygen does not rotate
-            tmp_xyz = np.zeros(shape=(num_atoms - 1, 3))
-
-            # Rotate each atoms by the quaternion, except oxygen
-            for i, u in enumerate(water_xyz[1:]):
-                tmp_xyz[i] = utils.rotate_vector_by_quaternion(u, q)
-
-            # Change coordinates by the new ones and
-            # we translate it back the original oxygen position
-            tmp_xyz += oxygen_xyz
-            # Instead of updating the Water object and loosing time, 
-            # we just update the coordinates of water_info, except oxygen
-            water_info[1:]["xyz"] = tmp_xyz
-
-            energy = ad_map.energy(water_info, ignore_electrostatic=True, ignore_desolvation=True)
-
-            energies.append(energy)
-            coordinates.append(tmp_xyz)
+        # Get the energies for each atom
+        # Oxygen first
+        energies += ad_map.energy_coordinates(oxygen_xyz, water_info["t"][0])
+        # ... and then hydrogens/lone-pairs
+        for i, atom_type in enumerate(water_info["t"][1:]):
+            energies += ad_map.energy_coordinates(water_orientations[:,i], atom_type)
 
         if self._how == "best":
             idx = np.argmin(energies)
@@ -251,16 +248,17 @@ class WaterOptimizer():
             idx = self._boltzmann_choice(energies)
 
         if idx is not None:
-            # Update the coordinates with the selected orientation, except oxygen
-            for i, j in enumerate(atom_ids[1:]):
-                water.update_coordinates(coordinates[idx][i], j)
+            # Update the coordinates with the selected orientation, except oxygen (i + 1)
+            new_orientation = water_orientations[idx]
+            for i, xyz in enumerate(new_orientation):
+                water.update_coordinates(xyz, i + 1)
             return energies[idx]
 
         """If we do not find anything, at least we return the energy
         of the current water molecule. """
         return ad_map.energy(water.atom_informations(), ignore_electrostatic=True, ignore_desolvation=True)
 
-    def optimize_grid(self, waters, connections=None, opt_disordered=True):
+    def sample_grid(self, waters, connections=None, opt_disordered=True):
         """Optimize position of water molecules."""
         ad_map = self._water_box.map
         dielectric = self._water_box._dielectric
