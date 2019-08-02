@@ -150,7 +150,7 @@ class WaterSampler():
 
         return disordered_energies
 
-    def _neighbor_points_grid(self, water, ad_map, add_noise=False, from_edges=None):
+    def _neighbor_points_grid(self, water, ad_map, from_edges=None):
         oxygen_type = water.atom_types(0)
         """This is how we select the allowed positions:
         1. Get all the point coordinates on the grid around the anchor (sphere). If the anchor type 
@@ -164,10 +164,6 @@ class WaterSampler():
         else:
             coord_sphere = ad_map.neighbor_points(water._anchor[0], self._max_distance, self._min_distance)
 
-        if add_noise:
-            limit = ad_map._spacing / 2.
-            coord_sphere += np.random.uniform(-limit, limit, coord_sphere.shape)
-
         if from_edges is not None:
             is_close = ad_map.is_close_to_edge(coord_sphere, from_edges)
             coord_sphere = coord_sphere[~is_close]
@@ -179,11 +175,11 @@ class WaterSampler():
 
         return coord_sphere, energy_sphere
 
-    def _optimize_placement_order_grid(self, waters, ad_map, add_noise=False, from_edges=None):
+    def _optimize_placement_order_grid(self, waters, ad_map, from_edges=None):
         energies = []
 
         for water in waters:
-            _, energy_sphere = self._neighbor_points_grid(water, ad_map, add_noise, from_edges)
+            _, energy_sphere = self._neighbor_points_grid(water, ad_map, from_edges)
 
             if energy_sphere.size:
                 energies.append(np.min(energy_sphere))
@@ -204,7 +200,7 @@ class WaterSampler():
         the angle with the anchor."""
         oxygen_type = water.atom_types([0])
         
-        coord_sphere, energy_sphere = self._neighbor_points_grid(water, ad_map, add_noise, from_edges)
+        coord_sphere, energy_sphere = self._neighbor_points_grid(water, ad_map, from_edges)
 
         if energy_sphere.size:
             if self._how == "best":
@@ -213,8 +209,14 @@ class WaterSampler():
                 idx = self._boltzmann_choice(energy_sphere)
 
             if idx is not None:
+                new_coord = coord_sphere[idx]
+
+                if add_noise:
+                    limit = ad_map._spacing / 2.
+                    new_coord += np.random.uniform(-limit, limit, new_coord.shape[0])
+
                 # Update the coordinates
-                water.translate(utils.vector(water.coordinates(0), coord_sphere[idx]))
+                water.translate(utils.vector(water.coordinates(0), new_coord))
                 return energy_sphere[idx]
 
         """If we do not find anything, at least we return the energy
@@ -228,13 +230,8 @@ class WaterSampler():
         water_info = water.atom_informations()
         energies = np.zeros(self._water_orientations.shape[0])
 
-        # Choose randomly orientations
-        #total_orientations = self._water_orientations.shape[0]
-        #choices = np.random.choice(total_orientations, size=self._n_orientations)
-        #water_orientations = self._water_orientations[choices]
         # Translate the coordinates
         water_orientations = self._water_orientations + oxygen_xyz
-
         # Get the energies for each atom
         # Oxygen first
         energies += ad_map.energy_coordinates(oxygen_xyz, water_info["t"][0])
@@ -242,6 +239,7 @@ class WaterSampler():
         for i, atom_type in enumerate(water_info["t"][1:]):
             energies += ad_map.energy_coordinates(water_orientations[:,i], atom_type)
 
+        # Pick one orientation based the energy
         if self._how == "best":
             idx = np.argmin(energies)
         elif self._how == "boltzmann":
@@ -306,7 +304,7 @@ class WaterSampler():
             self._optimize_disordered_waters(receptor, waters, connections, ad_map)
 
         # The placement order is based on the best energy around each hydrogen anchor point
-        water_orders = self._optimize_placement_order_grid(waters, ad_map, add_noise, from_edges=1.)
+        water_orders = self._optimize_placement_order_grid(waters, ad_map, from_edges=1.)
         to_be_removed.extend(set(np.arange(len(waters))) - set(water_orders))
 
         # We do not want name overlap between different replicates
