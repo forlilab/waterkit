@@ -49,23 +49,24 @@ pythonsh prepare_receptor4.py -r protein.pdb -C -o protein.pdbqt
 ### Grid calculation with autogrid4
 1. Create Grid Protein File (GPF)
 ```
-npts 20 20 20                        
+npts 20 20 20
 parameter_file AD4_parameters.dat
-gridfld protein_maps.fld        
+gridfld protein_maps.fld
 spacing 0.375
-disorder_h 
-receptor_types A N NA C OA SA HD
-ligand_types OW
-receptor protein.pdbqt          
-gridcenter 0.0 0.0 0.0      
-smooth 0.5                           
+receptor_types HP HO C3 HC HA O2 C* NA NB C8 CB C CO CN CC H CA O N S CX C2 CR N2 N3 CW CT OH H1 H4 H5
+ligand_types OD OW OT
+receptor protein.pdbqt
+gridcenter 0.0 0.0 0.0
+smooth 0
+map protein_OD.map
 map protein_OW.map
+map protein_OT.map
 elecmap protein_e.map
 dsolvmap protein_d.map
-dielectric -0.1465
+dielectric 1
 ```
 
-Depending of your system, you would have at least to modify the grid parameters (```npts```, ```gridcenter```) and the receptor atom types list (```receptor_types```). The ```disorder_h``` and ```nbp_r_eps``` options are mandatory in order to optimize the hydroxyl position and to place the spherical water (OD) around acceptor atoms (OA). An example of GPF file (```protein_grid.gpf```) as well as the AutoDock parameters (```AD4_parameters.dat```) are provided. Those files are located in the ```data``` waterkit module's directory.
+Depending of your system, you would have at least to modify the grid parameters (```npts```, ```gridcenter```) and the receptor atom types list (```receptor_types```). An example of GPF file (```protein_grid.gpf```) as well as the AutoDock parameters (```AD4_parameters.dat```) are provided. Those files are located in the ```data``` waterkit module's directory.
 
 2. Run autogrid4
 ```bash
