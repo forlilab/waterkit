@@ -10,6 +10,7 @@ You need, at a minimum (requirements):
 * Scipy
 * Sphinx (documentation)
 * Sphinx_rtd_theme (documentation)
+* ParmED (conversion to PDBQT file)
 
 ## Installation
 
@@ -41,9 +42,11 @@ Open the file ```build/html/index.html``` with your favorite browser (Google Chr
 ## Quick tutorial
 
 ### Receptor preparation
-Conversion to PDBQT using AutoDock Tools
+Conversion to PDBQT using AmberTools19 (http://ambermd.org/GetAmber.php) and `amber2pdbqt.py` script
 ```bash
-pythonsh prepare_receptor4.py -r protein.pdb -C -o protein.pdbqt
+pdb4amber -i protein.pdb -o protein_clean.pdb --dry --leap-template --nohyd
+tleap -s -f leap.template.in > leap.template.out
+amber2pdbqt.py -t prmtop -c rst7 -o protein.pdbqt
 ```
 
 ### Grid calculation with autogrid4
