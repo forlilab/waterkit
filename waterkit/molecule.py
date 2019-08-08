@@ -210,37 +210,47 @@ class Molecule():
         return atoms.copy()
 
     def _guess_rotatable_bonds(self, OBMol):
-        """ Guess all the rotatable bonds in the molecule
-        based the rotatable forcefield """
+        """Guess all the rotatable bonds in the molecule
+        based the rotatable forcefield.
+        
+        Args:
+            OBMol (OBMol): OBMolecule object
+
+        """
         columns = ["atom_i", "atom_j", "atom_i_xyz", "atom_j_xyz",
                    "atom_k_xyz", "atom_l_xyz", "name"]
         data = []
         unique = []
-
-        # Find all the hydroxyl
         ob_smarts = ob.OBSmartsPattern()
-        success = ob_smarts.Init("[#1][#8;X2;v2;H1][!#1][!#1]")
-        ob_smarts.Match(OBMol)
-        matches = list(ob_smarts.GetUMapList())
+        smarts_patterns = {"hydroxyl": "[#1][#8;X2;v2;H1][!#1][!#1]",
+                           "ammonium": "[#1][#7;X4;v4;H3][!#1][!#1]",
+                           "thiol": "[#1][#16;X2;v2;H1][!#1][!#1]",
+                           "selenol": "[#1][#32;X2;v2;H1][!#1][!#1]"}
 
-        for match in matches:
-            """ We check if the SMART pattern was not matching twice on
-            the same rotatable bonds, like hydroxyl in tyrosine. The
-            GetUMapList function does not work on that specific case
-            """
-            if not match[0] in unique:
-                atom_i = match[0] - 1
-                atom_j = match[1] - 1
-                atom_i_xyz = self.coordinates(match[0] - 1)[0]
-                atom_j_xyz = self.coordinates(match[1] - 1)[0]
-                atom_k_xyz = self.coordinates(match[2] - 1)[0]
-                atom_l_xyz = self.coordinates(match[3] - 1)[0]
-                data.append([atom_i, atom_j, atom_i_xyz, atom_j_xyz,
-                             atom_k_xyz, atom_l_xyz, "hydroxyl"])
-                unique.append(match[0])
+        for name in smarts_patterns:
+            success = ob_smarts.Init(smarts_patterns[name])
+            ob_smarts.Match(OBMol)
+            matches = list(ob_smarts.GetUMapList())
+
+            for match in matches:
+                """ We check if the SMART pattern was not matching twice on
+                the same rotatable bonds, like hydroxyl in tyrosine. The
+                GetUMapList function does not work on that specific case
+                """
+                if not match[0] in unique:
+                    atom_i = match[0] - 1
+                    atom_j = match[1] - 1
+                    atom_i_xyz = self.coordinates(match[0] - 1)[0]
+                    atom_j_xyz = self.coordinates(match[1] - 1)[0]
+                    atom_k_xyz = self.coordinates(match[2] - 1)[0]
+                    atom_l_xyz = self.coordinates(match[3] - 1)[0]
+                    data.append([atom_i, atom_j, atom_i_xyz, atom_j_xyz,
+                                 atom_k_xyz, atom_l_xyz, name])
+                    unique.append(match[0])
 
         self.rotatable_bonds = pd.DataFrame(data=data, columns=columns)
         self.rotatable_bonds.sort_values(by="atom_i", inplace=True)
+        self.rotatable_bonds.reset_index(drop=True, inplace=True)
 
     def _push_atom_to_end(self, lst, atomic_nums):
         """
@@ -347,9 +357,9 @@ class Molecule():
 
                     try:
                         # Calculate the vectors on the anchor
-                        vectors = self._hb_vectors(OBMol, idx - 1, atom_type.hyb, atom_type.n_water, atom_type.hb_length)
-                        for vector in vectors:
-                            data.append([idx - 1, vector, hb_type, name])
+                        vector_xyzs = self._hb_vectors(OBMol, idx - 1, atom_type.hyb, atom_type.n_water, atom_type.hb_length)
+                        for vector_xyz in vector_xyzs:
+                            data.append([idx - 1, vector_xyz, hb_type, name])
                     except:
                         print "Warning: Could not determine hydrogen bond vectors on atom %s of type %s." % (idx, name)
 
@@ -461,6 +471,26 @@ class Molecule():
 
         return vectors
 
+    def update_coordinates(self, xyz, atom_id):
+        """Update the coordinates of an atom.
+
+        Args:
+            xyz (array_like): 3d coordinates of the new atomic position
+            atom_id (int): atom id
+
+        Returns:
+            bool: True if successfull, False otherwise
+
+        """
+        if atom_id < self.atoms.size:
+            if self.atoms.size > 1:
+                self.atoms[atom_id]["xyz"] = xyz
+            else:
+                self.atoms["xyz"] = xyz
+            return True
+        else:
+            return False
+
     def to_file(self, fname, fformat, options=None, append=False):
         """Write PDBQT file of the water molecule.
     
@@ -481,7 +511,12 @@ class Molecule():
         pdbqt_str = "ATOM  %5d %-4s %-3s  %4d    %8.3f%8.3f%8.3f  0.00 0.00     %6.3f %-2s\n"
         output_str = ""
 
-        for atom in self.atoms:
+        if self.atoms.size == 1:
+            atoms = [self.atoms]
+        else:
+            atoms = self.atoms
+
+        for atom in atoms:
             x, y, z = atom["xyz"]
             output_str += pdbqt_str % (atom["i"], atom["name"], atom["resname"], atom["resnum"],
                                        x, y, z, atom["q"], atom["t"])

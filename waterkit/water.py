@@ -268,26 +268,6 @@ class Water(Molecule):
 
         self.hydrogen_bond_anchors = pd.DataFrame(data=data, columns=columns)
 
-    def update_coordinates(self, xyz, atom_id):
-        """Update the coordinates of an atom.
-
-        Args:
-            xyz (array_like): 3d coordinates of the new atomic position
-            atom_id (int): atom id
-
-        Returns:
-            bool: True if successfull, False otherwise
-
-        """
-        if atom_id < self.atoms.size:
-            if self.atoms.size > 1:
-                self.atoms[atom_id]["xyz"] = xyz
-            else:
-                self.atoms["xyz"] = xyz
-            return True
-        else:
-            return False
-
     def translate(self, vector):
         """Translate the water molecule.
         
