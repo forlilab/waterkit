@@ -11,6 +11,7 @@ You need, at a minimum (requirements):
 * Sphinx (documentation)
 * Sphinx_rtd_theme (documentation)
 * ParmED (conversion to PDBQT file)
+* parallel (multicore)
 
 ## Installation
 
