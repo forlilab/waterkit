@@ -81,6 +81,6 @@ autogrid4 -p protein_grid.gpf -l protein_grid.glg
 
 ```bash
 mkdir traj
-# Generate 10.000 frames with 16 cpu
+# Generate 10.000 frames using 16 cpus
 seq -f "water_%05g" 1 10000 | parallel --jobs 16 python run_waterkit.py -i protein.pdbqt -m protein_maps.fld -o traj/{}
 ```
