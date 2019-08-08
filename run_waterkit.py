@@ -16,6 +16,7 @@ from waterkit.autodock_map import Map
 from waterkit.molecule import Molecule
 from waterkit.water import Water
 from waterkit.waterfield import Waterfield
+from waterkit.forcefield import AutoDockForceField
 
 
 def cmd_lineparser():
@@ -36,10 +37,6 @@ def cmd_lineparser():
     parser.add_argument("-w", "--water", dest="water_model", default="tip3p",
                         choices=["tip3p", "tip5p"], action="store",
                         help="how water molecules are choosed")
-    parser.add_argument("-s", "--smooth", dest="smooth", default=0.5, type=float,
-                        action="store", help="smooth parameter of AutoDock FF")
-    parser.add_argument("-d", "--dielectric", dest="dielectric", default=-0.1465, type=float,
-                        action="store", help="dielectric parameter of AutoDock FF")
     parser.add_argument("-o", "--output", dest="output_prefix", default="water",
                         action="store", help="prefix add to output files")
     return parser.parse_args()
@@ -53,8 +50,6 @@ def main():
     n_layer = args.n_layer
     temperature = args.temperature
     how = args.how
-    smooth = args.smooth
-    dielectric = args.dielectric
     output_prefix = args.output_prefix
 
     """If the user does not provide any of these elements,
@@ -62,6 +57,8 @@ def main():
     d = imp.find_module("waterkit")[1]
     hb_forcefield_file = os.path.join(d, "data/waterfield.par")
     hb_forcefield = Waterfield(hb_forcefield_file)
+    ad_forcefield_file = os.path.join(d, "data/AD4_parameters.dat")
+    ad_forcefield = AutoDockForceField(ad_forcefield_file, smooth=0, dielectric=1.)
 
     # Read PDBQT/MOL2 file, Waterfield file and AutoDock grid map
     molecule = Molecule.from_file(mol_file, hb_forcefield)
@@ -69,8 +66,8 @@ def main():
 
     # Go waterkit!!
     k = Waterkit()
-    k.hydrate(molecule, ad_map, water_model, n_layer, 
-              how, temperature, smooth, dielectric)
+    k.hydrate(molecule, ad_map, ad_forcefield, 
+              water_model, how, temperature, n_layer)
 
     # Write output files
     k.write_shells(output_prefix)

@@ -464,8 +464,6 @@ class WaterSampler():
             self._optimize_disordered_waters(waters, connections)
             #self._sample_disordered_groups(waters, connections)
 
-        #sys.exit(0)
-
         # The placement order is based on the best energy around each hydrogen anchor point
         water_orders = self._optimize_placement_order_grid(waters, from_edges=1.)
         to_be_removed.extend(set(np.arange(len(waters))) - set(water_orders))
