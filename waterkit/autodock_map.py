@@ -315,7 +315,8 @@ class Map():
         return self._maps_interpn[atom_type](xyz, method=method)
 
     def energy(self, nd, ignore_atom_types=None, ignore_vdw_hb=False, 
-               ignore_electrostatic=False, ignore_desolvation=False, method="linear"):
+               ignore_electrostatic=False, ignore_desolvation=False, 
+               method="linear", sum_energies=True):
         """Get energy interaction of a molecule based of the grid.
 
         Args:
@@ -329,7 +330,7 @@ class Map():
             float: Grid energy interaction
 
         """
-        energy = 0.
+        energies = []
         vdw_hb = 0.
         elec = 0.
         desolv = 0.
@@ -364,9 +365,12 @@ class Map():
             if not ignore_desolvation:
                 desolv = self._maps_interpn["Desolvation"](xyz, method=method)
 
-            energy += np.sum(vdw_hb + elec + desolv)
+            energies.extend(vdw_hb + elec + desolv)
 
-        return energy
+        if sum_energies:
+            return np.sum(energies)
+        else:
+            return np.array(energies)
 
     def neighbor_points(self, xyz, radius, min_radius=0):
         """Grid coordinates around a point at a certain distance.
