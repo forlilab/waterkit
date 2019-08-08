@@ -24,7 +24,8 @@ warnings.filterwarnings("ignore")
 
 
 class AutoDockForceField():
-    def __init__(self, parameter_file=None, hb_cutoff=8, elec_cutoff=20, weighted=True):
+    def __init__(self, parameter_file=None, dielectric=-0.1465, smooth=0.5, 
+                 hb_cutoff=8, elec_cutoff=20, weighted=True):
         if parameter_file is None:
             d = imp.find_module('waterkit')[1]
             parameter_file = os.path.join(d, 'data/AD4_parameters.dat')
@@ -38,12 +39,13 @@ class AutoDockForceField():
         self.elec_cutoff = elec_cutoff
 
         # VdW and hydrogen bond
-        self.smooth = 0.5
+        self.smooth = smooth
 
         # Desolvation constants
         self.desolvation_k = 0.01097
 
         # Dielectric constants
+        self.dielectric = dielectric
         self.dielectric_epsilon = 78.4
         self.dielectric_A = -8.5525
         self.dielectric_B = self.dielectric_epsilon - self.dielectric_A
@@ -158,13 +160,15 @@ class AutoDockForceField():
 
     def van_der_waals(self, r, reqm, A, B):
         """Compute VdW interaction."""
-        r = self.smooth_distance(r, reqm, self.smooth)
+        if self.smooth > 0:
+            r = self.smooth_distance(r, reqm, self.smooth)
         return np.sum((A / r**12) - (B / r**6))
 
     def hydrogen_bond_distance(self, r, reqm, C, D):
         """Compute hydrogen bond distance-based interaction."""
         if r <= self.hb_cutoff:
-            r = self.smooth_distance(r, reqm, self.smooth)
+            if self.smooth > 0:
+                r = self.smooth_distance(r, reqm, self.smooth)
             return np.sum((C / r**12) - (D / r**10))
         else:
             return 0.
@@ -189,8 +193,11 @@ class AutoDockForceField():
     def electrostatic(self, r, qi, qj):
         """Compute electrostatic interaction."""
         if r <= self.elec_cutoff:
-            r_ddd = self.distance_dependent_dielectric(r)
-            return np.sum(self.elec_scale * qi * qj / (r * r_ddd))
+            if self.dielectric < 0:
+                r_ddd = self.distance_dependent_dielectric(r)
+                return self.elec_scale * np.sum(qi * qj / (r * r_ddd))
+            else:
+                return self.elec_scale * np.sum(qi * qj / (r * self.dielectric))
         else:
             return 0.
 
@@ -209,16 +216,16 @@ class AutoDockForceField():
         total = 0.
         vdw = 0.
 
-        for _, atom_i in atoms_i.iterrows():
+        for atom_i in atoms_i:
             # Get HB vectors from atom i
             if hbs_i is not None and hbs_j is not None:
                 hb_i = hbs_i.loc[hbs_i['atom_i'] == atom_i['atom_i']]
 
-            for _, atom_j in atoms_j.iterrows():
-                pairwise = self.pairwise.loc[(atom_i['atom_type'], atom_j['atom_type'])]
+            for atom_j in atoms_j:
+                pairwise = self.pairwise.loc[(atom_i['t'], atom_j['t'])]
 
                 if pairwise['active']:
-                    r = utils.get_euclidean_distance(np.array(atom_i['atom_xyz']), np.array([atom_j['atom_xyz']]))
+                    r = utils.get_euclidean_distance(np.array(atom_i['xyz']), np.array([atom_j['xyz']]))
 
                     """ We do not want to calculate useless thing
                     if the weight is equal to zero."""
@@ -234,7 +241,7 @@ class AutoDockForceField():
 
                             for h_i in hb_i.iterrows():
                                 for h_j in hb_j.iterrows():
-                                    hb_angle = self.hydrogen_bond_angle(atom_i['atom_xyz'], atom_j['atom_xyz'], 
+                                    hb_angle = self.hydrogen_bond_angle(atom_i['xyz'], atom_j['xyz'], 
                                                                         h_i['vector_xyz'], h_j['vector_xyz'])
                                     hb_angles.append(hb_angle)
 
@@ -246,14 +253,14 @@ class AutoDockForceField():
                         vdw += self.van_der_waals(r, pairwise['vdw_rij'], pairwise['A'], pairwise['B'])
 
                     if self.weights['estat'] > 0:
-                        elec += self.electrostatic(r, atom_i['atom_q'], atom_j['atom_q'])
+                        elec += self.electrostatic(r, atom_i['q'], atom_j['q'])
 
                     if self.weights['desolv'] > 0:
-                        desolv += self.desolvation(r, atom_i['atom_q'], atom_j['atom_q'],
-                                                   self.atom_par.loc[atom_i['atom_type']]['solpar'],
-                                                   self.atom_par.loc[atom_j['atom_type']]['solpar'],
-                                                   self.atom_par.loc[atom_i['atom_type']]['vol'],
-                                                   self.atom_par.loc[atom_j['atom_type']]['vol'])
+                        desolv += self.desolvation(r, atom_i['q'], atom_j['q'],
+                                                   self.atom_par.loc[atom_i['t']]['solpar'],
+                                                   self.atom_par.loc[atom_j['t']]['solpar'],
+                                                   self.atom_par.loc[atom_i['t']]['vol'],
+                                                   self.atom_par.loc[atom_j['t']]['vol'])
 
         hb *= self.weights['hbond']
         elec *= self.weights['estat']
