@@ -79,8 +79,17 @@ autogrid4 -p protein_grid.gpf -l protein_grid.glg
 ### Predict water molecules position with WaterKit
 
 1. Run WaterKit:
+
+* On single CPU
 ```bash
 python run_waterkit.py -i protein.pdbqt -m protein_maps.fld -o waters
+```
+
+* On multicore CPU
+```bash
+mkdir traj
+# Generate 10.000 frames with 16 cpu
+seq -f "water_%05g" 1 10000 | parallel --jobs 16 python run_waterkit.py -i protein.pdbqt -m protein_maps.fld -o traj/{}
 ```
 
 2. ???
