@@ -20,19 +20,12 @@ from optimize import WaterSampler
 
 class WaterBox():
 
-    def __init__(self, receptor, ad_map, how="boltzmann", temperature=300., 
-                 water_model="tip3p", smooth=0.5, dielectric=-0.1465):
+    def __init__(self, receptor, ad_map, ad_forcefield, water_model="tip3p", how="boltzmann", temperature=300.):
         self.df = {}
-        self._kdtree = None
         self.molecules = {}
         self.map = None
-
-        # Forcefields, forcefield parameters and water model
-        self._how = how
-        self._temperature = temperature
+        self._kdtree = None
         self._water_model = water_model
-        self._dielectric = dielectric
-        self._smooth = smooth
 
         # All the informations are stored into a dict of df
         columns = ["molecule_i", "atom_i", "molecule_j", "atom_j"]
@@ -45,9 +38,14 @@ class WaterBox():
         self._add_map(ad_map)
         self._add_receptor(receptor)
 
+        # Forcefields, forcefield parameters and water model
+        self._how = how
+        self._temperature = temperature
+        self._dielectric = 1.
+        self._smooth = 0.
+        self._adff = ad_forcefield
         # Initialize the sampling method
-        angle = 110
-        self._wopt = WaterSampler(self, self._how, angle=angle, temperature=self._temperature)
+        self._wopt = WaterSampler(self, self._how, angle=110, temperature=self._temperature)
 
     def copy(self):
         """Return deepcopy of WaterBox."""

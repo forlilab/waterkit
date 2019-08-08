@@ -24,12 +24,8 @@ warnings.filterwarnings("ignore")
 
 
 class AutoDockForceField():
-    def __init__(self, parameter_file=None, dielectric=-0.1465, smooth=0.5, 
+    def __init__(self, parameter_file, dielectric=-0.1465, smooth=0.5, 
                  hb_cutoff=8, elec_cutoff=20, weighted=True):
-        if parameter_file is None:
-            d = imp.find_module('waterkit')[1]
-            parameter_file = os.path.join(d, 'data/AD4_parameters.dat')
-
         self.weights = self._set_weights(parameter_file, weighted)
         self.atom_par = self._set_atom_parameters(parameter_file)
         self.pairwise = self._build_pairwise_table()

@@ -38,6 +38,10 @@ class WaterSampler():
         # Boltzmann constant (kcal/mol)
         self._kb = 0.0019872041
 
+        # AutoGrid initialization and ADFF
+        self._ag = AutoGrid()
+        self._adff = water_box._adff
+
         """ Load pre-generated water molecules (only hydrogens)
         We will use those to sample the orientation."""
         n_atoms = 2
@@ -51,8 +55,6 @@ class WaterSampler():
         water_orientations = np.loadtxt(w_orientation_file, usecols=usecols)
         shape = (water_orientations.shape[0], n_atoms, 3)
         self._water_orientations = water_orientations.reshape(shape)
-
-        self._ff = AutoDockForceField('AD4_parameters.dat', smooth=0, dielectric=1.)
 
     def _boltzmann_choice(self, energies, size=None):
         """Choose state i based on boltzmann probability."""
@@ -404,7 +406,6 @@ class WaterSampler():
         dielectric = self._water_box._dielectric
         smooth = self._water_box._smooth
         spacing = self._ad_map._spacing
-        ag = AutoGrid()
 
         e_type = "Electrostatics"
         sw_type = "OD"
@@ -428,7 +429,7 @@ class WaterSampler():
             ligand_types += [ot_type]
 
         # Fire off AutoGrid
-        water_map = ag.run(receptor_file, ligand_types, center, npts, 
+        water_map = self._ag.run(receptor_file, ligand_types, center, npts, 
                            spacing, smooth, dielectric, clean=True)
 
         # For the TIP3P and TIP5P models

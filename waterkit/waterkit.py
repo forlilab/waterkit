@@ -19,8 +19,8 @@ class Waterkit():
         """Initialize WaterKit."""
         self.water_box = None
 
-    def hydrate(self, receptor, ad_map, water_model="tip3p", n_layer=1, 
-                how="best", temperature=300., smooth=0.5, dielectric=-0.1465):
+    def hydrate(self, receptor, ad_map, ad_forcefield, water_model="tip3p", 
+                how="best", temperature=300., n_layer=1):
         """Hydrate the molecule with water molecules.
 
         The receptor is hydrated by adding successive layers
@@ -29,12 +29,11 @@ class Waterkit():
         Args:
             receptor (Molecule): Receptor of the protein
             ad_map (Map): AutoDock map of the receptor
+            ad_forcefield (AutoDockForceField): AutoDock forcefield for pairwise interactions
             water_model (str): Model used for the water molecule, tip3p or tip5p (default: tip3p)
-            n_layer (int): Number of hydration layer to add (default: 1)
             how (str): Method for water placement: "best" or "boltzmann" (default: best)
             temperature (float): Temperature in Kelvin, only used for Boltzmann sampling (default: 300)
-            smooth (float): AutoDock smooth parameter (default: 0.5)
-            dielectric (float): AutoDock dielectric constant (default: -0.1465)
+            n_layer (int): Number of hydration layer to add (default: 1)
 
         Returns:
             bool: True if succeeded or False otherwise
@@ -42,8 +41,7 @@ class Waterkit():
         """
         i = 1
 
-        w = WaterBox(receptor, ad_map, how, temperature, 
-                     water_model, smooth, dielectric)
+        w = WaterBox(receptor, ad_map, ad_forcefield, water_model, how, temperature)
         #w_copy = copy.deepcopy(w)
 
         while True:
