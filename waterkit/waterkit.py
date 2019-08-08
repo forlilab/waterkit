@@ -6,16 +6,12 @@
 # The core of the WaterKit program
 #
 
-import os
-import copy
-import imp
 from string import ascii_uppercase
 
 import numpy as np
 
-from autodock_map import Map
-from forcefield import AutoDockForceField
 from water_box import WaterBox
+
 
 class Waterkit():
 
@@ -45,41 +41,10 @@ class Waterkit():
 
         """
         i = 1
-        e_type = "Electrostatics"
-        sw_type = "OD"
 
-        """In TIP3P and TIP5P models, hydrogen atoms and lone-pairs does not
-        have VdW radius, so their interactions with the receptor are purely
-        based on electrostatics. So the HD and Lp maps are just the electrostatic 
-        map. Each map is multiplied by the partial charge. So it is just a
-        look-up table to get the energy for each water molecule.
-        """
-        if water_model == "tip3p":
-            ow_type = "OW"
-            hw_type = "HW"
-            ow_q = -0.834
-            hw_q = 0.417
-        elif water_model == "tip5p":
-            ot_type = "OT"
-            hw_type = "HT"
-            lw_type = "LP"
-            hw_q = 0.241
-            lw_q = -0.241
-        else:
-            print "Error: water model %s unknown." % water_model
-            return False
-
-        # For the TIP3P and TIP5P models
-        ad_map.apply_operation_on_maps(hw_type, e_type, "x * %f" % hw_q)
-        if water_model == "tip3p":
-            ad_map.apply_operation_on_maps(e_type, e_type, "x * %f" % ow_q)
-            ad_map.combine(ow_type, [ow_type, e_type], how="add")
-        elif water_model == "tip5p":
-            ad_map.apply_operation_on_maps(lw_type, e_type, "x * %f" % lw_q)
-
-        #w_copy = copy.deepcopy(w_ori)
-        w = WaterBox(how, temperature, water_model, smooth, dielectric)
-        w.add_receptor(receptor, ad_map)
+        w = WaterBox(receptor, ad_map, how, temperature, 
+                     water_model, smooth, dielectric)
+        #w_copy = copy.deepcopy(w)
 
         while True:
             # build_next_shell returns True if

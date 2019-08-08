@@ -20,8 +20,8 @@ from optimize import WaterSampler
 
 class WaterBox():
 
-    def __init__(self, how="boltzmann", temperature=300., water_model="tip3p", 
-                 smooth=0.5, dielectric=-0.1465):
+    def __init__(self, receptor, ad_map, how="boltzmann", temperature=300., 
+                 water_model="tip3p", smooth=0.5, dielectric=-0.1465):
         self.df = {}
         self._kdtree = None
         self.molecules = {}
@@ -41,18 +41,62 @@ class WaterBox():
         self.df["shells"] = pd.DataFrame(columns=columns)
         columns = ["molecule_i", "atom_i"]
         self.df["kdtree_relations"] = pd.DataFrame(columns=columns)
-        self.df["profiles"] = pd.DataFrame()
+
+        self._add_map(ad_map)
+        self._add_receptor(receptor)
+
+        # Initialize the sampling method
+        angle = 110
+        self._wopt = WaterSampler(self, self._how, angle=angle, temperature=self._temperature)
 
     def copy(self):
         """Return deepcopy of WaterBox."""
         return copy.deepcopy(self)
 
-    def add_receptor(self, receptor, ad_map):
+    def _add_map(self, ad_map):
+        """Add the receptor and the corresponding ad_map to the waterbox."""
+        self.map = ad_map.copy()
+
+        e_type = "Electrostatics"
+        sw_type = "OD"
+
+        """In TIP3P and TIP5P models, hydrogen atoms and lone-pairs does not
+        have VdW radius, so their interactions with the receptor are purely
+        based on electrostatics. So the HD and Lp maps are just the electrostatic 
+        map. Each map is multiplied by the partial charge. So it is just a
+        look-up table to get the energy for each water molecule.
+        """
+        if self._water_model == "tip3p":
+            ow_type = "OW"
+            hw_type = "HW"
+            ow_q = -0.834
+            hw_q = 0.417
+        elif self._water_model == "tip5p":
+            ot_type = "OT"
+            hw_type = "HT"
+            lw_type = "LP"
+            hw_q = 0.241
+            lw_q = -0.241
+        else:
+            print "Error: water model %s unknown." % self._water_model
+            return False
+
+        # For the TIP3P and TIP5P models
+        self.map.apply_operation_on_maps(hw_type, e_type, "x * %f" % hw_q)
+
+        if self._water_model == "tip3p":
+            self.map.apply_operation_on_maps(e_type, e_type, "x * %f" % ow_q)
+            self.map.combine(ow_type, [ow_type, e_type], how="add")
+        elif self._water_model == "tip5p":
+            self.map.apply_operation_on_maps(lw_type, e_type, "x * %f" % lw_q)
+
+        return True
+
+    def _add_receptor(self, receptor):
         """Add the receptor and the corresponding ad_map to the waterbox."""
         if not 0 in self.molecules:
-            # Add the receptor/map to the waterbox
+            # Add the receptor to the waterbox
             self.add_molecules(receptor)
-            self.map = ad_map.copy()
             # Add informations about the receptor
             data = pd.DataFrame([[0]], columns=["shell_id"])
             self.add_informations(data, "shells")
@@ -170,10 +214,10 @@ class WaterBox():
         index = self._kdtree.query_ball_point(xyz, radius)
         df = self.df["kdtree_relations"].loc[index]
 
-        if exclude is not None:
-            if not isinstance(exclude, (list, tuple)):
-                exclude = [exclude]
-            df = df[-df["molecule_i"].isin(exclude)]
+        if isinstance(exclude, pd.DataFrame):
+            df = df.merge(exclude, indicator=True, how="outer")
+            df = df[df["_merge"] == "left_only"]
+            df.drop(columns="_merge", inplace=True)
 
         return df
 
@@ -251,8 +295,9 @@ class WaterBox():
         for i, molecule in enumerate(molecules):
             for index, row in molecule.hydrogen_bond_anchors.iterrows():
                 # Add water molecule only if it's in the map
-                if self.map.is_in_map(row.vector_xyz):
-                    anchor_xyz = molecule.coordinates(row.atom_i)[0]
+                anchor_xyz = molecule.coordinates(row.atom_i)[0]
+
+                if self.map.is_in_map(anchor_xyz):
                     w = Water(row.vector_xyz, atom_type, partial_charge, anchor_xyz, row.vector_xyz, row.anchor_type)
                     
                     waters.append(w)
@@ -271,27 +316,21 @@ class WaterBox():
             bool: True if water molecules were added or False otherwise
 
         """
-        angle = 110
         type_sw = "OD"
         partial_charge = 0.0
         shell_id = self.number_of_shells()
         molecules = self.molecules_in_shell(shell_id)
 
-        # Test if we have all the material to continue
-        assert len(molecules) > 0, "There is molecule(s) in the shell %s" % shell_id
-
-        wopt = WaterSampler(self, self._how, angle=angle, temperature=self._temperature)
-
         waters, connections = self.place_optimal_spherical_waters(molecules, type_sw, partial_charge)
 
         # Only the receptor contains disordered hydrogens
         if shell_id == 0:
-            waters, df = wopt.sample_grid(waters, connections, opt_disordered=True)
+            waters, df = self._wopt.sample_grid(waters, connections, opt_disordered=True)
         else:
             """After the first hydration layer, we don't care anymore about 
             connections. It was only useful for the disordered hydrogen atoms.
             """
-            waters, df = wopt.sample_grid(waters, opt_disordered=False)
+            waters, df = self._wopt.sample_grid(waters, opt_disordered=False)
 
         if len(waters):
             self.add_molecules(waters, add_KDTree=False)
