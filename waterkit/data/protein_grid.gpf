@@ -2,16 +2,14 @@ npts 20 20 20
 parameter_file AD4_parameters.dat
 gridfld protein_maps.fld        
 spacing 0.375
-disorder_h 
-receptor_types A N NA C OA SA HD
-ligand_types OW
+receptor_types HP HO C3 HC HA O2 C* NA NB C8 CB C CO CN CC H CA O N S CX C2 CR N2 N3 CW CT OH H1 H4 H5
+ligand_types OD OW OT
 receptor protein.pdbqt          
 gridcenter 0.0 0.0 0.0      
-smooth 0.5                           
-map protein_OA.map
-map protein_HD.map
-map protein_Lp.map
+smooth 0.0
 map protein_OD.map
+map protein_OW.map
+map protein_OT.map
 elecmap protein_e.map
 dsolvmap protein_d.map
-dielectric -0.1465
+dielectric 1
