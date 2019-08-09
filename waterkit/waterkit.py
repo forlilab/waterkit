@@ -103,18 +103,19 @@ class Waterkit():
 
         return True
 
-    def write_shells(self, prefix="water"):
+    def write_shells(self, prefix="water", water_model='tip3p'):
         """Export hydration shells in a PDBQT format.
 
         Args:
             prefix (str): prefix name of the files
+            water_model (str): water model to use to write coordinates (choices: tip3p or tip5p)
 
         Returns:
             None
 
         """
         output_str = ""
-        pdbqt_str = "ATOM  %5d  %-3s HOH%2s%4d    %8.3f%8.3f%8.3f%6.2f 1.00    %6.3f %2s\n"
+        pdbqt_str = "ATOM  %5d  %-3s HOH%2s%4d    %8.3f%8.3f%8.3f  1.00  1.00          %2s\n"
 
         shell_id = self.water_box.number_of_shells()
         waters = [self.water_box.molecules_in_shell(i) for i in range(1, shell_id + 1)]
@@ -122,31 +123,20 @@ class Waterkit():
         for shell, chain in zip(waters, ascii_uppercase):
             i, j = 1, 1
 
-            fname = "%s_%s.pdbqt" % (prefix, chain)
+            fname = "%s_%s.pdb" % (prefix, chain)
 
             for water in shell:
                 c = water.coordinates()
 
-                try:
-                    e = water.energy
-                    # Truncate energy 
-                    e = np.clip(e, -99.99, 99.99)
-                except:
-                    e = 0.0
+                output_str += pdbqt_str % (j, "O", chain, i, c[0][0], c[0][1], c[0][2], "O")
+                output_str += pdbqt_str % (j + 1, "H1", chain, i, c[1][0], c[1][1], c[1][2], "H")
+                output_str += pdbqt_str % (j + 2, "H2", chain, i, c[2][0], c[2][1], c[2][2], "H")
+                j += 2
 
-                if c.shape[0] == 3:
-                    output_str += pdbqt_str % (j, "O", chain, i, c[0][0], c[0][1], c[0][2], e, -0.834, "O")
-                    output_str += pdbqt_str % (j + 1, "H", chain, i, c[1][0], c[1][1], c[1][2], e,0.417, "H")
-                    output_str += pdbqt_str % (j + 2, "H", chain, i, c[2][0], c[2][1], c[2][2], e, 0.417, "H")
+                if water_model == 'tip5p':
+                    output_str += pdbqt_str % (j + 3, "L1", chain, i, c[3][0], c[3][1], c[3][2], "L")
+                    output_str += pdbqt_str % (j + 4, "L2", chain, i, c[4][0], c[4][1], c[4][2], "L")
                     j += 2
-
-                if c.shape[0] == 5:
-                    output_str += pdbqt_str % (j, "O", chain, i, c[0][0], c[0][1], c[0][2], e, 0, "O")
-                    output_str += pdbqt_str % (j + 1, "H", chain, i, c[1][0], c[1][1], c[1][2], e, 0.241, "H")
-                    output_str += pdbqt_str % (j + 2, "H", chain, i, c[2][0], c[2][1], c[2][2], e, 0.241, "H")
-                    output_str += pdbqt_str % (j + 3, "H", chain, i, c[3][0], c[3][1], c[3][2], e, -0.241, "L")
-                    output_str += pdbqt_str % (j + 4, "H", chain, i, c[4][0], c[4][1], c[4][2], e, -0.241, "L")
-                    j += 4
 
                 i += 1
                 j += 1

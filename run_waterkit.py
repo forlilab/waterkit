@@ -73,7 +73,7 @@ def main():
               how, temperature, smooth, dielectric)
 
     # Write output files
-    k.write_shells(output_prefix)
+    k.write_shells(output_prefix, water_model)
 
 if __name__ == "__main__":
     main()

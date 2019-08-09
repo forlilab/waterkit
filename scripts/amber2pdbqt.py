@@ -15,23 +15,33 @@ def cmd_lineparser():
                         action="store", help="topology file")
     parser.add_argument("-c", "--coords", dest="crd_file", required=True,
                         action="store", help="coordinates file")
-    parser.add_argument("-o", "--pdbqt", dest="pdbqt_file", default=None,
-                        action="store", help="output pdbqt file")
+    parser.add_argument("-o", "--output", dest="output_name", default=None,
+                        action="store", help="output name")
     return parser.parse_args()
 
 
-def write_pdbqt(mol, pdbqt_file):
-    """Write PDBQT file from parmed amber object
+def write_pdb_file(output_name, molecule):
+    """Write PDB file
 
     Args:
-        mol (parmed.amber._amberparm.AmberParm): amber object from parmed
-        pdbqt_file (str): pdbqt output file
+        output_name (str): pdbqt output filename
+        molecule (parmed): parmed molecule object
+
+    """
+    mol.save(output_name)
+
+def write_pdbqt_file(output_name, molecule):
+    """Write PDBQT file
+
+    Args:
+        output_name (str): pdbqt output filename
+        molecule (parmed): parmed molecule object
 
     """
     pdbqt_str = "ATOM  %5d %-4s %3s  %4d    %8.3f%8.3f%8.3f  1.00  1.00    %6.3f %-2s\n"
     output_str = ""
 
-    for atom in mol.atoms:
+    for atom in molecule.atoms:
         if len(atom.name) < 4:
             name = " %s" % atom.name
         else:
@@ -55,14 +65,17 @@ def main():
     args = cmd_lineparser()
     top_file = args.top_file
     crd_file = args.crd_file
-    pdbqt_file = args.pdbqt_file
+    output_name = args.output_name
 
-    mol = pmd.load_file(top_file, crd_file)
+    if output_name is None:
+        output_name = top_file.split('.')[0]
 
-    if pdbqt_file is None:
-        pdbqt_file = "%s.pdbqt" % top_file.split('.')[0]
+    molecule = pmd.load_file(top_file, crd_file)
 
-    write_pdbqt(mol, pdbqt_file)
+    # The PDB file will be use for the trajectory and
+    # the PDBQT file for WaterKit
+    write_pdb_file("%s_prepared.pdb" % output_name, molecule)
+    write_pdbqt_file("%s_prepared.pdbqt" % output_name, molecule)
 
 
 if __name__ == '__main__':
