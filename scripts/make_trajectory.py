@@ -125,9 +125,7 @@ def write_trajectory_file(fname, receptor, water_filenames,
     for water_filename in water_filenames:
         m = pmd.load_file(water_filename)
 
-        last_residue_id = len(m.residues)
-        step = len(m.atoms) / last_residue_id
-        last_atom_id = last_residue_id * 3
+        last_atom_id = len(m.residues) * 3
 
         # Get all the TIP3P water molecules
         coordinates[n_atoms:n_atoms + last_atom_id] = m["@O, H1, H2"].coordinates
