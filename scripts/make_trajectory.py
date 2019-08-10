@@ -45,9 +45,8 @@ def max_water(water_filenames):
     """
     sizes = [os.path.getsize(f) for f in water_filenames]
     idx = np.argmax(sizes)
-    print water_filenames[idx]
     m = pmd.load_file(water_filenames[idx])
-    max_water = int(m.residues[-1].number)
+    max_water = len(m.residues)
     return max_water, idx
 
 
@@ -64,7 +63,7 @@ def write_system_pdb_file(fname, receptor, water_filenames):
     water = pmd.load_file(water_filenames[idx])
     # We do an in-place addition, so first we have to create a copy
     receptor_copy = copy.deepcopy(receptor)
-    receptor_copy += water
+    receptor_copy += water["@O, H1, H2"]
     # ParmED really want a symmetry attributes to write the PDB file
     receptor_copy.symmetry = None
     try:
@@ -114,9 +113,12 @@ def write_trajectory_file(fname, receptor, water_filenames,
 
     """
     max_n_waters, idx = max_water(water_filenames)
-    receptor_coordinates = receptor.coordinates
-    n_atoms = receptor_coordinates.shape[0]
+    n_atoms = receptor.coordinates.shape[0]
     max_n_atoms = n_atoms + (max_n_waters * 3)
+    coordinates = np.zeros(shape=(max_n_atoms, 3))
+
+    # Already add the coordinates from the receptor
+    coordinates[:n_atoms] = receptor.coordinates
 
     trj = NetCDFTraj.open_new(fname, natom=max_n_atoms, 
                               box=True, crds=True)
@@ -124,18 +126,12 @@ def write_trajectory_file(fname, receptor, water_filenames,
     for water_filename in water_filenames:
         m = pmd.load_file(water_filename)
 
-        last_residue_id = m.residues[-1].number
+        last_residue_id = len(m.residues)
         step = len(m.atoms) / last_residue_id
         last_atom_id = last_residue_id * 3
 
-        coordinates = np.zeros(shape=(max_n_atoms, 3))
-
-        # Add receptor coordinates
-        coordinates[:n_atoms] = receptor_coordinates
         # Get all the TIP3P water molecules
-        coordinates[n_atoms:n_atoms + last_atom_id:3] = m[::step].coordinates
-        coordinates[n_atoms + 1:n_atoms + last_atom_id:3] = m[1::step].coordinates
-        coordinates[n_atoms + 2:n_atoms + last_atom_id:3] = m[2::step].coordinates
+        coordinates[n_atoms:n_atoms + last_atom_id] = m["@O, H1, H2"].coordinates
         # Add the dummy water molecules
         coordinates[n_atoms + last_atom_id:] = dummy_water_xyz
 
