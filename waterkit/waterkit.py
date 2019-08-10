@@ -80,30 +80,31 @@ class Waterkit():
         """
         output_str = ""
         pdbqt_str = "ATOM  %5d  %-3s HOH%2s%4d    %8.3f%8.3f%8.3f  1.00  1.00          %2s\n"
-
+        fname = "%s.pdb" % prefix
+        
         shell_id = self.water_box.number_of_shells()
-        waters = [self.water_box.molecules_in_shell(i) for i in range(1, shell_id + 1)]
+        water_shells = [self.water_box.molecules_in_shell(i) for i in range(1, shell_id + 1)]
 
-        for shell, chain in zip(waters, ascii_uppercase):
-            i, j = 1, 1
+        i = 1
 
-            fname = "%s_%s.pdb" % (prefix, chain)
+        for water_shell, chain in zip(water_shells, ascii_uppercase):
+            j = 1
 
-            for water in shell:
+            for water in water_shell:
                 c = water.coordinates()
 
-                output_str += pdbqt_str % (j, "O", chain, i, c[0][0], c[0][1], c[0][2], "O")
-                output_str += pdbqt_str % (j + 1, "H1", chain, i, c[1][0], c[1][1], c[1][2], "H")
-                output_str += pdbqt_str % (j + 2, "H2", chain, i, c[2][0], c[2][1], c[2][2], "H")
-                j += 2
+                output_str += pdbqt_str % (i, "O", chain, j, c[0][0], c[0][1], c[0][2], "O")
+                output_str += pdbqt_str % (i + 1, "H1", chain, j, c[1][0], c[1][1], c[1][2], "H")
+                output_str += pdbqt_str % (i + 2, "H2", chain, j, c[2][0], c[2][1], c[2][2], "H")
+                i += 2
 
                 if water_model == 'tip5p':
-                    output_str += pdbqt_str % (j + 3, "L1", chain, i, c[3][0], c[3][1], c[3][2], "L")
-                    output_str += pdbqt_str % (j + 4, "L2", chain, i, c[4][0], c[4][1], c[4][2], "L")
-                    j += 2
+                    output_str += pdbqt_str % (i + 3, "L1", chain, j, c[3][0], c[3][1], c[3][2], "L")
+                    output_str += pdbqt_str % (i + 4, "L2", chain, j, c[4][0], c[4][1], c[4][2], "L")
+                    i += 2
 
                 i += 1
                 j += 1
 
-            with open(fname, "w") as w:
-                w.write(output_str)
+        with open(fname, "w") as w:
+            w.write(output_str)
