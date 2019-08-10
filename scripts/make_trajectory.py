@@ -120,8 +120,7 @@ def write_trajectory_file(fname, receptor, water_filenames,
     # Already add the coordinates from the receptor
     coordinates[:n_atoms] = receptor.coordinates
 
-    trj = NetCDFTraj.open_new(fname, natom=max_n_atoms, 
-                              box=True, crds=True)
+    trj = NetCDFTraj.open_new(fname, natom=max_n_atoms, box=True, crds=True)
 
     for water_filename in water_filenames:
         m = pmd.load_file(water_filename)
