@@ -4,6 +4,7 @@
 #                                                                            #
 #                                                                            #
 #  Later lines should specify:                                               #
+#   * The name of the rotamer                                                #
 #   * A SMARTS pattern for the rotor rule                                    #
 #   * A set of 4 "reference atoms" (as integers, numbered from 1             #
 #      in the specified SMARTS pattern                                       #
@@ -20,21 +21,15 @@
 # atoms." BMC structural biology 8.1 (2008): 41.
 
 # Hydroxyl
-# Serine
-[#1][#8;X2;v2;H1][#6;X4;v4;H2][#6;X4;v4;H1] 1 2 3 4 -60 60 180
-# Tyrosine
-[#1][#8;X2;v2;H1][c][c] 1 2 3 4 0 180
-# Threonine 
-[#1][#8;X2;v2;H1][#6;X4;v4;H1][#6;X4;v4;H1] 1 2 3 4 -60 60 180
+hydroxyl_serine [#1][#8;X2;v2;H1][#6;X4;v4;H2][#6;X4;v4;H1] 1 2 3 4 -60 60 180
+hydroxyl_tyrosine [#1][#8;X2;v2;H1][c][c] 1 2 3 4 0 180
+hydroxyl_threonine [#1][#8;X2;v2;H1][#6;X4;v4;H1][#6;X4;v4;H1] 1 2 3 4 -60 60 180
 
 # Ammonium
-# Lysine
-[#1][#7;X4;v4;H3][!#1][!#1] 1 2 3 4 0 Delta 10
+ammonium_lysine [#1][#7;X4;v4;H3][!#1][!#1] 1 2 3 4 0 Delta 10
 
-# Thiol
-# Cysteine 
-[#1][#16;X2;v2;H1][!#1][!#1] 1 2 3 4 0 Delta 10
+# Thiol 
+thiol_cysteine [#1][#16;X2;v2;H1][!#1][!#1] 1 2 3 4 0 Delta 10
 
 # Selenol
-# Selenocysteine
-[#1][#32;X2;v2;H1][!#1][!#1] 1 2 3 4 0 Delta 10
+selenol_selenocysteine [#1][#32;X2;v2;H1][!#1][!#1] 1 2 3 4 0 Delta 10

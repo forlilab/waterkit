@@ -15,7 +15,6 @@ from waterkit.waterkit import Waterkit
 from waterkit.autodock_map import Map
 from waterkit.molecule import Molecule
 from waterkit.water import Water
-from waterkit.waterfield import Waterfield
 from waterkit.forcefield import AutoDockForceField
 
 
@@ -55,13 +54,11 @@ def main():
     """If the user does not provide any of these elements,
     we take those available per default in waterkit."""
     d = imp.find_module("waterkit")[1]
-    hb_forcefield_file = os.path.join(d, "data/waterfield.par")
-    hb_forcefield = Waterfield(hb_forcefield_file)
     ad_forcefield_file = os.path.join(d, "data/AD4_parameters.dat")
     ad_forcefield = AutoDockForceField(ad_forcefield_file, smooth=0, dielectric=1.)
 
     # Read PDBQT/MOL2 file, Waterfield file and AutoDock grid map
-    molecule = Molecule.from_file(mol_file, hb_forcefield)
+    molecule = Molecule.from_file(mol_file)
     ad_map = Map.from_fld(fld_file)
 
     # Go waterkit!!
