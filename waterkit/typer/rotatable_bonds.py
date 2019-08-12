@@ -86,11 +86,11 @@ class RotatableBonds():
                     
                     ob_atom = OBMol.GetAtom(int(match[0]))
                     atom_i_xyz = np.array([ob_atom.GetX(), ob_atom.GetY(), ob_atom.GetZ()])
-                    ob_atom = OBMol.GetAtom(int(match[0]))
+                    ob_atom = OBMol.GetAtom(int(match[1]))
                     atom_j_xyz = np.array([ob_atom.GetX(), ob_atom.GetY(), ob_atom.GetZ()])
-                    ob_atom = OBMol.GetAtom(int(match[0]))
+                    ob_atom = OBMol.GetAtom(int(match[2]))
                     atom_k_xyz = np.array([ob_atom.GetX(), ob_atom.GetY(), ob_atom.GetZ()])
-                    ob_atom = OBMol.GetAtom(int(match[0]))
+                    ob_atom = OBMol.GetAtom(int(match[3]))
                     atom_l_xyz = np.array([ob_atom.GetX(), ob_atom.GetY(), ob_atom.GetZ()])
 
                     data.append((match[0], match[1], atom_i_xyz, atom_j_xyz,
