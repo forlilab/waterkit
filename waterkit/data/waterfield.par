@@ -29,7 +29,6 @@ ATOM H_O_000  1   0.000 1 1 1.8 [#1][#8] # general hydroxyl (OH)
 ATOM H_O_001  1   1.100 1 1 1.8 [#1;X1][#8;X2;v2] # other hydroxyl
 ATOM H_O_002  1   1.500 1 1 1.8 [#1;X1][#8;X2;v2;H1][a] # Ar-OH (phenol-like)
 ATOM H_O_003  1   1.500 1 1 1.8 [#1;X1][#8;X2;v2;H1]-[#6;X3;v4]=[#8;X1;v2] # carboxylate H
-ATOM H_O_004  1   1.000 1 1 1.8 [] # hydrogen of TIP5P water molecule
 
 ## HN
 ATOM H_N_000  1   0.000 1 1 1.8 [#1][#7] # general NH
@@ -78,9 +77,6 @@ ATOM O_P_000   0   0.000 0 0 0.0 [#8]~[#15]
 ATOM O_P_001   2   0.000 2 3 2.8 [#8;X1]~[#15]
 ATOM O_P_002   2   1.200 2 3 2.8 [#8]=[#15]
 ATOM O_P_003   0   0.750 0 0 0.0 [#8]-[#15]
-
-## O Lone pairs
-ATOM O_L_000   2   1.000 1 1 2.1 [] # Lone pair of TIP5P water molecule
 
 # Nitrogen
 ATOM N_000     0   0.000 0 0 0.0 [#7] # any nitrogen

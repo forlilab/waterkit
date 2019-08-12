@@ -6,15 +6,12 @@
 # Class for molecule
 #
 
-import copy
 import imp
 import os
 import re
 
 import numpy as np
-import pandas as pd
 import openbabel as ob
-from scipy import spatial
 
 import utils
 from typer.rotatable_bonds import RotatableBonds
@@ -150,7 +147,7 @@ class Molecule():
             ndarray: 1d ndarray (i, name, resname, resnum, xyz, q, t)
 
         """
-        return self.atoms[i]
+        return self.atoms[i - 1]
 
     def coordinates(self, atom_ids=None):
         """
@@ -164,7 +161,10 @@ class Molecule():
 
         """
         if atom_ids is not None and self.atoms.size > 1:
-            atoms = self.atoms[atom_ids]["xyz"]
+            if not isinstance(atom_ids, np.ndarray):
+                atom_ids = np.array(atom_ids)
+            # -1 because numpy array is 0-based
+            atoms = self.atoms[atom_ids - 1]["xyz"]
         else:
             atoms = self.atoms["xyz"]
 
@@ -181,7 +181,10 @@ class Molecule():
 
         """
         if atom_ids is not None and self.atoms.size > 1:
-            t = self.atoms[atom_ids]['t']
+            if not isinstance(atom_ids, np.ndarray):
+                atom_ids = np.array(atom_ids)
+            # -1 because numpy array is 0-based
+            t = self.atoms[atom_ids - 1]['t']
         else:
             t = self.atoms['t']
 
@@ -198,7 +201,10 @@ class Molecule():
 
         """
         if atom_ids is not None and self.atoms.size > 1:
-            q = self.atoms[atom_ids]['q']
+            if not isinstance(atom_ids, np.ndarray):
+                atom_ids = np.array(atom_ids)
+            # -1 because numpy array is 0-based
+            q = self.atoms[atom_ids - 1]['q']
         else:
             q =  self.atoms['q']
 
@@ -215,7 +221,10 @@ class Molecule():
 
         """
         if atom_ids is not None:
-            atoms = self.atoms[atom_ids][['i', 'xyz', 'q', 't']]
+            if not isinstance(atom_ids, np.ndarray):
+                atom_ids = np.array(atom_ids)
+            # -1 because numpy array is 0-based
+            atoms = self.atoms[atom_ids - 1][['i', 'xyz', 'q', 't']]
         else:
             atoms = self.atoms[['i', 'xyz', 'q', 't']]
 
@@ -256,7 +265,7 @@ class Molecule():
         """
         if atom_id < self.atoms.size:
             if self.atoms.size > 1:
-                self.atoms[atom_id]["xyz"] = xyz
+                self.atoms[atom_id - 1]["xyz"] = xyz
             else:
                 self.atoms["xyz"] = xyz
             return True

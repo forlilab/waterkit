@@ -42,11 +42,6 @@ class HydrogenBonds():
                     sline = line.split(' ')
                     sline = filter(None, sline)
 
-                    if sline[7] == "[]":
-                        smarts = None
-                    else:
-                        smarts = sline[7]
-
                     ob_smarts = ob.OBSmartsPattern()
                     success = ob_smarts.Init(sline[7])
 
@@ -60,6 +55,8 @@ class HydrogenBonds():
 
                         hb_type = self._Atom_type(hb_type, hb_strength, hyb, n_water, hb_length, ob_smarts)
                         self._atom_types[name] = hb_type
+                    else:
+                        print "Warning: invalid SMARTS pattern %s for atom type %s." % (sline[7], sline[1])
 
     def _push_atom_to_end(self, lst, atomic_nums):
         """
@@ -95,7 +92,7 @@ class HydrogenBonds():
         while queue:
             i, d = queue.pop(0)
 
-            ob_atom = OBMol.GetAtomById(np.int(i))
+            ob_atom = OBMol.GetAtom(np.int(i))
 
             # If we construct the data structure before [[n], [n1, n2, ...], ...]
             # and because the depth is too large compared to the molecule
@@ -110,8 +107,8 @@ class HydrogenBonds():
 
             if d < depth:
                 for a in ob.OBAtomAtomIter(ob_atom):
-                    if not visited[a.GetId()] and a.GetAtomicNum() >= atomic_num_to_keep:
-                        queue.append((a.GetId(), d + 1))
+                    if not visited[a.GetIdx()] and a.GetAtomicNum() >= atomic_num_to_keep:
+                        queue.append((a.GetIdx(), d + 1))
 
         # We push all the hydrogen (= 1) atom to the end
         neighbors = [self._push_atom_to_end(x, 1) for x in neighbors]
@@ -138,7 +135,7 @@ class HydrogenBonds():
         vectors = []
 
         # Get origin atom
-        ob_atom = OBMol.GetAtomById(np.int(idx))
+        ob_atom = OBMol.GetAtom(np.int(idx))
         anchor_xyz = np.array([ob_atom.GetX(), ob_atom.GetY(), ob_atom.GetZ()])
         # Get coordinates of all the neihbor atoms
         neighbors_xyz = self._neighbor_atom_coordinates(OBMol, idx, depth=2)
@@ -268,16 +265,16 @@ class HydrogenBonds():
                 if not visited[idx]:
                     visited[idx] = True
 
-                    if True:
-                    #try:
+                    try:
                         # Calculate the vectors on the anchor
-                        vector_xyzs = self._hb_vectors(OBMol, idx - 1, atom_type.hyb, atom_type.n_water, atom_type.hb_length)
+                        vector_xyzs = self._hb_vectors(OBMol, idx, atom_type.hyb, atom_type.n_water, atom_type.hb_length)
                         for vector_xyz in vector_xyzs:
-                            data.append([idx - 1, vector_xyz, hb_type, name])
-                    #except:
-                    #    print "Warning: Could not determine hydrogen bond vectors on atom %s of type %s." % (idx, name)
+                            data.append([idx, vector_xyz, hb_type, name])
+                    except:
+                        print "Warning: Could not determine hydrogen bond vectors on atom %s of type %s." % (idx, name)
 
         df = pd.DataFrame(data=data, columns=columns)
         df.sort_values(by="atom_i", inplace=True)
+        df.reset_index(drop=True, inplace=True)
 
         return df
