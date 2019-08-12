@@ -266,7 +266,7 @@ class Water(Molecule):
             vector_xyz = utils.resize_vector(atom["xyz"], hb_length, oxygen_xyz)
             data.append((i + 1, vector_xyz, hb_type, hb_name))
 
-        self.hydrogen_bond_anchors = pd.DataFrame(data=data, columns=columns)
+        self.hydrogen_bonds = pd.DataFrame(data=data, columns=columns)
 
     def translate(self, vector):
         """Translate the water molecule.
@@ -283,8 +283,8 @@ class Water(Molecule):
             self.update_coordinates(coord_xyz, atom_id)
 
         # We have also to translate the hydrogen bond vectors if present
-        if self.hydrogen_bond_anchors is not None:
-            self.hydrogen_bond_anchors["vector_xyz"] += vector
+        if self.hydrogen_bonds is not None:
+            self.hydrogen_bonds["vector_xyz"] += vector
 
     def rotate(self, angle, ref_id=1):
         """Rotate water molecule.
@@ -319,4 +319,4 @@ class Water(Molecule):
         if self.hydrogen_bond_anchors is not None:
             for index, vector in self.hydrogen_bond_anchors.iterrows():
                 vector_xyz = utils.rotate_point(vector["vector_xyz"], oxygen_xyz, r, np.radians(angle))
-                self.hydrogen_bond_anchors.at[index, "vector_xyz"] = vector_xyz
+                self.hydrogen_bonds.at[index, "vector_xyz"] = vector_xyz

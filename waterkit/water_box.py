@@ -252,7 +252,8 @@ class WaterBox():
         if not df.empty:
             for index, row in df.iterrows():
                 try:
-                    hba = self.molecules[row["molecule_i"]].hydrogen_bond_anchors[row["atom_i"]]
+                    hydrogen_bonds = self.molecules[row["molecule_i"]].hydrogen_bonds
+                    hba = hydrogen_bonds.loc[hydrogen_bonds["atom_i"] == row["atom_i"]]
                     hba_xyz = self.molecules[row["molecule_i"]].coordinates(row["atom_i"])
 
                     hba_distance = utils.get_euclidean_distance(xyz, hba_xyz)[0]
@@ -291,7 +292,7 @@ class WaterBox():
         data = []
 
         for i, molecule in enumerate(molecules):
-            for index, row in molecule.hydrogen_bond_anchors.iterrows():
+            for index, row in molecule.hydrogen_bonds.iterrows():
                 # Add water molecule only if it's in the map
                 anchor_xyz = molecule.coordinates(row.atom_i)[0]
 
