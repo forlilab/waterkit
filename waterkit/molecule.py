@@ -162,7 +162,7 @@ class Molecule():
         """
         if atom_ids is not None and self.atoms.size > 1:
             if not isinstance(atom_ids, np.ndarray):
-                atom_ids = np.array(atom_ids)
+                atom_ids = np.array(atom_ids, dtype=np.int)
             # -1 because numpy array is 0-based
             atoms = self.atoms[atom_ids - 1]["xyz"]
         else:
@@ -182,7 +182,7 @@ class Molecule():
         """
         if atom_ids is not None and self.atoms.size > 1:
             if not isinstance(atom_ids, np.ndarray):
-                atom_ids = np.array(atom_ids)
+                atom_ids = np.array(atom_ids, dtype=np.int)
             # -1 because numpy array is 0-based
             t = self.atoms[atom_ids - 1]['t']
         else:
@@ -202,7 +202,7 @@ class Molecule():
         """
         if atom_ids is not None and self.atoms.size > 1:
             if not isinstance(atom_ids, np.ndarray):
-                atom_ids = np.array(atom_ids)
+                atom_ids = np.array(atom_ids, dtype=np.int)
             # -1 because numpy array is 0-based
             q = self.atoms[atom_ids - 1]['q']
         else:
@@ -222,7 +222,7 @@ class Molecule():
         """
         if atom_ids is not None:
             if not isinstance(atom_ids, np.ndarray):
-                atom_ids = np.array(atom_ids)
+                atom_ids = np.array(atom_ids, dtype=np.int)
             # -1 because numpy array is 0-based
             atoms = self.atoms[atom_ids - 1][['i', 'xyz', 'q', 't']]
         else:
