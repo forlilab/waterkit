@@ -32,7 +32,7 @@ class Water(Molecule):
 
         """
         self.atoms = None
-        self.hydrogen_bond_anchors = None
+        self.hydrogen_bonds = None
         self.rotatable_bonds = None
         self._anchor = None
         self._anchor_type = anchor_type
@@ -240,11 +240,11 @@ class Water(Molecule):
             self._add_atom(atom, atom_type, partial_charge)
 
         # Do the HB typing at the end
-        self._guess_hydrogen_bond_anchors()
+        self._guess_hydrogen_bonds()
 
         return True
 
-    def _guess_hydrogen_bond_anchors(self):
+    def _guess_hydrogen_bonds(self):
         """Guess all the hydrogen bond anchors in the
         TIP5P water molecule. We do not need the waterfield here. """
         hyb = 1

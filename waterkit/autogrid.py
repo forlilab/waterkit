@@ -53,7 +53,8 @@ class AutoGrid():
         if not isinstance(atom_types, (list, tuple)):
             atom_types = [atom_types]
 
-        receptor = Molecule.from_file(receptor_file)
+        receptor = Molecule.from_file(receptor_file, guess_hydrogen_bonds=False, 
+                                      guess_disordered_hydrogens=False)
         receptor_types = set(receptor.atom_types())
         receptor_name = receptor_file.split("/")[-1].split(".")[0]
 
