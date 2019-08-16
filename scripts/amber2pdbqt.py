@@ -11,7 +11,7 @@ import parmed as pmd
 
 def cmd_lineparser():
     parser = argparse.ArgumentParser(description="amber2pdbqt")
-    parser.add_argument("-p", "--top", dest="top_file", required=True,
+    parser.add_argument("-t", "--top", dest="top_file", required=True,
                         action="store", help="topology file")
     parser.add_argument("-c", "--coords", dest="crd_file", required=True,
                         action="store", help="coordinates file")
