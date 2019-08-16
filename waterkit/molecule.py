@@ -33,7 +33,7 @@ class Molecule():
         dtype = [("i", "i4"), ("name", "S4"), ("resname", "S3"), ("resnum", "i4"),
                  ("xyz", "f4", (3)), ("q", "f4"), ("t", "S5")]
         self.atoms = np.zeros(OBMol.NumAtoms(), dtype)
-        self.hydrogen_bond_anchors = None
+        self.hydrogen_bonds = None
         self.rotatable_bonds = None
 
         # Remove all implicit hydrogens because OpenBabel
@@ -263,7 +263,7 @@ class Molecule():
             bool: True if successfull, False otherwise
 
         """
-        if atom_id < self.atoms.size:
+        if atom_id <= self.atoms.size:
             if self.atoms.size > 1:
                 self.atoms[atom_id - 1]["xyz"] = xyz
             else:
@@ -333,11 +333,11 @@ class Molecule():
         """
         pdbqt_str = "ATOM  %5d  %-3s ANC%2s%4d    %8.3f%8.3f%8.3f%6.2f 1.00    %6.3f %2s\n"
 
-        if self.hydrogen_bond_anchors is not None:
+        if self.hydrogen_bonds is not None:
             i = 1
             output_str = ""
 
-            for index, anchor in self.hydrogen_bond_anchors.iterrows():
+            for index, anchor in self.hydrogen_bonds.iterrows():
                 x, y, z = anchor.vector_xyz
                 atom_type = anchor.anchor_type[0].upper()
 
