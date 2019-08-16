@@ -28,7 +28,7 @@ def write_pdb_file(output_name, molecule):
         molecule (parmed): parmed molecule object
 
     """
-    mol.save(output_name)
+    molecule.save(output_name)
 
 def write_pdbqt_file(output_name, molecule):
     """Write PDBQT file
@@ -57,7 +57,7 @@ def write_pdbqt_file(output_name, molecule):
         output_str += pdbqt_str % (atom.idx + 1, name, resname, resid, atom.xx, 
                                    atom.xy, atom.xz, atom.charge, atom_type)
 
-    with open(pdbqt_file, "w") as w:
+    with open(output_name, "w") as w:
         w.write(output_str)
 
 
