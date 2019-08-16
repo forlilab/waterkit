@@ -159,7 +159,7 @@ class WaterBox():
         for index, molecule in enumerate(molecules):
             coordinates = molecule.coordinates()
             mol_i = index + last_molecule_i + 1
-            relations.append([[mol_i, i] for i in range(coordinates.shape[0])])
+            relations.append([[mol_i, i + 1] for i in range(coordinates.shape[0])])
             data.append(coordinates)
 
         # Update the KDTree relation database
@@ -209,7 +209,7 @@ class WaterBox():
             print "Warning: KDTree is empty."
             return pd.DataFrame(columns=["molecule_i", "atom_i"])
 
-        index = self._kdtree.query_ball_point(xyz, radius)
+        index = self._kdtree.query_ball_point(xyz, radius, p=2)
         df = self.df["kdtree_relations"].loc[index]
 
         if isinstance(exclude, pd.DataFrame):
