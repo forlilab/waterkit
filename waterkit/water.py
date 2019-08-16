@@ -87,7 +87,7 @@ class Water(Molecule):
         resnum = 1
 
         if self.atoms is None:
-            num_atoms = -1
+            num_atoms = 0
         else:
             num_atoms = np.max(self.atoms['i'])
 
@@ -100,10 +100,19 @@ class Water(Molecule):
             self.atoms = new_atom
 
     def _delete_atoms(self, atom_ids):
-        """Delete OBAtom from OBMol using atom id."""
-        if self.atoms.size > 1:
-            self.atoms = np.delete(self.atoms, atom_ids)
-            self.atoms["i"] = np.arange(0, self.atoms.shape[0])
+        """Delete atoms from the water. ids are atom ids and not array indices.
+        Only the hydrogens and lone pairs are deleted, never the oxygen atom."""
+        if not isinstance(atom_ids, np.ndarray):
+            atom_ids = np.array(atom_ids)
+
+        # Make sure, we never delete the oxygen atom (1)
+        atom_ids = np.delete(atom_ids, np.where(atom_ids == 1))
+
+        if self.atoms.size > 1 and atom_ids.size > 0:
+            # atoms_ids - 1, because the array is 0-based
+            self.atoms = np.delete(self.atoms, atom_ids - 1)
+            # From 1 to num_atom + 1, because atom ids are 1-based
+            self.atoms["i"] = np.arange(1, self.atoms.shape[0] + 1)
             return True
         else:
             return False
@@ -140,8 +149,10 @@ class Water(Molecule):
         """Return a tip3p version of the Water (deepcopy)."""
         if self.is_tip5p():
             w = copy.deepcopy(self)
-            w._delete_atoms([3, 4])
-            w.hydrogen_bond_anchors.drop([2, 3], inplace=True)
+            # Atom ids are 1-based, and LP corresponds to atom 4 and 5
+            w._delete_atoms([4, 5])
+            # hbond df is 0-based, and so LP corresponds to index 2 and 3
+            w.hydrogen_bonds.drop([2, 3], inplace=True)
 
             return w
             
@@ -192,7 +203,7 @@ class Water(Molecule):
             distances.reverse()
             angles.reverse()
 
-        coord_oxygen = self.coordinates(0)[0]
+        coord_oxygen = self.coordinates(1)[0]
 
         # Vector between O and the Acceptor/Donor atom
         v = utils.vector(coord_oxygen, self._anchor[0])
@@ -227,7 +238,7 @@ class Water(Molecule):
         if not self.is_spherical():
             self.atoms[0]["q"] = partial_charges[0]
             self.atoms[0]["t"] = atom_types[0]
-            self._delete_atoms(range(1, self.atoms.size))
+            self._delete_atoms(range(2, self.atoms.size + 1))
 
         # Order them: H, H, Lp, Lp, we want hydrogen atoms first
         if self._anchor_type == "acceptor":
@@ -253,7 +264,7 @@ class Water(Molecule):
         columns = ["atom_i", "vector_xyz", "anchor_type", "anchor_name"]
         data = []
 
-        oxygen_xyz = self.coordinates(0)[0]
+        oxygen_xyz = self.coordinates(1)[0]
 
         for i, atom in enumerate(self.atoms[1:]):
             if atom["name"] == "H":
@@ -280,13 +291,14 @@ class Water(Molecule):
         """
         water_xyz = self.coordinates() + vector
         for atom_id, coord_xyz in enumerate(water_xyz):
-            self.update_coordinates(coord_xyz, atom_id)
+            # +1, because atom ids are 1-based
+            self.update_coordinates(coord_xyz, atom_id + 1)
 
         # We have also to translate the hydrogen bond vectors if present
         if self.hydrogen_bonds is not None:
             self.hydrogen_bonds["vector_xyz"] += vector
 
-    def rotate(self, angle, ref_id=1):
+    def rotate(self, angle, ref_id=2):
         """Rotate water molecule.
 
         The rotation is along the axis Oxygen 
@@ -301,22 +313,26 @@ class Water(Molecule):
 
         """
         water_xyz = self.coordinates()
-
         # Get the rotation between the oxygen and the atom ref
         oxygen_xyz = water_xyz[0]
-        ref_xyz = water_xyz[ref_id]
+        # -1, because array is 0-based
+        ref_xyz = water_xyz[ref_id - 1]
         r = oxygen_xyz + utils.normalize(utils.vector(ref_xyz, oxygen_xyz))
 
         # Remove the atom ref from the list of atoms we want to rotate
-        atom_ids = list(range(1, water_xyz.shape[0]))
+        # From 2 to num_atom + 1, because atom ids are 1-based
+        atom_ids = list(range(2, water_xyz.shape[0] + 1))
         atom_ids.remove(ref_id)
 
+        print atom_ids
+
         for atom_id in atom_ids:
-            coord_xyz = utils.rotate_point(water_xyz[atom_id], oxygen_xyz, r, np.radians(angle))
+            # -1, because array is 0-based
+            coord_xyz = utils.rotate_point(water_xyz[atom_id - 1], oxygen_xyz, r, np.radians(angle))
             self.update_coordinates(coord_xyz, atom_id)
 
         # We have also to rotate the hydrogen bond vectors if present
-        if self.hydrogen_bond_anchors is not None:
-            for index, vector in self.hydrogen_bond_anchors.iterrows():
+        if self.hydrogen_bonds is not None:
+            for index, vector in self.hydrogen_bonds.iterrows():
                 vector_xyz = utils.rotate_point(vector["vector_xyz"], oxygen_xyz, r, np.radians(angle))
                 self.hydrogen_bonds.at[index, "vector_xyz"] = vector_xyz
