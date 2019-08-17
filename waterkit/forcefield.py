@@ -87,17 +87,46 @@ class AutoDockForceField():
         atom_par.set_index('type', inplace=True)
         return atom_par
 
-    def load_intnbp_r_eps_from_dpf(self, dp_file):
+    def load_intnbp_r_eps_from_gpf(self, gpf_file):
         """Load intnbp_r_eps from dpf file."""
-        pass
+        columns = ["npb_ij", "cn", "cm", "n", "m", "statut"]
+        pairwise_to_add = []
+
+        with open(dpf_file) as f:
+            lines = f.readlines()
+
+            for line in lines:
+                if re.search("^nbp_r_eps", line):
+                    sline = line.split()
+                    req = np.float(sline[1])
+                    eps = np.float(sline[2])
+                    n = np.int(sline[3])
+                    m = np.int(sline[4])
+                    i = sline[5]
+                    j = sline[6]
+
+                    cn = (m / (n - m)) * (eps * req**n)
+                    cm = (n / (n - m)) * (eps * req**m)
+
+                    data = [req, cn, cm, n, m, "nbp"]
+
+                    try:
+                        self.pairwise.loc[(i, j), columns] = data
+                        self.pairwise.loc[(j, i), columns] = data
+                    except:
+                        pairwise_to_add.append([i, j] + [None] * 6 + data)
+                        pairwise_to_add.append([j, i] + [None] * 6 + data)
+        
+        if pairwise_to_add:
+            #merge to pairwise
 
     def deactivate_pairs(self, pairs):
         """Deactivate pairwise interactions between atoms."""
         if all(isinstance(pair, list) and len(pair) == 2 for pair in pairs):
             for pair in pairs:
                 try:
-                    self.pairwise.loc[(pair[0], pair[1]), 'active'] = False
-                    self.pairwise.loc[(pair[1], pair[0]), 'active'] = False
+                    self.pairwise.loc[(pair[0], pair[1]), 'statut'] = "inactive"
+                    self.pairwise.loc[(pair[1], pair[0]), 'statut'] = "inactive"
                 except:
                     print "Error: pair %s - %s does not exist." % (pair[0], pair[1])
         else:
@@ -109,8 +138,11 @@ class AutoDockForceField():
 
     def _build_pairwise_table(self):
         """Pre-compute all pairwise interactions."""
-        columns = ['i', 'j', 'vdw_rij', 'vdw_epsij', 'A', 
-                   'B', 'hb_rij', 'hb_epsij', 'C', 'D', 'active']
+        columns = ['i', 'j', # atom types
+                   'vdw_rij', 'A', 'B', # vdw parameters
+                   'hb_rij', 'C', 'D', #hydrogen bond parameters
+                   'nbp_ij', 'cn', 'cm', 'n', 'm', #npb parameters
+                   'statut']
         data = []
 
         for i in self.atom_par.index:
@@ -138,7 +170,8 @@ class AutoDockForceField():
                 c = self._coefficient(hb_epsij, hb_rij, 10, 12)
                 d = self._coefficient(hb_epsij, hb_rij, 12, 10)
 
-                data.append((i, j, vdw_rij, vdw_epsij, a, b, hb_rij, hb_epsij, c, d, True))
+                data.append((i, j, vdw_rij, a, b, hb_rij, c, d, 
+                             None, None, None, None, None, "active"))
 
         pairwise = pd.DataFrame(data=data, columns=columns)
         pairwise.set_index(['i', 'j'], inplace=True)
@@ -153,6 +186,11 @@ class AutoDockForceField():
         r[r >= reqm + sf] -= sf
         r[r <= reqm - sf] += sf
         return r
+
+    def intnbp_r_eps(self, r, reqm, cn, cm, n, m):
+        if self.smooth > 0:
+            r = self.smooth_distance(r, reqm, self.smooth)
+        return np.sum((cn / r**n) - (cm / r**m))
 
     def van_der_waals(self, r, reqm, A, B):
         """Compute VdW interaction."""
@@ -211,6 +249,7 @@ class AutoDockForceField():
         hb = 0.
         total = 0.
         vdw = 0.
+        nbp = 0.
 
         for atom_i in atoms_i:
             # Get HB vectors from atom i
@@ -220,7 +259,7 @@ class AutoDockForceField():
             for atom_j in atoms_j:
                 pairwise = self.pairwise.loc[(atom_i['t'], atom_j['t'])]
 
-                if pairwise['active']:
+                if pairwise['statut'] == "active":
                     r = utils.get_euclidean_distance(np.array(atom_i['xyz']), np.array([atom_j['xyz']]))
 
                     """ We do not want to calculate useless thing
@@ -258,13 +297,17 @@ class AutoDockForceField():
                                                    self.atom_par.loc[atom_i['t']]['vol'],
                                                    self.atom_par.loc[atom_j['t']]['vol'])
 
+                elif pairwise["statut"] = "nbp":
+                    nbp += self.nbp_r_eps(r, pairwise["npb_ij"], pairwise["cn"], pairwise["cm"],
+                                          pairwise["n"], pairwise["m"])
+
         hb *= self.weights['hbond']
         elec *= self.weights['estat']
         vdw *= self.weights['vdW']
         desolv *= self.weights['desolv']
-        total = hb + vdw + elec + desolv
+        total = hb + vdw + elec + desolv + nbp
 
         if details:
-            return np.array([total, hb, vdw, elec, desolv])
+            return np.array([total, hb, vdw, elec, desolv, nbp])
         else:
             return total

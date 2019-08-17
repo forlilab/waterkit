@@ -21,7 +21,7 @@ from forcefield import AutoDockForceField
 
 class WaterSampler():
 
-    def __init__(self, water_box, how="best", min_distance=2.4, max_distance=3.2, angle=110, rotation=10,
+    def __init__(self, water_box, how="best", min_distance=2.4, max_distance=3.2, angle=110,
                  energy_cutoff=0, temperature=298.15):
         self._water_box = water_box
         self._water_model = water_box._water_model
@@ -32,15 +32,10 @@ class WaterSampler():
         self._min_distance = min_distance
         self._max_distance = max_distance
         self._angle = angle
-        self._rotation = rotation
         self._temperature = temperature
         self._energy_cutoff = energy_cutoff
         # Boltzmann constant (kcal/mol)
         self._kb = 0.0019872041
-
-        # AutoGrid initialization and ADFF
-        self._ag = AutoGrid()
-        self._adff = water_box._adff
 
         """ Load pre-generated water molecules (only hydrogens)
         We will use those to sample the orientation."""
@@ -55,6 +50,11 @@ class WaterSampler():
         water_orientations = np.loadtxt(w_orientation_file, usecols=usecols)
         shape = (water_orientations.shape[0], n_atoms, 3)
         self._water_orientations = water_orientations.reshape(shape)
+
+        # AutoGrid initialization and ADFF
+        ad_parameters_file = os.path.join(d, "data/AD4_parameters.dat")
+        self._ag = AutoGrid(param_file=ad_parameters_file)
+        self._adff = water_box._adff
 
     def _boltzmann_choice(self, energies, size=None):
         """Choose state i based on boltzmann probability."""
@@ -98,14 +98,12 @@ class WaterSampler():
         energies = []
         water_xyzs = []
         hydrogen_xyzs = []
-        distance = 5.
-
-        # Number of rotation necessary to do a full spin
-        n_rotation = np.int(np.floor((360 / self._rotation))) - 1
-        rotation = np.radians(self._rotation)
+        distance = 10.
 
         # Get all the water attached
         rot_waters, hydrogen_ids = self._waters_on_disordered_group(heavy_atom_id, waters, connections)
+
+        print heavy_atom_id
 
         # Get all the receptor atoms around for pairwise interactions
         heavy_atom_xyz = receptor.atom_informations(heavy_atom_id)["xyz"]
@@ -119,36 +117,45 @@ class WaterSampler():
         water_infos = np.array([w.atom_informations() for w in rot_waters])
         hydrogen_infos = receptor.atom_informations(hydrogen_ids)
         rot_infos = rot_bonds.loc[rot_bonds["atom_j"] == heavy_atom_id].iloc[0]
-        # Get the current energy
-        energy_hydrogens = self._ff.intermolecular_energy(hydrogen_infos, receptor_infos)
-        energy_waters = self._ad_map.energy(water_infos, ignore_electrostatic=True, 
-                                            ignore_desolvation=True, sum_energies=False)
-        energy_waters[energy_waters > 0] = 0
-        energy_waters = np.sum(energy_waters)
-        # Store the current state
-        energies.append(energy_waters + energy_hydrogens)
-        water_xyzs.append(water_infos["xyz"].copy())
-        hydrogen_xyzs.append(hydrogen_infos["xyz"].copy())
+
+        print excluded_atom_ids
+        print water_infos
+        print receptor_infos
+        print hydrogen_infos
 
         # Atoms 3 and 2 define the rotation axis
         p1 = rot_infos["atom_k_xyz"]
         p2 = rot_infos["atom_j_xyz"]
 
+        rotamers = rot_infos["rotamers"]
+        current_angle = utils.dihedral(rot_infos[["atom_i_xyz", "atom_j_xyz", "atom_k_xyz", "atom_l_xyz"]].values, degree=True)
+        rotations = np.sort((rotamers - np.round(current_angle) + 360.) % 360.)
+        rotations[1:] = np.diff(rotations)
+        rotations = np.radians(rotations)
+
+        #print current_angle
+        #print np.degrees(rotations)
+        tmp = 0
+
         # Scan all the angles
-        for i in range(n_rotation):
-            # Get the new positions
-            water_infos["xyz"] = utils.rotate_point(water_infos["xyz"], p1, p2, rotation)
-            hydrogen_infos["xyz"] = utils.rotate_point(hydrogen_infos["xyz"], p1, p2, rotation)
+        for rotation in rotations:
+            if rotation > 0:
+                # Get the new positions
+                water_infos["xyz"] = utils.rotate_point(water_infos["xyz"], p1, p2, rotation)
+                hydrogen_infos["xyz"] = utils.rotate_point(hydrogen_infos["xyz"], p1, p2, rotation)
+
             # Get the new energy
-            energy_hydrogens = self._ff.intermolecular_energy(hydrogen_infos, receptor_infos)
+            energy_hydrogens = self._adff.intermolecular_energy(hydrogen_infos, receptor_infos)
             energy_waters = self._ad_map.energy(water_infos, ignore_electrostatic=True, 
                                                 ignore_desolvation=True, sum_energies=False)
             energy_waters[energy_waters > 0] = 0
             energy_waters = np.sum(energy_waters)
             # Store the new state
-            energies.append(energy_waters + energy_hydrogens)
+            energies.append(energy_waters)
             water_xyzs.append(water_infos["xyz"].copy())
             hydrogen_xyzs.append(hydrogen_infos["xyz"].copy())
+
+            tmp += rotation
 
         # Choose the best or the best-boltzmann state
         if self._how == "best":
@@ -157,21 +164,22 @@ class WaterSampler():
             idx = self._boltzmann_choice(energies)
 
         # Update water coordinates to the choosen state
-        new_angle = idx * np.radians(self._rotation)
+        new_angle = rotamers[idx]
 
-        for i, rot_water in enumerate(rot_waters):
-            rot_water.update_coordinates(water_xyzs[idx][i], atom_id=0)
-            rot_water.to_file("water_rotation_%s_%s.pdbqt" % (heavy_atom_id, i), "pdbqt")
-            # Update the anchor point
-            anchor = rot_water._anchor
-            anchor[0] = utils.rotate_point(anchor[0], p1, p2, new_angle)
-            anchor[1] = utils.rotate_point(anchor[1], p1, p2, new_angle)
+        if new_angle > 0:
+            for i, rot_water in enumerate(rot_waters):
+                rot_water.update_coordinates(water_xyzs[idx][i], atom_id=1)
+                #rot_water.to_file("water_rotation_%s_%s.pdbqt" % (heavy_atom_id, i), "pdbqt")
+                # Update the anchor point
+                anchor = rot_water._anchor
+                anchor[0] = utils.rotate_point(anchor[0], p1, p2, new_angle)
+                anchor[1] = utils.rotate_point(anchor[1], p1, p2, new_angle)
 
         # Update also the position of disordered hydrogen
         for i, hydrogen_id in enumerate(hydrogen_ids):
             receptor.update_coordinates(hydrogen_xyzs[idx][i], atom_id=hydrogen_id)
 
-        print idx, energies[idx]
+        print idx, energies[idx], hydrogen_xyzs[idx]
         print energies
         print ""
 
@@ -183,7 +191,7 @@ class WaterSampler():
         receptor = self._receptor
         rot_bonds = receptor.rotatable_bonds
         disordered_energies = []
-        distance = 6.
+        distance = 2.
         method = "single"
 
         # Get all the heavy atoms with a disordered hydrogens in the map
@@ -207,13 +215,15 @@ class WaterSampler():
                 heavy_atom_id = disordered_cluster[0]
                 rot_waters = self._sample_disordered_group(heavy_atom_id, waters, connections)
 
-        receptor.to_file("receptor_disordered.pdbqt", "pdbqt")
+        short_uuid = str(uuid.uuid4())[0:8]
+        receptor.to_file("receptor_disordered_%s.pdbqt" % short_uuid, "pdbqt")
 
     def _optimize_disordered_waters(self, waters, connections):
         """Optimize water molecules on rotatable bonds."""
         ad_map = self._ad_map
         receptor = self._receptor
         disordered_energies = []
+        self._rotation = 10
 
         # Number of rotation necessary to do a full spin
         n_rotation = np.int(np.floor((360 / self._rotation))) - 1
@@ -258,9 +268,9 @@ class WaterSampler():
                     before doing the optimization and only at the end
                     we update the coordinates of the water molecules."""
                     for rot_water in rot_waters:
-                        p0 = rot_water.coordinates([0])[0]
+                        p0 = rot_water.coordinates(1)[0]
                         p_new = utils.rotate_point(p0, p1, p2, rotation)
-                        rot_water.update_coordinates(p_new, atom_id=0)
+                        rot_water.update_coordinates(p_new, atom_id=1)
 
                     # Get energy and update the current angle (increment rotation)
                     energy_waters = np.array([ad_map.energy(w.atom_informations(), ignore_electrostatic=True, 
@@ -283,9 +293,9 @@ class WaterSampler():
                 best_angle = np.radians((360. - np.degrees(current_angle)) + np.degrees(angles[i]))
                 # Update coordinates to the choosen state
                 for rot_water in rot_waters:
-                    p0 = rot_water.coordinates([0])[0]
+                    p0 = rot_water.coordinates(1)[0]
                     p_new = utils.rotate_point(p0, p1, p2, best_angle)
-                    rot_water.update_coordinates(p_new, atom_id=0)
+                    rot_water.update_coordinates(p_new, atom_id=1)
                     # Update also the anchor point
                     anchor = rot_water._anchor
                     anchor[0] = utils.rotate_point(anchor[0], p1, p2, best_angle)
@@ -361,17 +371,17 @@ class WaterSampler():
                     new_coord += np.random.uniform(-limit, limit, new_coord.shape[0])
 
                 # Update the coordinates
-                water.translate(utils.vector(water.coordinates(0), new_coord))
+                water.translate(utils.vector(water.coordinates(1), new_coord))
                 return energy_sphere[idx]
 
         """If we do not find anything, at least we return the energy
         of the current water molecule. """
-        return ad_map.energy_coordinates(water.coordinates(0), atom_type=oxygen_type)
+        return ad_map.energy_coordinates(water.coordinates(1), atom_type=oxygen_type)
 
     def _optimize_orientation_grid(self, water):
         """Optimize the orientation of the TIP5P water molecule using the grid. """
         ad_map = self._ad_map
-        oxygen_xyz = water.coordinates(0)
+        oxygen_xyz = water.coordinates(1)
         water_info = water.atom_informations()
         energies = np.zeros(self._water_orientations.shape[0])
 
@@ -391,10 +401,10 @@ class WaterSampler():
             idx = self._boltzmann_choice(energies)
 
         if idx is not None:
-            # Update the coordinates with the selected orientation, except oxygen (i + 1)
+            # Update the coordinates with the selected orientation, except oxygen (i + 2)
             new_orientation = water_orientations[idx]
             for i, xyz in enumerate(new_orientation):
-                water.update_coordinates(xyz, i + 1)
+                water.update_coordinates(xyz, i + 2)
             return energies[idx]
 
         """If we do not find anything, at least we return the energy
@@ -442,7 +452,7 @@ class WaterSampler():
 
         # And we update the receptor map
         for atom_type in atom_types_replaced:
-            self._ad_map.combine(atom_type, atom_type, "replace", water_map)
+            self._ad_map.combine(atom_type, atom_type, "add", water_map)
 
     def sample_grid(self, waters, connections=None, opt_disordered=True):
         """Optimize position of water molecules."""
@@ -452,7 +462,7 @@ class WaterSampler():
         data = []
         to_be_removed = []
         spacing = self._ad_map._spacing
-        boxsize = np.array([7, 7, 7])
+        boxsize = np.array([8, 8, 8])
         npts = np.round(boxsize / spacing).astype(np.int)
 
         if self._how == "best":
@@ -460,9 +470,11 @@ class WaterSampler():
         else:
             add_noise = True
 
-        if opt_disordered and connections is not None:
-            self._optimize_disordered_waters(waters, connections)
-            #self._sample_disordered_groups(waters, connections)
+        #if opt_disordered and connections is not None:
+        #    self._optimize_disordered_waters(waters, connections)
+        #    #self._sample_disordered_groups(waters, connections)
+
+        #sys.exit(0)
 
         # The placement order is based on the best energy around each hydrogen anchor point
         water_orders = self._optimize_placement_order_grid(waters, from_edges=1.)
@@ -470,8 +482,7 @@ class WaterSampler():
 
         # We do not want name overlap between different replicates
         short_uuid = str(uuid.uuid4())[0:8]
-        receptor_file = "%s.pdbqt" % short_uuid
-        self._water_box.to_pdbqt(receptor_file)
+        water_file = "%s.pdbqt" % short_uuid
 
         """ And now we optimize all water individually. All the
         water molecules are outside the box or with a positive
@@ -497,23 +508,21 @@ class WaterSampler():
                 if energy_orientation < self._energy_cutoff:
                     data.append((shell_id + 1, energy_position, energy_orientation))
 
-                    # Add water water to the receptor before calculating the new map
-                    water.to_file(receptor_file, "pdbqt", append=True)
-
                     """ If we choose the closest point in the grid and not the coordinates of the
                     oxygen as the center of the grid, it is because we want to avoid any edge effect
                     when we will combine the small box to the bigger box, and also the energy is
                     not interpolated but it is coming from the grid directly.
                     """
-                    center = self._ad_map.neighbor_points(water.coordinates(0)[0], spacing)[0]
+                    center = self._ad_map.neighbor_points(water.coordinates(1)[0], spacing)[0]
 
-                    self._update_maps(receptor_file, center, npts)
+                    water.to_file(water_file, "pdbqt")
+                    self._update_maps(water_file, center, npts)
                 else:
                     to_be_removed.append(i)
             else:
                 to_be_removed.append(i)
 
-        os.remove(receptor_file)
+        os.remove(water_file)
 
         # Keep only the good waters
         waters = [waters[i] for i in water_orders if not i in to_be_removed]

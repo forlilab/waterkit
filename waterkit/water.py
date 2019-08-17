@@ -80,7 +80,7 @@ class Water(Molecule):
         return waters
 
     def _add_atom(self, xyz, atom_type, partial_charge):
-        """Add an OBAtom to the molecule."""
+        """Add an atom to the molecule."""
         dtype = [("i", "i4"), ("name", "S4"), ("resname", "S3"), ("resnum", "i4"),
                  ("xyz", "f4", (3)), ("q", "f4"), ("t", "S5")]
         resname = "HOH"
