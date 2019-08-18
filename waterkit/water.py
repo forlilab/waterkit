@@ -169,10 +169,6 @@ class Water(Molecule):
             bool: True if successfull, False otherwise
 
         """
-        i = 2
-        distances = [0.9572, 0.9572, 0.7, 0.7]
-        angles = [104.52, 109.47]
-
         models = {
             "tip3p": {"atom_types": ["OW", "HW", "HW"],
                       "partial_charges": [-0.834, 0.417, 0.417]
@@ -198,6 +194,13 @@ class Water(Molecule):
         if self._anchor is None:
             self._anchor = [np.random.rand(3), None]
 
+        if water_model == "tip3p":
+            distances = [0.9572, 0.9572, 1.0]
+            angles = [104.52, 127.74]
+        elif water_model == "tip5p":
+            distances = [0.9572, 0.9572, 0.7, 0.7]
+            angles = [104.52, 109.47]
+
         # If donor, we started by building the lone-pairs first
         if self._anchor_type == "donor":
             distances.reverse()
@@ -205,6 +208,7 @@ class Water(Molecule):
 
         coord_oxygen = self.coordinates(1)[0]
 
+        # For both TIP3P and TIP5P
         # Vector between O and the Acceptor/Donor atom
         v = utils.vector(coord_oxygen, self._anchor[0])
         v = utils.normalize(v)
@@ -215,13 +219,19 @@ class Water(Molecule):
         # Build the second H/Lp using the perpendicular vector p
         a2 = utils.rotate_point(a1, coord_oxygen, p, np.radians(angles[0]))
         a2 = utils.resize_vector(a2, distances[1], coord_oxygen)
-        # ... and rotate it to build the last H/Lp
-        p = utils.atom_to_move(coord_oxygen, [a1, a2])
-        r = coord_oxygen + utils.normalize(utils.vector(a1, a2))
-        a3 = utils.rotate_point(p, coord_oxygen, r, np.radians(angles[1] / 2.))
-        a3 = utils.resize_vector(a3, distances[3], coord_oxygen)
-        a4 = utils.rotate_point(p, coord_oxygen, r, -np.radians(angles[1] / 2.))
-        a4 = utils.resize_vector(a4, distances[3], coord_oxygen)
+
+        if water_model == "tip3p" and self._anchor_type == "donor":
+            # Build the second H/Lp using the perpendicular vector p
+            a3 = utils.rotate_point(a2, coord_oxygen, p, np.radians(angles[1]))
+            a3 = utils.resize_vector(a3, distances[2], coord_oxygen)
+        elif water_model == "tip5p":
+            # ... and rotate it to build the last H/Lp
+            p = utils.atom_to_move(coord_oxygen, [a1, a2])
+            r = coord_oxygen + utils.normalize(utils.vector(a1, a2))
+            a3 = utils.rotate_point(p, coord_oxygen, r, np.radians(angles[1] / 2.))
+            a3 = utils.resize_vector(a3, distances[3], coord_oxygen)
+            a4 = utils.rotate_point(p, coord_oxygen, r, -np.radians(angles[1] / 2.))
+            a4 = utils.resize_vector(a4, distances[3], coord_oxygen)
 
         """ Only now we do all the modifications to the 
         atoms. We never know, we might have an error 
@@ -240,11 +250,18 @@ class Water(Molecule):
             self.atoms[0]["t"] = atom_types[0]
             self._delete_atoms(range(2, self.atoms.size + 1))
 
-        # Order them: H, H, Lp, Lp, we want hydrogen atoms first
-        if self._anchor_type == "acceptor":
-            atoms = [a1, a2, a3, a4]
-        else:
-            atoms = [a3, a4, a1, a2]
+        # Select the right atom to add and their order
+        if water_model == "tip3p":
+            if self._anchor_type == "acceptor":
+                atoms = [a1, a2]
+            else:
+                atoms = [a2, a3]
+        elif water_model == "tip5p":
+            # Order them: H, H, Lp, Lp, we want hydrogen atoms first
+            if self._anchor_type == "acceptor":
+                atoms = [a1, a2, a3, a4]
+            else:
+                atoms = [a3, a4, a1, a2]
 
         # ... and add the new ones
         for atom, atom_type, partial_charge in zip(atoms, atom_types[1:], partial_charges[1:]):
@@ -313,18 +330,24 @@ class Water(Molecule):
 
         """
         water_xyz = self.coordinates()
-        # Get the rotation between the oxygen and the atom ref
         oxygen_xyz = water_xyz[0]
-        # -1, because array is 0-based
-        ref_xyz = water_xyz[ref_id - 1]
-        r = oxygen_xyz + utils.normalize(utils.vector(ref_xyz, oxygen_xyz))
-
-        # Remove the atom ref from the list of atoms we want to rotate
         # From 2 to num_atom + 1, because atom ids are 1-based
+        # And the oxygen (atom id = 1) is not moving of course...
         atom_ids = list(range(2, water_xyz.shape[0] + 1))
-        atom_ids.remove(ref_id)
 
-        print atom_ids
+        # Special case when the water molecule is a tip3p
+        # and we want to rotate both hydrogen atoms
+        if ref_id == 4 and self.is_tip3p:
+            ref_xyz = np.mean(water_xyz[1:], axis=0)
+        else:
+            # -1, because array is 0-based
+            ref_xyz = water_xyz[ref_id - 1]
+            # Of course the reference atom is not moving because
+            # it is part of the rotation axis, so we remove it
+            # from the list of atom to rotate
+            atom_ids.remove(ref_id)
+        
+        r = oxygen_xyz + utils.normalize(utils.vector(ref_xyz, oxygen_xyz))
 
         for atom_id in atom_ids:
             # -1, because array is 0-based
