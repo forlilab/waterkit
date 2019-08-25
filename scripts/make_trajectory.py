@@ -81,7 +81,7 @@ def write_tleap_input_file(fname, pdb_filename):
         pdb_filename (str): pdb filename
 
     """
-    prefix = pdb_filename.split(".pdb")[0]
+    prefix = pdb_filename.split(".pdb")[0].split("/")[-1]
 
     output_str = "source leaprc.protein.ff14SB\n"
     output_str += "source leaprc.DNA.OL15\n"
@@ -89,7 +89,7 @@ def write_tleap_input_file(fname, pdb_filename):
     output_str += "source leaprc.water.tip3p\n"
     output_str += "source leaprc.gaff2\n"
     output_str += "\n"
-    output_str += "x = loadpdb %s\n" % pdb_filename
+    output_str += "x = loadpdb %s\n" % pdb_filename.split("/")[-1]
     output_str += "\n"
     output_str += "set default PBradii mbondi3\n"
     output_str += "set default nocenter on\n"
@@ -150,7 +150,7 @@ def main():
 
     receptor = pmd.load_file(receptor_filename)
 
-    write_tleap_input_file("%s_leap.in" % output_name, "%s_system.pdb" % output_name)
+    write_tleap_input_file("%s.leap.in" % output_name, "%s_system.pdb" % output_name)
     write_system_pdb_file("%s_system.pdb" % output_name, receptor, water_filenames)
     write_trajectory_file("%s.nc" % output_name, receptor, water_filenames,
                           dummy_water_xyz, box_dimension)
