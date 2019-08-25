@@ -53,6 +53,8 @@ class WaterSampler():
 
         # AutoGrid initialization and ADFF
         ad_parameters_file = os.path.join(d, "data/AD4_parameters.dat")
+        #gpf_file = os.path.join(d, "data/nbp_r_eps.gpf")
+        #self._ag = AutoGrid(param_file=ad_parameters_file, gpf_file=gpf_file)
         self._ag = AutoGrid(param_file=ad_parameters_file)
         self._adff = water_box._adff
 
@@ -470,8 +472,8 @@ class WaterSampler():
         else:
             add_noise = True
 
-        #if opt_disordered and connections is not None:
-        #    self._optimize_disordered_waters(waters, connections)
+        if opt_disordered and connections is not None:
+            self._optimize_disordered_waters(waters, connections)
         #    #self._sample_disordered_groups(waters, connections)
 
         #sys.exit(0)

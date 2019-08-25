@@ -282,6 +282,7 @@ class Water(Molecule):
 
         oxygen_xyz = self.coordinates(1)[0]
 
+        # For the lone pairs on the oxygen TIP3P
         if self.is_tip3p():
             h1_xyz = self.atoms[1]["xyz"]
             h2_xyz = self.atoms[2]["xyz"]
@@ -297,6 +298,7 @@ class Water(Molecule):
             data.append((1, lp1_xyz, "acceptor", "O_L_000"))
             data.append((1, lp2_xyz, "acceptor", "O_L_000"))
 
+        # For the rest...
         for i, atom in enumerate(self.atoms[1:]):
             if atom["name"] == "H":
                 hb_type = "donor"
