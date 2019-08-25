@@ -87,12 +87,13 @@ class AutoDockForceField():
         atom_par.set_index('type', inplace=True)
         return atom_par
 
-    def load_intnbp_r_eps_from_gpf(self, gpf_file):
+    def load_nbp_r_eps_from_gpf(self, gpf_file):
         """Load intnbp_r_eps from dpf file."""
-        columns = ["npb_ij", "cn", "cm", "n", "m", "statut"]
-        pairwise_to_add = []
+        columns_1 = ["vdw_rij", "A", "B", "hb_rij", "C", "D"]
+        columns_2 = ["nbp_ij", "cn", "cm", "n", "m", "statut"]
+        added = []
 
-        with open(dpf_file) as f:
+        with open(gpf_file) as f:
             lines = f.readlines()
 
             for line in lines:
@@ -110,15 +111,19 @@ class AutoDockForceField():
 
                     data = [req, cn, cm, n, m, "nbp"]
 
-                    try:
-                        self.pairwise.loc[(i, j), columns] = data
-                        self.pairwise.loc[(j, i), columns] = data
-                    except:
-                        pairwise_to_add.append([i, j] + [None] * 6 + data)
-                        pairwise_to_add.append([j, i] + [None] * 6 + data)
-        
-        if pairwise_to_add:
-            #merge to pairwise
+                    if (i, j) in self.pairwise.index:
+                        columns = columns_2
+                    else:
+                        columns = columns_1 + columns_2
+                        data = [0] * 6 + data
+
+                    self.pairwise.loc[(i, j), columns] = data
+                    self.pairwise.loc[(j, i), columns] = data
+
+                    added = True
+
+        if added:
+            self.pairwise.sort_index(inplace=True)
 
     def deactivate_pairs(self, pairs):
         """Deactivate pairwise interactions between atoms."""
@@ -171,10 +176,12 @@ class AutoDockForceField():
                 d = self._coefficient(hb_epsij, hb_rij, 12, 10)
 
                 data.append((i, j, vdw_rij, a, b, hb_rij, c, d, 
-                             None, None, None, None, None, "active"))
+                             0, 0, 0, 0, 0, "active"))
 
         pairwise = pd.DataFrame(data=data, columns=columns)
         pairwise.set_index(['i', 'j'], inplace=True)
+        pairwise.sort_index(inplace=True)
+
         return pairwise
 
     def smooth_distance(self, r, reqm, smooth=0.5):
@@ -187,7 +194,7 @@ class AutoDockForceField():
         r[r <= reqm - sf] += sf
         return r
 
-    def intnbp_r_eps(self, r, reqm, cn, cm, n, m):
+    def nbp_r_eps(self, r, reqm, cn, cm, n, m):
         if self.smooth > 0:
             r = self.smooth_distance(r, reqm, self.smooth)
         return np.sum((cn / r**n) - (cm / r**m))
@@ -257,7 +264,7 @@ class AutoDockForceField():
                 hb_i = hbs_i.loc[hbs_i['atom_i'] == atom_i['atom_i']]
 
             for atom_j in atoms_j:
-                pairwise = self.pairwise.loc[(atom_i['t'], atom_j['t'])]
+                pairwise = self.pairwise.loc[(str(atom_i['t']), str(atom_j['t']))]
 
                 if pairwise['statut'] == "active":
                     r = utils.get_euclidean_distance(np.array(atom_i['xyz']), np.array([atom_j['xyz']]))
@@ -297,8 +304,9 @@ class AutoDockForceField():
                                                    self.atom_par.loc[atom_i['t']]['vol'],
                                                    self.atom_par.loc[atom_j['t']]['vol'])
 
-                elif pairwise["statut"] = "nbp":
-                    nbp += self.nbp_r_eps(r, pairwise["npb_ij"], pairwise["cn"], pairwise["cm"],
+                elif pairwise["statut"] == "nbp":
+                    r = utils.get_euclidean_distance(np.array(atom_i['xyz']), np.array([atom_j['xyz']]))
+                    nbp += self.nbp_r_eps(r, pairwise["nbp_ij"], pairwise["cn"], pairwise["cm"],
                                           pairwise["n"], pairwise["m"])
 
         hb *= self.weights['hbond']
