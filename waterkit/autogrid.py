@@ -9,6 +9,7 @@
 from __future__ import print_function
 
 import os
+import re
 from glob import glob
 
 import numpy as np
@@ -21,16 +22,42 @@ from autodock_map import Map
 
 class AutoGrid():
 
-    def __init__(self, exec_path="autogrid4", param_file="AD4_parameters.dat"):
+    def __init__(self, exec_path="autogrid4", param_file="AD4_parameters.dat", gpf_file=None):
         """Initialize AutoGrid.
 
         Args:
             exec_path (str): pathname of the autogrid executable (default: autogrid4)
             param_file (str): pathname of the AutoDock forcefield (default: AD4_parameters.dat)
+            gpf_file (str): gpf file that contains the non-bonded potential (default: None)
 
         """
         self._exec_path = exec_path
         self._param_file = param_file
+        if gpf_file is not None:
+            self._nbp_r_eps = self._load_nbp_r_eps_from_gpf(gpf_file)
+        else:
+            self._nbp_r_eps = None
+
+    def _load_nbp_r_eps_from_gpf(self, gpf_file):
+        """Load intnbp_r_eps from dpf file."""
+        nbp_r_eps = []
+
+        with open(gpf_file) as f:
+            lines = f.readlines()
+
+            for line in lines:
+                if re.search("^nbp_r_eps", line):
+                    sline = line.split()
+                    req = np.float(sline[1])
+                    eps = np.float(sline[2])
+                    n = np.int(sline[3])
+                    m = np.int(sline[4])
+                    i = sline[5]
+                    j = sline[6]
+
+                    nbp_r_eps.append((req, eps, n, m, i, j))
+
+        return nbp_r_eps
 
     def run(self, receptor_file, atom_types, center=(0., 0., 0.),
             npts=(32, 32, 32), spacing=0.375, smooth=0.5, dielectric=-0.1465,
@@ -53,7 +80,7 @@ class AutoGrid():
         if not isinstance(atom_types, (list, tuple)):
             atom_types = [atom_types]
 
-        receptor = Molecule.from_file(receptor_file, guess_hydrogen_bonds=False, 
+        receptor = Molecule.from_file(receptor_file, guess_hydrogen_bonds=False,
                                       guess_disordered_hydrogens=False)
         receptor_types = set(receptor.atom_types())
         receptor_name = receptor_file.split("/")[-1].split(".")[0]
@@ -72,6 +99,10 @@ class AutoGrid():
         ag_str += "elecmap %s.e.map\n" % receptor_name
         ag_str += "dsolvmap %s.d.map\n" % receptor_name
         ag_str += "dielectric %.3f\n" % dielectric
+        if self._nbp_r_eps is not None:
+            for nbp in self._nbp_r_eps:
+                ag_str += "nbp_r_eps %.3f %.3f %d %d %s %s\n" % (nbp[0], nbp[1], nbp[2],
+                                                                 nbp[3], nbp[4], nbp[5])
 
         gpf_file = "%s.gpf" % receptor_name
         glg_file = "%s.glg" % receptor_name
