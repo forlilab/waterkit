@@ -381,7 +381,11 @@ class WaterSampler():
             else:
                 to_be_removed.append(i)
 
-        os.remove(water_file)
+        try:
+            os.remove(water_file)
+        except OSError:
+            # It means that no water was added during the sampling
+            pass
 
         # Keep only the good waters
         waters = [waters[i] for i in water_orders if not i in to_be_removed]
