@@ -37,18 +37,6 @@ conda install sphinx sphinx_rtd_theme
 
 ## Documentation
 
-<<<<<<< HEAD
-### Receptor preparation
-1. Add hydrogen atoms and optimize side-chains using REDUCE
-```bash
-reduce -FLIP protein.pdb > protein_reduce.pdb
-```
-2. Conversion to PDBQT using AutoDock Tools
-```bash
-pythonsh prepare_receptor4.py -r protein_reduce.pdb -A 'None' -o protein.pdbqt
-```
-3. ... and now to mol2 format using OpenBabel
-=======
 Build documentation with Sphinx
 ```bash
 cd docs
@@ -62,7 +50,6 @@ Open the file ```build/html/index.html``` with your favorite browser (Google Chr
 ### Receptor preparation
 
 Conversion to PDBQT using AmberTools19 (http://ambermd.org/GetAmber.php) and `amber2pdbqt.py` script
->>>>>>> dev
 ```bash
 pdb4amber -i protein.pdb -o protein_clean.pdb --dry --leap-template --nohyd
 tleap -s -f leap.template.in > leap.template.out
@@ -89,16 +76,7 @@ map protein_OW.map
 map protein_OT.map
 elecmap protein_e.map
 dsolvmap protein_d.map
-<<<<<<< HEAD
-dielectric -0.1465
-nbp_r_eps 2.8 0.315 12 10 OD OA
-nbp_r_eps 2.8 0.315 12 10 OD NA
-nbp_r_eps 2.8 0.315 12 10 OD SA
-nbp_r_eps 2.8 0.315 12 10 OD NS
-nbp_r_eps 2.8 0.315 12 10 OD OS
-=======
 dielectric 1
->>>>>>> dev
 ```
 
 Depending of your system, you would have at least to modify the grid parameters (```npts```, ```gridcenter```) and the receptor atom types list (```receptor_types```). An example of GPF file (```protein_grid.gpf```) as well as the AutoDock parameters (```AD4_parameters.dat```) are provided. Those files are located in the ```data``` waterkit module's directory.
