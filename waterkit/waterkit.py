@@ -6,16 +6,13 @@
 # The core of the WaterKit program
 #
 
-import os
 import copy
-import imp
 from string import ascii_uppercase
 
 import numpy as np
 
-from autodock_map import Map
-from forcefield import AutoDockForceField
 from water_box import WaterBox
+
 
 class Waterkit():
 
@@ -23,8 +20,8 @@ class Waterkit():
         """Initialize WaterKit."""
         self.water_box = None
 
-    def hydrate(self, receptor, ad_map, water_model="tip3p", n_layer=1, 
-                how="best", temperature=300., smooth=0.5, dielectric=-0.1465):
+    def hydrate(self, receptor, ad_map, ad_forcefield, water_model="tip3p", 
+                how="best", temperature=300., n_layer=1):
         """Hydrate the molecule with water molecules.
 
         The receptor is hydrated by adding successive layers
@@ -33,53 +30,20 @@ class Waterkit():
         Args:
             receptor (Molecule): Receptor of the protein
             ad_map (Map): AutoDock map of the receptor
+            ad_forcefield (AutoDockForceField): AutoDock forcefield for pairwise interactions
             water_model (str): Model used for the water molecule, tip3p or tip5p (default: tip3p)
-            n_layer (int): Number of hydration layer to add (default: 1)
             how (str): Method for water placement: "best" or "boltzmann" (default: best)
             temperature (float): Temperature in Kelvin, only used for Boltzmann sampling (default: 300)
-            smooth (float): AutoDock smooth parameter (default: 0.5)
-            dielectric (float): AutoDock dielectric constant (default: -0.1465)
+            n_layer (int): Number of hydration layer to add (default: 1)
 
         Returns:
             bool: True if succeeded or False otherwise
 
         """
         i = 1
-        e_type = "Electrostatics"
-        sw_type = "OD"
 
-        """In TIP3P and TIP5P models, hydrogen atoms and lone-pairs does not
-        have VdW radius, so their interactions with the receptor are purely
-        based on electrostatics. So the HD and Lp maps are just the electrostatic 
-        map. Each map is multiplied by the partial charge. So it is just a
-        look-up table to get the energy for each water molecule.
-        """
-        if water_model == "tip3p":
-            ow_type = "OW"
-            hw_type = "HW"
-            ow_q = -0.834
-            hw_q = 0.417
-        elif water_model == "tip5p":
-            ot_type = "OT"
-            hw_type = "HT"
-            lw_type = "LP"
-            hw_q = 0.241
-            lw_q = -0.241
-        else:
-            print "Error: water model %s unknown." % water_model
-            return False
-
-        # For the TIP3P and TIP5P models
-        ad_map.apply_operation_on_maps(hw_type, e_type, "x * %f" % hw_q)
-        if water_model == "tip3p":
-            ad_map.apply_operation_on_maps(e_type, e_type, "x * %f" % ow_q)
-            ad_map.combine(ow_type, [ow_type, e_type], how="add")
-        elif water_model == "tip5p":
-            ad_map.apply_operation_on_maps(lw_type, e_type, "x * %f" % lw_q)
-
-        #w_copy = copy.deepcopy(w_ori)
-        w = WaterBox(how, temperature, water_model, smooth, dielectric)
-        w.add_receptor(receptor, ad_map)
+        w = WaterBox(receptor, ad_map, ad_forcefield, water_model, how, temperature)
+        #w_copy = copy.deepcopy(w)
 
         while True:
             # build_next_shell returns True if
@@ -116,18 +80,28 @@ class Waterkit():
         """
         output_str = ""
         pdbqt_str = "ATOM  %5d  %-3s HOH%2s%4d    %8.3f%8.3f%8.3f  1.00  1.00          %2s\n"
+<<<<<<< HEAD
 
+=======
+        fname = "%s.pdb" % prefix
+        
+>>>>>>> disordered_hydrogens
         shell_id = self.water_box.number_of_shells()
-        waters = [self.water_box.molecules_in_shell(i) for i in range(1, shell_id + 1)]
+        water_shells = [self.water_box.molecules_in_shell(i) for i in range(1, shell_id + 1)]
 
-        for shell, chain in zip(waters, ascii_uppercase):
-            i, j = 1, 1
+        i = 1
 
+<<<<<<< HEAD
             fname = "%s_%s.pdb" % (prefix, chain)
+=======
+        for water_shell, chain in zip(water_shells, ascii_uppercase):
+            j = 1
+>>>>>>> disordered_hydrogens
 
-            for water in shell:
+            for water in water_shell:
                 c = water.coordinates()
 
+<<<<<<< HEAD
                 output_str += pdbqt_str % (j, "O", chain, i, c[0][0], c[0][1], c[0][2], "O")
                 output_str += pdbqt_str % (j + 1, "H1", chain, i, c[1][0], c[1][1], c[1][2], "H")
                 output_str += pdbqt_str % (j + 2, "H2", chain, i, c[2][0], c[2][1], c[2][2], "H")
@@ -137,9 +111,20 @@ class Waterkit():
                     output_str += pdbqt_str % (j + 3, "L1", chain, i, c[3][0], c[3][1], c[3][2], "L")
                     output_str += pdbqt_str % (j + 4, "L2", chain, i, c[4][0], c[4][1], c[4][2], "L")
                     j += 2
+=======
+                output_str += pdbqt_str % (i, "O", chain, j, c[0][0], c[0][1], c[0][2], "O")
+                output_str += pdbqt_str % (i + 1, "H1", chain, j, c[1][0], c[1][1], c[1][2], "H")
+                output_str += pdbqt_str % (i + 2, "H2", chain, j, c[2][0], c[2][1], c[2][2], "H")
+                i += 2
+
+                if water_model == 'tip5p':
+                    output_str += pdbqt_str % (i + 3, "L1", chain, j, c[3][0], c[3][1], c[3][2], "L")
+                    output_str += pdbqt_str % (i + 4, "L2", chain, j, c[4][0], c[4][1], c[4][2], "L")
+                    i += 2
+>>>>>>> disordered_hydrogens
 
                 i += 1
                 j += 1
 
-            with open(fname, "w") as w:
-                w.write(output_str)
+        with open(fname, "w") as w:
+            w.write(output_str)

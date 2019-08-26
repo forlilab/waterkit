@@ -11,7 +11,11 @@ import parmed as pmd
 
 def cmd_lineparser():
     parser = argparse.ArgumentParser(description="amber2pdbqt")
+<<<<<<< HEAD
     parser.add_argument("-p", "--top", dest="top_file", required=True,
+=======
+    parser.add_argument("-t", "--top", dest="top_file", required=True,
+>>>>>>> disordered_hydrogens
                         action="store", help="topology file")
     parser.add_argument("-c", "--coords", dest="crd_file", required=True,
                         action="store", help="coordinates file")
@@ -28,7 +32,11 @@ def write_pdb_file(output_name, molecule):
         molecule (parmed): parmed molecule object
 
     """
+<<<<<<< HEAD
     mol.save(output_name)
+=======
+    molecule.save(output_name)
+>>>>>>> disordered_hydrogens
 
 def write_pdbqt_file(output_name, molecule):
     """Write PDBQT file
@@ -57,7 +65,11 @@ def write_pdbqt_file(output_name, molecule):
         output_str += pdbqt_str % (atom.idx + 1, name, resname, resid, atom.xx, 
                                    atom.xy, atom.xz, atom.charge, atom_type)
 
+<<<<<<< HEAD
     with open(pdbqt_file, "w") as w:
+=======
+    with open(output_name, "w") as w:
+>>>>>>> disordered_hydrogens
         w.write(output_str)
 
 

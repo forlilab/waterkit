@@ -6,21 +6,21 @@
 # Class for molecule
 #
 
-import copy
+import imp
 import os
 import re
 
 import numpy as np
-import pandas as pd
 import openbabel as ob
-from scipy import spatial
 
 import utils
+from typer.rotatable_bonds import RotatableBonds
+from typer.hydrogen_bonds import HydrogenBonds
 
 
 class Molecule():
 
-    def __init__(self, OBMol, waterfield=None):
+    def __init__(self, OBMol, guess_hydrogen_bonds=True, guess_disordered_hydrogens=True):
         """Initialize a Molecule object.
 
         Args:
@@ -33,7 +33,7 @@ class Molecule():
         dtype = [("i", "i4"), ("name", "S4"), ("resname", "S3"), ("resnum", "i4"),
                  ("xyz", "f4", (3)), ("q", "f4"), ("t", "S5")]
         self.atoms = np.zeros(OBMol.NumAtoms(), dtype)
-        self.hydrogen_bond_anchors = None
+        self.hydrogen_bonds = None
         self.rotatable_bonds = None
 
         # Remove all implicit hydrogens because OpenBabel
@@ -56,17 +56,26 @@ class Molecule():
             j += 1
 
         # Do the typing for hydrogen bonds and disordered hydrogen atoms
-        if waterfield is not None:
-            self._guess_hydrogen_bond_anchors(OBMol, waterfield)
-        self._guess_rotatable_bonds(OBMol)
+        d = imp.find_module("waterkit")[1]
+        
+        if guess_disordered_hydrogens:
+            dh_file = os.path.join(d, "data/disordered_hydrogens.par")
+            dhfield = RotatableBonds(dh_file)
+            self._guess_rotatable_bonds(OBMol, dhfield)
+
+        if guess_hydrogen_bonds:
+            hb_file = os.path.join(d, "data/waterfield.par")
+            hbfield = HydrogenBonds(hb_file)
+            self._guess_hydrogen_bond_anchors(OBMol, hbfield)
 
     @classmethod
-    def from_file(cls, fname, waterfield=None):
+    def from_file(cls, fname, guess_hydrogen_bonds=True, guess_disordered_hydrogens=True):
         """Create Molecule object from a PDB file.
 
         Args:
             fname (str): molecule filename
-            waterfield (Waterfield): Waterfield object for HB typing
+            guess_hydrogen_bonds (bool): guess hydrogen bonds (defaut: True)
+            guess_disordered_hydrogens (bool): guess disordered hydrogens (default: True)
 
         Returns:
             Molecule
@@ -89,7 +98,7 @@ class Molecule():
         OBMol = ob.OBMol()
         obconv.ReadFile(OBMol, fname)
 
-        m = cls(OBMol, waterfield)
+        m = cls(OBMol, guess_hydrogen_bonds, guess_disordered_hydrogens)
 
         # OpenBabel do chemical perception to define the type
         # So we override the types with AutoDock atom types
@@ -138,7 +147,7 @@ class Molecule():
             ndarray: 1d ndarray (i, name, resname, resnum, xyz, q, t)
 
         """
-        return self.atoms[i]
+        return self.atoms[i - 1]
 
     def coordinates(self, atom_ids=None):
         """
@@ -152,7 +161,10 @@ class Molecule():
 
         """
         if atom_ids is not None and self.atoms.size > 1:
-            atoms = self.atoms[atom_ids]["xyz"]
+            if not isinstance(atom_ids, np.ndarray):
+                atom_ids = np.array(atom_ids, dtype=np.int)
+            # -1 because numpy array is 0-based
+            atoms = self.atoms[atom_ids - 1]["xyz"]
         else:
             atoms = self.atoms["xyz"]
 
@@ -169,7 +181,10 @@ class Molecule():
 
         """
         if atom_ids is not None and self.atoms.size > 1:
-            t = self.atoms[atom_ids]['t']
+            if not isinstance(atom_ids, np.ndarray):
+                atom_ids = np.array(atom_ids, dtype=np.int)
+            # -1 because numpy array is 0-based
+            t = self.atoms[atom_ids - 1]['t']
         else:
             t = self.atoms['t']
 
@@ -186,7 +201,10 @@ class Molecule():
 
         """
         if atom_ids is not None and self.atoms.size > 1:
-            q = self.atoms[atom_ids]['q']
+            if not isinstance(atom_ids, np.ndarray):
+                atom_ids = np.array(atom_ids, dtype=np.int)
+            # -1 because numpy array is 0-based
+            q = self.atoms[atom_ids - 1]['q']
         else:
             q =  self.atoms['q']
 
@@ -203,263 +221,56 @@ class Molecule():
 
         """
         if atom_ids is not None:
-            atoms = self.atoms[atom_ids][['i', 'xyz', 'q', 't']]
+            if not isinstance(atom_ids, np.ndarray):
+                atom_ids = np.array(atom_ids, dtype=np.int)
+            # -1 because numpy array is 0-based
+            atoms = self.atoms[atom_ids - 1][['i', 'xyz', 'q', 't']]
         else:
             atoms = self.atoms[['i', 'xyz', 'q', 't']]
 
         return atoms.copy()
 
-    def _guess_rotatable_bonds(self, OBMol):
-        """ Guess all the rotatable bonds in the molecule
-        based the rotatable forcefield """
-        columns = ["atom_i", "atom_j", "atom_i_xyz", "atom_j_xyz",
-                   "atom_k_xyz", "atom_l_xyz", "name"]
-        data = []
-        unique = []
+    def _guess_rotatable_bonds(self, OBMol, rotatable_bond_typer):
+        """Guess all the rotatable bonds in the molecule
+        based the rotatable forcefield.
+        
+        Args:
+            OBMol (OBMol): OBMolecule object
+            rotatable_bond_typer (RotatableBonds): RotatableBonds object
 
-        # Find all the hydroxyl
-        ob_smarts = ob.OBSmartsPattern()
-        success = ob_smarts.Init("[#1][#8;X2;v2;H1][!#1][!#1]")
-        ob_smarts.Match(OBMol)
-        matches = list(ob_smarts.GetUMapList())
-
-        for match in matches:
-            """ We check if the SMART pattern was not matching twice on
-            the same rotatable bonds, like hydroxyl in tyrosine. The
-            GetUMapList function does not work on that specific case
-            """
-            if not match[0] in unique:
-                atom_i = match[0] - 1
-                atom_j = match[1] - 1
-                atom_i_xyz = self.coordinates(match[0] - 1)[0]
-                atom_j_xyz = self.coordinates(match[1] - 1)[0]
-                atom_k_xyz = self.coordinates(match[2] - 1)[0]
-                atom_l_xyz = self.coordinates(match[3] - 1)[0]
-                data.append([atom_i, atom_j, atom_i_xyz, atom_j_xyz,
-                             atom_k_xyz, atom_l_xyz, "hydroxyl"])
-                unique.append(match[0])
-
-        self.rotatable_bonds = pd.DataFrame(data=data, columns=columns)
-        self.rotatable_bonds.sort_values(by="atom_i", inplace=True)
-
-    def _push_atom_to_end(self, lst, atomic_nums):
         """
-        Return a list of OBAtom with all the atom type selected at the end
+        self.rotatable_bonds = rotatable_bond_typer.match(OBMol)
+
+    def _guess_hydrogen_bond_anchors(self, OBMol, hydrogen_bond_typer):
+        """Guess all the hydrogen bonds in the molecule
+        based the hydrogen bond forcefield.
+        
+        Args:
+            OBMol (OBMol): OBMolecule object
+            hydrogen_bond_typer (HydrogenBonds): HydrogenBonds object
+
         """
-        if not isinstance(atomic_nums, (list, tuple)):
-            atomic_nums = [atomic_nums]
+        self.hydrogen_bonds = hydrogen_bond_typer.match(OBMol)
 
-        for atomic_num in atomic_nums:
-            pop_count = 0
+    def update_coordinates(self, xyz, atom_id):
+        """Update the coordinates of an atom.
 
-            idx = [i for i, x in enumerate(lst) if x.GetAtomicNum() == atomic_num]
+        Args:
+            xyz (array_like): 3d coordinates of the new atomic position
+            atom_id (int): atom id
 
-            for i in idx:
-                lst.append(lst.pop(i - pop_count))
-                pop_count += 1
+        Returns:
+            bool: True if successfull, False otherwise
 
-        return lst
-
-    def _neighbor_atoms(self, OBMol, start_index=1, depth=1, hydrogen=True):
         """
-        Return a nested list of all the neighbor OBAtoms by following the bond connectivity
-        https://baoilleach.blogspot.com/2008/02/calculate-circular-fingerprints-with.html
-        """
-        visited = [False] * (OBMol.NumAtoms() + 1)
-        neighbors = []
-        queue = list([(start_index, 0)])
-        atomic_num_to_keep = 1
-
-        if not hydrogen:
-            atomic_num_to_keep = 2
-
-        while queue:
-            i, d = queue.pop(0)
-
-            ob_atom = OBMol.GetAtomById(np.int(i))
-
-            # If we construct the data structure before [[n], [n1, n2, ...], ...]
-            # and because the depth is too large compared to the molecule
-            # we will have some extra [] not filled
-            try:
-                neighbors[d].append(ob_atom)
-            except:
-                neighbors.append([])
-                neighbors[d].append(ob_atom)
-
-            visited[i] = True
-
-            if d < depth:
-                for a in ob.OBAtomAtomIter(ob_atom):
-                    if not visited[a.GetId()] and a.GetAtomicNum() >= atomic_num_to_keep:
-                        queue.append((a.GetId(), d + 1))
-
-        # We push all the hydrogen (= 1) atom to the end
-        neighbors = [self._push_atom_to_end(x, 1) for x in neighbors]
-
-        return neighbors
-
-    def _neighbor_atom_coordinates(self, OBMol, id_atom, depth=1, hydrogen=True):
-        """
-        Return a nested list of all the coordinates of all the neighbor
-        atoms by following the bond connectivity
-        """
-        coords = []
-
-        atoms = self._neighbor_atoms(OBMol, id_atom, depth, hydrogen)
-
-        for level in atoms:
-            tmp = [[ob_atom.GetX(), ob_atom.GetY(), ob_atom.GetZ()] for ob_atom in level]
-            coords.append(np.array(tmp))
-
-        return coords
-
-    def _guess_hydrogen_bond_anchors(self, OBMol, waterfield):
-        """ Guess all the hydrogen bonds anchors (donor/acceptor)
-        in the molecule based on the hydrogen bond forcefield """
-        columns = ["atom_i", "vector_xyz", "anchor_type", "anchor_name"]
-        data = []
-
-        # Get all the available hb types
-        atom_types = waterfield.get_atom_types()
-        # Keep track of all the visited atom
-        visited = [False] * (OBMol.NumAtoms() + 1)
-
-        for name in atom_types.keys()[::-1]:
-            atom_type = atom_types[name]
-            matches = waterfield.get_matches(name, OBMol)
-
-            if atom_type.hb_type == 1:
-                hb_type = "donor"
-            elif atom_type.hb_type == 2:
-                hb_type = "acceptor"
+        if atom_id <= self.atoms.size:
+            if self.atoms.size > 1:
+                self.atoms[atom_id - 1]["xyz"] = xyz
             else:
-                hb_type = None
-
-            for match in matches:
-                idx = match[0]
-
-                if hb_type is None and not visited[idx]:
-                    visited[idx] = True
-
-                if not visited[idx]:
-                    visited[idx] = True
-
-                    try:
-                        # Calculate the vectors on the anchor
-                        vectors = self._hb_vectors(OBMol, idx - 1, atom_type.hyb, atom_type.n_water, atom_type.hb_length)
-                        for vector in vectors:
-                            data.append([idx - 1, vector, hb_type, name])
-                    except:
-                        print "Warning: Could not determine hydrogen bond vectors on atom %s of type %s." % (idx, name)
-
-        self.hydrogen_bond_anchors = pd.DataFrame(data=data, columns=columns)
-        self.hydrogen_bond_anchors.sort_values(by="atom_i", inplace=True)
-
-    def _hb_vectors(self, OBMol, idx, hyb, n_hbond, hb_length):
-        """Return all the hydrogen bond vectors the atom idx."""
-        vectors = []
-
-        # Get origin atom
-        anchor_xyz = self.coordinates(idx)[0]
-        # Get coordinates of all the neihbor atoms
-        neighbors_xyz = self._neighbor_atom_coordinates(OBMol, idx, depth=2)
-        neighbor1_xyz = neighbors_xyz[1][0]
-
-        if hyb == 1:
-            # Position of water is linear
-            # And we just need the origin atom and the first neighboring atom
-            # Example: H donor
-            if n_hbond == 1:
-                r = None
-                p = anchor_xyz + utils.vector(neighbor1_xyz, anchor_xyz)
-                angles = [0]
-
-            if n_hbond == 3:
-                hyb = 3
-
-        elif hyb == 2:
-            # Position of water is just above the origin atom
-            # We need the 2 direct neighboring atoms of the origin atom
-            # Example: Nitrogen
-            if n_hbond == 1:
-                neighbor2_xyz = neighbors_xyz[1][1]
-
-                r = None
-                p = utils.atom_to_move(anchor_xyz, [neighbor1_xyz, neighbor2_xyz])
-                angles = [0]
-
-            # Position of waters are separated by angle of 120 degrees
-            # And they are aligned with the neighboring atoms (deep=2) of the origin atom
-            # Exemple: Backbone oxygen
-            elif n_hbond == 2:
-                neighbor2_xyz = neighbors_xyz[2][0]
-
-                r = utils.rotation_axis(neighbor1_xyz, anchor_xyz, neighbor2_xyz, origin=anchor_xyz)
-                p = neighbor1_xyz
-                angles = [-np.radians(120), np.radians(120)]
-
-            elif n_hbond == 3:
-                hyb = 3
-
-        if hyb == 3:
-            neighbor2_xyz = neighbors_xyz[1][1]
-
-            # Position of water is just above the origin atom
-            # We need the 3 direct neighboring atoms (tetrahedral)
-            # Exemple: Ammonia
-            if n_hbond == 1:
-                neighbor3_xyz = neighbors_xyz[1][2]
-
-                # We have to normalize bonds, otherwise the water molecule is not well placed
-                v1 = anchor_xyz + utils.normalize(utils.vector(anchor_xyz, neighbor1_xyz))
-                v2 = anchor_xyz + utils.normalize(utils.vector(anchor_xyz, neighbor2_xyz))
-                v3 = anchor_xyz + utils.normalize(utils.vector(anchor_xyz, neighbor3_xyz))
-
-                r = None
-                p = utils.atom_to_move(anchor_xyz, [v1, v2, v3])
-                angles = [0]
-
-            # Position of waters are separated by angle of 109 degrees
-            # Tetrahedral geometry, perpendicular with the neighboring atoms of the origin atom
-            # Example: Oxygen of the hydroxyl group
-            elif n_hbond == 2:
-                v1 = anchor_xyz + utils.normalize(utils.vector(anchor_xyz, neighbor1_xyz))
-                v2 = anchor_xyz + utils.normalize(utils.vector(anchor_xyz, neighbor2_xyz))
-
-                r = anchor_xyz + utils.normalize(utils.vector(v1, v2))
-                p = utils.atom_to_move(anchor_xyz, [v1, v2])
-                angles = [-np.radians(60), np.radians(60)]
-
-            # Position of waters are separated by angle of 109 degrees
-            # Tetrahedral geometry, there is no reference so water molecules are placed randomly
-            # Example: DMSO
-            elif n_hbond == 3:
-                # Vector between anchor_xyz and the only neighbor atom
-                v = utils.vector(anchor_xyz, neighbor1_xyz)
-                v = utils.normalize(v)
-
-                # Pick a random vector perpendicular to vector v
-                # It will be used as the rotation axis
-                r = anchor_xyz + utils.get_perpendicular_vector(v)
-
-                # And we place a pseudo atom (will be the first water molecule)
-                p = utils.rotate_point(neighbor1_xyz, anchor_xyz, r, np.radians(109.471))
-                # The next rotation axis will be the vector along the neighbor atom and the origin atom
-                r = anchor_xyz + utils.normalize(utils.vector(neighbor1_xyz, anchor_xyz))
-                angles = [0, -np.radians(120), np.radians(120)]
-
-        # We rotate p to get each vectors if necessary
-        for angle in angles:
-            vector = p
-            if angle != 0.:
-                vector = utils.rotate_point(vector, anchor_xyz, r, angle)
-            vector = utils.resize_vector(vector, hb_length, anchor_xyz)
-            vectors.append(vector)
-
-        vectors = np.array(vectors)
-
-        return vectors
+                self.atoms["xyz"] = xyz
+            return True
+        else:
+            return False
 
     def to_file(self, fname, fformat, options=None, append=False):
         """Write PDBQT file of the water molecule.
@@ -481,7 +292,12 @@ class Molecule():
         pdbqt_str = "ATOM  %5d %-4s %-3s  %4d    %8.3f%8.3f%8.3f  0.00 0.00     %6.3f %-2s\n"
         output_str = ""
 
-        for atom in self.atoms:
+        if self.atoms.size == 1:
+            atoms = [self.atoms]
+        else:
+            atoms = self.atoms
+
+        for atom in atoms:
             x, y, z = atom["xyz"]
             output_str += pdbqt_str % (atom["i"], atom["name"], atom["resname"], atom["resnum"],
                                        x, y, z, atom["q"], atom["t"])
@@ -517,11 +333,11 @@ class Molecule():
         """
         pdbqt_str = "ATOM  %5d  %-3s ANC%2s%4d    %8.3f%8.3f%8.3f%6.2f 1.00    %6.3f %2s\n"
 
-        if self.hydrogen_bond_anchors is not None:
+        if self.hydrogen_bonds is not None:
             i = 1
             output_str = ""
 
-            for index, anchor in self.hydrogen_bond_anchors.iterrows():
+            for index, anchor in self.hydrogen_bonds.iterrows():
                 x, y, z = anchor.vector_xyz
                 atom_type = anchor.anchor_type[0].upper()
 

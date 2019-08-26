@@ -24,11 +24,8 @@ warnings.filterwarnings("ignore")
 
 
 class AutoDockForceField():
-    def __init__(self, parameter_file=None, hb_cutoff=8, elec_cutoff=20, weighted=True):
-        if parameter_file is None:
-            d = imp.find_module('waterkit')[1]
-            parameter_file = os.path.join(d, 'data/AD4_parameters.dat')
-
+    def __init__(self, parameter_file, dielectric=-0.1465, smooth=0.5, 
+                 hb_cutoff=8, elec_cutoff=20, weighted=True):
         self.weights = self._set_weights(parameter_file, weighted)
         self.atom_par = self._set_atom_parameters(parameter_file)
         self.pairwise = self._build_pairwise_table()
@@ -38,12 +35,13 @@ class AutoDockForceField():
         self.elec_cutoff = elec_cutoff
 
         # VdW and hydrogen bond
-        self.smooth = 0.5
+        self.smooth = smooth
 
         # Desolvation constants
         self.desolvation_k = 0.01097
 
         # Dielectric constants
+        self.dielectric = dielectric
         self.dielectric_epsilon = 78.4
         self.dielectric_A = -8.5525
         self.dielectric_B = self.dielectric_epsilon - self.dielectric_A
@@ -89,17 +87,51 @@ class AutoDockForceField():
         atom_par.set_index('type', inplace=True)
         return atom_par
 
-    def load_intnbp_r_eps_from_dpf(self, dp_file):
+    def load_nbp_r_eps_from_gpf(self, gpf_file):
         """Load intnbp_r_eps from dpf file."""
-        pass
+        columns_1 = ["vdw_rij", "A", "B", "hb_rij", "C", "D"]
+        columns_2 = ["nbp_ij", "cn", "cm", "n", "m", "statut"]
+        added = []
+
+        with open(gpf_file) as f:
+            lines = f.readlines()
+
+            for line in lines:
+                if re.search("^nbp_r_eps", line):
+                    sline = line.split()
+                    req = np.float(sline[1])
+                    eps = np.float(sline[2])
+                    n = np.int(sline[3])
+                    m = np.int(sline[4])
+                    i = sline[5]
+                    j = sline[6]
+
+                    cn = (m / (n - m)) * (eps * req**n)
+                    cm = (n / (n - m)) * (eps * req**m)
+
+                    data = [req, cn, cm, n, m, "nbp"]
+
+                    if (i, j) in self.pairwise.index:
+                        columns = columns_2
+                    else:
+                        columns = columns_1 + columns_2
+                        data = [0] * 6 + data
+
+                    self.pairwise.loc[(i, j), columns] = data
+                    self.pairwise.loc[(j, i), columns] = data
+
+                    added = True
+
+        if added:
+            self.pairwise.sort_index(inplace=True)
 
     def deactivate_pairs(self, pairs):
         """Deactivate pairwise interactions between atoms."""
         if all(isinstance(pair, list) and len(pair) == 2 for pair in pairs):
             for pair in pairs:
                 try:
-                    self.pairwise.loc[(pair[0], pair[1]), 'active'] = False
-                    self.pairwise.loc[(pair[1], pair[0]), 'active'] = False
+                    self.pairwise.loc[(pair[0], pair[1]), 'statut'] = "inactive"
+                    self.pairwise.loc[(pair[1], pair[0]), 'statut'] = "inactive"
                 except:
                     print "Error: pair %s - %s does not exist." % (pair[0], pair[1])
         else:
@@ -111,8 +143,11 @@ class AutoDockForceField():
 
     def _build_pairwise_table(self):
         """Pre-compute all pairwise interactions."""
-        columns = ['i', 'j', 'vdw_rij', 'vdw_epsij', 'A', 
-                   'B', 'hb_rij', 'hb_epsij', 'C', 'D', 'active']
+        columns = ['i', 'j', # atom types
+                   'vdw_rij', 'A', 'B', # vdw parameters
+                   'hb_rij', 'C', 'D', #hydrogen bond parameters
+                   'nbp_ij', 'cn', 'cm', 'n', 'm', #npb parameters
+                   'statut']
         data = []
 
         for i in self.atom_par.index:
@@ -140,10 +175,13 @@ class AutoDockForceField():
                 c = self._coefficient(hb_epsij, hb_rij, 10, 12)
                 d = self._coefficient(hb_epsij, hb_rij, 12, 10)
 
-                data.append((i, j, vdw_rij, vdw_epsij, a, b, hb_rij, hb_epsij, c, d, True))
+                data.append((i, j, vdw_rij, a, b, hb_rij, c, d, 
+                             0, 0, 0, 0, 0, "active"))
 
         pairwise = pd.DataFrame(data=data, columns=columns)
         pairwise.set_index(['i', 'j'], inplace=True)
+        pairwise.sort_index(inplace=True)
+
         return pairwise
 
     def smooth_distance(self, r, reqm, smooth=0.5):
@@ -156,15 +194,22 @@ class AutoDockForceField():
         r[r <= reqm - sf] += sf
         return r
 
+    def nbp_r_eps(self, r, reqm, cn, cm, n, m):
+        if self.smooth > 0:
+            r = self.smooth_distance(r, reqm, self.smooth)
+        return np.sum((cn / r**n) - (cm / r**m))
+
     def van_der_waals(self, r, reqm, A, B):
         """Compute VdW interaction."""
-        r = self.smooth_distance(r, reqm, self.smooth)
+        if self.smooth > 0:
+            r = self.smooth_distance(r, reqm, self.smooth)
         return np.sum((A / r**12) - (B / r**6))
 
     def hydrogen_bond_distance(self, r, reqm, C, D):
         """Compute hydrogen bond distance-based interaction."""
         if r <= self.hb_cutoff:
-            r = self.smooth_distance(r, reqm, self.smooth)
+            if self.smooth > 0:
+                r = self.smooth_distance(r, reqm, self.smooth)
             return np.sum((C / r**12) - (D / r**10))
         else:
             return 0.
@@ -189,8 +234,11 @@ class AutoDockForceField():
     def electrostatic(self, r, qi, qj):
         """Compute electrostatic interaction."""
         if r <= self.elec_cutoff:
-            r_ddd = self.distance_dependent_dielectric(r)
-            return np.sum(self.elec_scale * qi * qj / (r * r_ddd))
+            if self.dielectric < 0:
+                r_ddd = self.distance_dependent_dielectric(r)
+                return self.elec_scale * np.sum(qi * qj / (r * r_ddd))
+            else:
+                return self.elec_scale * np.sum(qi * qj / (r * self.dielectric))
         else:
             return 0.
 
@@ -208,17 +256,18 @@ class AutoDockForceField():
         hb = 0.
         total = 0.
         vdw = 0.
+        nbp = 0.
 
-        for _, atom_i in atoms_i.iterrows():
+        for atom_i in atoms_i:
             # Get HB vectors from atom i
             if hbs_i is not None and hbs_j is not None:
                 hb_i = hbs_i.loc[hbs_i['atom_i'] == atom_i['atom_i']]
 
-            for _, atom_j in atoms_j.iterrows():
-                pairwise = self.pairwise.loc[(atom_i['atom_type'], atom_j['atom_type'])]
+            for atom_j in atoms_j:
+                pairwise = self.pairwise.loc[(str(atom_i['t']), str(atom_j['t']))]
 
-                if pairwise['active']:
-                    r = utils.get_euclidean_distance(np.array(atom_i['atom_xyz']), np.array([atom_j['atom_xyz']]))
+                if pairwise['statut'] == "active":
+                    r = utils.get_euclidean_distance(np.array(atom_i['xyz']), np.array([atom_j['xyz']]))
 
                     """ We do not want to calculate useless thing
                     if the weight is equal to zero."""
@@ -234,7 +283,7 @@ class AutoDockForceField():
 
                             for h_i in hb_i.iterrows():
                                 for h_j in hb_j.iterrows():
-                                    hb_angle = self.hydrogen_bond_angle(atom_i['atom_xyz'], atom_j['atom_xyz'], 
+                                    hb_angle = self.hydrogen_bond_angle(atom_i['xyz'], atom_j['xyz'], 
                                                                         h_i['vector_xyz'], h_j['vector_xyz'])
                                     hb_angles.append(hb_angle)
 
@@ -246,22 +295,27 @@ class AutoDockForceField():
                         vdw += self.van_der_waals(r, pairwise['vdw_rij'], pairwise['A'], pairwise['B'])
 
                     if self.weights['estat'] > 0:
-                        elec += self.electrostatic(r, atom_i['atom_q'], atom_j['atom_q'])
+                        elec += self.electrostatic(r, atom_i['q'], atom_j['q'])
 
                     if self.weights['desolv'] > 0:
-                        desolv += self.desolvation(r, atom_i['atom_q'], atom_j['atom_q'],
-                                                   self.atom_par.loc[atom_i['atom_type']]['solpar'],
-                                                   self.atom_par.loc[atom_j['atom_type']]['solpar'],
-                                                   self.atom_par.loc[atom_i['atom_type']]['vol'],
-                                                   self.atom_par.loc[atom_j['atom_type']]['vol'])
+                        desolv += self.desolvation(r, atom_i['q'], atom_j['q'],
+                                                   self.atom_par.loc[atom_i['t']]['solpar'],
+                                                   self.atom_par.loc[atom_j['t']]['solpar'],
+                                                   self.atom_par.loc[atom_i['t']]['vol'],
+                                                   self.atom_par.loc[atom_j['t']]['vol'])
+
+                elif pairwise["statut"] == "nbp":
+                    r = utils.get_euclidean_distance(np.array(atom_i['xyz']), np.array([atom_j['xyz']]))
+                    nbp += self.nbp_r_eps(r, pairwise["nbp_ij"], pairwise["cn"], pairwise["cm"],
+                                          pairwise["n"], pairwise["m"])
 
         hb *= self.weights['hbond']
         elec *= self.weights['estat']
         vdw *= self.weights['vdW']
         desolv *= self.weights['desolv']
-        total = hb + vdw + elec + desolv
+        total = hb + vdw + elec + desolv + nbp
 
         if details:
-            return np.array([total, hb, vdw, elec, desolv])
+            return np.array([total, hb, vdw, elec, desolv, nbp])
         else:
             return total
