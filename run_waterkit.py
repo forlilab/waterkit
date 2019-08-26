@@ -10,12 +10,10 @@ import os
 import imp
 import argparse
 
-from waterkit import utils
-from waterkit.waterkit import Waterkit
-from waterkit.autodock_map import Map
-from waterkit.molecule import Molecule
-from waterkit.water import Water
-from waterkit.forcefield import AutoDockForceField
+from waterkit import AutoDockForceField
+from waterkit import Map
+from waterkit import Molecule
+from waterkit import WaterKit
 
 
 def cmd_lineparser():
@@ -62,7 +60,7 @@ def main():
     ad_map = Map.from_fld(fld_file)
 
     # Go waterkit!!
-    k = Waterkit()
+    k = WaterKit()
     k.hydrate(molecule, ad_map, ad_forcefield, 
               water_model, how, temperature, n_layer)
 

@@ -14,8 +14,8 @@ import numpy as np
 import openbabel as ob
 
 import utils
-from typer.rotatable_bonds import RotatableBonds
-from typer.hydrogen_bonds import HydrogenBonds
+from typer import RotatableBonds
+from typer import HydrogenBonds
 
 
 class Molecule():
@@ -25,7 +25,8 @@ class Molecule():
 
         Args:
             OBMol (OBMol): OpenBabel molecule object
-            waterfield (Waterfield): Waterfield object for HB typing
+            guess_hydrogen_bonds (bool): hydrogen bonds typing (Default: True)
+            guess_disordered_hydrogens (bool): disordered hydrogens typing (Default: True)
 
         """
         i = 0
@@ -74,8 +75,8 @@ class Molecule():
 
         Args:
             fname (str): molecule filename
-            guess_hydrogen_bonds (bool): guess hydrogen bonds (defaut: True)
-            guess_disordered_hydrogens (bool): guess disordered hydrogens (default: True)
+            guess_hydrogen_bonds (bool): hydrogen bonds typing (Default: True)
+            guess_disordered_hydrogens (bool): disordered hydrogens typing (Default: True)
 
         Returns:
             Molecule

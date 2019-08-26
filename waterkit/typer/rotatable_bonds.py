@@ -6,7 +6,6 @@
 # Class to manage the rotatable bond typer
 #
 
-
 import re
 from collections import namedtuple
 from collections import OrderedDict

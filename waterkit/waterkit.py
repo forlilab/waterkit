@@ -14,7 +14,7 @@ import numpy as np
 from water_box import WaterBox
 
 
-class Waterkit():
+class WaterKit():
 
     def __init__(self):
         """Initialize WaterKit."""
