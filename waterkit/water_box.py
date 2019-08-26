@@ -94,17 +94,17 @@ class WaterBox():
         """Add the receptor and the corresponding ad_map to the waterbox."""
         if not 0 in self.molecules:
             # Add the receptor to the waterbox
-            self.add_molecules(receptor)
+            self._add_molecules(receptor)
             # Add informations about the receptor
             data = pd.DataFrame([[0]], columns=["shell_id"])
-            self.add_informations(data, "shells")
+            self._add_informations(data, "shells")
 
             return True
         else:
             # The receptor was already added to the waterbox
             return False
 
-    def add_molecules(self, molecules, connections=None, add_KDTree=True):
+    def _add_molecules(self, molecules, connections=None, add_KDTree=True):
         """ Add a new molecule to the waterbox """
         if not isinstance(molecules, (list, tuple)):
             molecules = [molecules]
@@ -137,7 +137,7 @@ class WaterBox():
 
         connections["molecule_i"] += last_molecule_i + 1
         connections["molecule_j"] += last_molecule_j + 1
-        self.add_informations(connections, "connections")
+        self._add_informations(connections, "connections")
 
     def _add_molecules_to_kdtree(self, molecules):
         """ Build or update the cKDTree of all the atoms in
@@ -166,7 +166,7 @@ class WaterBox():
         columns = ["molecule_i", "atom_i"]
         relations = np.vstack(relations)
         relations = pd.DataFrame(relations, columns=columns)
-        self.add_informations(relations, "kdtree_relations")
+        self._add_informations(relations, "kdtree_relations")
 
         # Update the KDTree
         data = np.vstack(data)
@@ -176,7 +176,7 @@ class WaterBox():
             pass
         self._kdtree = spatial.cKDTree(data)
 
-    def add_informations(self, data, where):
+    def _add_informations(self, data, where):
         """ Append DF to the existing information DF """
         try:
             self.df[where] = self.df[where].append(data, sort=False)
@@ -184,13 +184,31 @@ class WaterBox():
         except:
             print "Error: Cannot add informations to %s dataframe." % where
 
-    def update_informations_in_shell(self, data, shell_id, key):
+    def _update_informations_in_shell(self, data, shell_id, key):
         """Update shell information."""
         index = self.df["shells"]["shell_id"] == shell_id
         self.df["shells"].loc[index, key] = data
 
+    def number_of_shells(self):
+        """Total number of shells in the WaterBox.
+
+        Returns:
+            int: number of shells
+
+        """
+        # df["column"].max() faster than np.max(df["column"])
+        return self.df["shells"]["shell_id"].max()
+
     def molecules_in_shell(self, shell_ids=None):
-        """ Get all the molecule in shell """
+        """Get all the molecule in shell.
+
+        Args:
+            shell_ids (list): ids of the shell(s) (default: None)
+
+        Returns:
+            list: list of all the molecules in the selected shell(s)
+
+        """
         if shell_ids is not None:
             if not isinstance(shell_ids, (list, tuple)):
                 shell_ids = [shell_ids]
@@ -202,9 +220,33 @@ class WaterBox():
 
         return molecules
 
+    def molecule_informations_in_shell(self, shell_id):
+        """Get information of shell.
+
+        Args:
+            shell_id (int): id the shell
+
+        Returns:
+            DataFrame: informations concerning the shell
+
+        """
+        df = self.df["shells"]
+        # Return a copy to avoid a SettingWithCopyWarning flag
+        return df.loc[df["shell_id"] == shell_id].copy()
+
     def closest_atoms(self, xyz, radius, exclude=None):
-        """ Retrieve indices of the closest atoms around x 
-        at a certain radius """
+        """Retrieve indices of the closest atoms around x 
+        at a certain radius.
+
+        Args:
+            xyz (array_like): array of 3D coordinates
+            raidus (float): radius
+            exclude (DataFrame): contains molecule to exclude (columns: molecule_i and atom_i)
+
+        Returns:
+            DataFrame: contains all the molecules/atoms at XX angstrom from xyz
+
+        """
         if self._kdtree is None:
             print "Warning: KDTree is empty."
             return pd.DataFrame(columns=["molecule_i", "atom_i"])
@@ -219,20 +261,9 @@ class WaterBox():
 
         return df
 
-    def molecule_informations_in_shell(self, shell_id):
-        """Get information of shell."""
-        df = self.df["shells"]
-        # Return a copy to avoid a SettingWithCopyWarning flag
-        return df.loc[df["shell_id"] == shell_id].copy()
-
-    def number_of_shells(self):
-        """Total number of shells in the WaterBox."""
-        # df["column"].max() faster than np.max(df["column"])
-        return self.df["shells"]["shell_id"].max()
-
     def closest_hydrogen_bond_anchor(self, xyz, radius, exclude=None):
         """Find the closest hydrogen bond anchors.
-        
+
         Args:
             xyz (array_like): array of 3D coordinates
             radius (float): max radius in Angström
@@ -275,7 +306,7 @@ class WaterBox():
 
         return best_hba, best_hbv_id
 
-    def place_optimal_spherical_waters(self, molecules, atom_type="W", partial_charge=0.):
+    def _place_optimal_spherical_waters(self, molecules, atom_type="W", partial_charge=0.):
         """Place spherical water molecules in the optimal position.
 
         Args:
@@ -284,8 +315,8 @@ class WaterBox():
             partial_charges (float): partial charges of the spherical water molecules (default: -0.834)
 
         Returns:
-            waters (list): list of water molecules
-            connections (DataFrame): contains connections between molecules
+            list: list of water molecules
+            DataFrame: contains connections between molecules
 
         """
         waters = []
@@ -320,7 +351,7 @@ class WaterBox():
         shell_id = self.number_of_shells()
         molecules = self.molecules_in_shell(shell_id)
 
-        waters, connections = self.place_optimal_spherical_waters(molecules, type_sw, partial_charge)
+        waters, connections = self._place_optimal_spherical_waters(molecules, type_sw, partial_charge)
 
         # Only the receptor contains disordered hydrogens
         if shell_id == 0:
@@ -332,10 +363,10 @@ class WaterBox():
             waters, df = self._wopt.sample_grid(waters, opt_disordered=False)
 
         if len(waters):
-            self.add_molecules(waters, add_KDTree=False)
+            self._add_molecules(waters, add_KDTree=False)
             # Add informations about the new shell
             if "shells" in df.keys():
-                self.add_informations(df["shells"], "shells")
+                self._add_informations(df["shells"], "shells")
 
             return True
         else:
