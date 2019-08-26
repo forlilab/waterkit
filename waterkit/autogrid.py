@@ -33,6 +33,7 @@ class AutoGrid():
         """
         self._exec_path = exec_path
         self._param_file = param_file
+        
         if gpf_file is not None:
             self._nbp_r_eps = self._load_nbp_r_eps_from_gpf(gpf_file)
         else:
