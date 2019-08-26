@@ -6,11 +6,13 @@
 # Class to manage autodock maps
 #
 
+import collections
 import os
 import re
 import copy
 
 import numpy as np
+from scipy import spatial
 from scipy.interpolate import RegularGridInterpolator
 
 import utils
@@ -18,67 +20,135 @@ import utils
 
 class Map():
 
-    def __init__(self, fld_file):
+    def __init__(self, map_files=None, labels=None):
+        """Initialize a Map object by reading AutoDock map files.
 
-        # Read the fld_file
-        self._center, self._spacing, self._npts, self._maps = self._read_fld(fld_file)
+        Args:
+            map_files (list): list of the autodock map files
+            labels (list): list of the atom types corresponding to each maps
 
-        # Compute min and max coordinates
-        # Half of each side
-        l = (self._spacing * self._npts) / 2.
-        # Minimum and maximum coordinates
-        self._xmin, self._ymin, self._zmin = self._center - l
-        self._xmax, self._ymax, self._zmax = self._center + l
-        # Generate the cartesian grid
-        self._grid = self._generate_cartesian()
+        """
+        maps = {}
+        prv_grid_information = None
 
-        # Get the relative folder path from fld_file
-        path = os.path.dirname(fld_file)
-        # If there is nothing, it means we are in the current directory
-        if path == '':
-            path = '.'
+        if map_files is not None and labels is not None:
+            if not isinstance(map_files, (list, tuple)):
+                map_files = [map_files]
+            if not isinstance(labels, (list, tuple)):
+                labels = [labels]
 
-        self._maps_interpn = {}
-        # Read all the affinity maps
-        for map_type, map_file in self._maps.items():
-            affinity_map = self._read_affinity_map('%s/%s' % (path, map_file))
+            assert (len(map_files) == len(labels)), "map files and labels must have the same number of elements"
 
-            self._maps[map_type] = affinity_map
-            self._maps_interpn[map_type] = self._generate_affinity_map_interpn(affinity_map)
+            # Get information (center, spacing, nelements) from each grid
+            # and make sure they are all identical
+            for map_file, label in zip(map_files, labels):
+                grid_information = self._grid_information_from_map(map_file)
+
+                if prv_grid_information is not None:
+                    if not cmp(prv_grid_information, grid_information):
+                        raise Exception("grid %s is different from the previous one." % label)
+
+                    prv_grid_information = grid_information
+
+                maps[label] = map_file
+
+            self._maps = {}
+            self._maps_interpn = {}
+            self._spacing = grid_information["spacing"]
+            self._npts = grid_information["nelements"]
+            self._center = grid_information["center"]
+
+            # Compute min and max coordinates
+            # Half of each side
+            l = (self._spacing * (self._npts - 1)) / 2.
+            # Minimum and maximum coordinates
+            self._xmin, self._ymin, self._zmin = self._center - l
+            self._xmax, self._ymax, self._zmax = self._center + l
+            # Generate the kdtree and bin edges of the grid
+            self._kdtree, self._edges = self._build_kdtree_from_grid()
+
+            # Read all the affinity maps
+            for label, map_file in maps.items():
+                affinity_map = self._read_affinity_map(map_file)
+
+                self._maps[label] = affinity_map
+                self._maps_interpn[label] = self._generate_affinity_map_interpn(affinity_map)
 
     def __str__(self):
-        info = 'SPACING %s\n' % self._spacing
-        info += 'NELEMENTS %s\n' % ' '.join(self._npts.astype(str))
-        info += 'CENTER %s\n' % ' '.join(self._center.astype(str))
-        info += 'MAPS %s\n' % ' '.join(self._maps.iterkeys())
+        """Print basic information about the maps"""
+        try:
+            info = "SPACING %s\n" % self._spacing
+            info += "NELEMENTS %s\n" % " ".join(self._npts.astype(str))
+            info += "CENTER %s\n" % " ".join(self._center.astype(str))
+            info += "MAPS %s\n" % " ".join(self._maps.iterkeys())
+        except AttributeError:
+            info = "AutoDock Map object is not defined."
+
         return info
 
-    def _read_fld(self, fld_file):
+    def copy(self):
+        """Create a deep copy the current state of the Map object.
+
+        Returns:
+            Map: Deep copy of the map
+
         """
-        Read the fld file and extract spacing, npts, center and the name of all the maps
+        return copy.deepcopy(self)
+
+    @classmethod
+    def from_fld(cls, fld_file):
+        """Read a fld file.
+
+        The AutoDock map files are read using the information contained
+        into the fld file. The fld file is created by AutoGrid.
+
+        Args:
+            fld_file (str): pathname of the AutoGrid fld file.
+
+        Returns:
+            Map: Instance of Map object.
+
         """
-        labels = []
         map_files = []
-        npts = []
+        labels = []
+
+        path = os.path.dirname(fld_file)
+        # If there is nothing, it means we are in the current directory
+        if path == "":
+            path = "."
 
         with open(fld_file) as f:
             for line in f:
+                if re.search("^label=", line):
+                    labels.append(line.split("=")[1].split("#")[0].split("-")[0].strip())
+                elif re.search("^variable", line):
+                    map_files.append(path + os.sep + line.split(" ")[2].split("=")[1].split("/")[-1])
 
-                if re.search('^#SPACING', line):
-                    spacing = np.float(line.split(' ')[1])
-                elif re.search('^dim', line):
-                    npts.append(line.split('=')[1].split('#')[0].strip())
-                elif re.search('^#CENTER', line):
-                    center = np.array(line.split(' ')[1:4], dtype=np.float)
-                elif re.search('^label=', line):
-                    labels.append(line.split('=')[1].split('#')[0].split('-')[0].strip())
-                elif re.search('^variable', line):
-                    map_files.append(line.split(' ')[2].split('=')[1].split('/')[-1])
+        if map_files and labels:
+            return cls(map_files, labels)
 
-        npts = np.array(npts, dtype=np.int)
-        maps = {label: map_file for label, map_file in zip(labels, map_files)}
+    def _grid_information_from_map(self, map_file):
+        """Read grid information in the map file"""
+        grid_information = {"spacing": None,
+                            "nelements": None,
+                            "center": None}
 
-        return center, spacing, npts, maps
+        with open(map_file) as f:
+            for line in f:
+                if re.search("^SPACING", line):
+                    grid_information["spacing"] = np.float(line.split(" ")[1])
+                elif re.search("^NELEMENTS", line):
+                    nelements = np.array(line.split(" ")[1:4], dtype=np.int)
+                    # Transform even numbers to the nearest odd integer
+                    nelements = nelements // 2 * 2 + 1
+                    grid_information["nelements"] = nelements
+                elif re.search("CENTER", line):
+                    grid_information["center"] = np.array(line.split(" ")[1:4], dtype=np.float)
+                elif re.search("^[0-9]", line):
+                    # If the line starts with a number, we stop
+                    break
+
+        return grid_information
 
     def _read_affinity_map(self, map_file):
         """
@@ -88,7 +158,7 @@ class Map():
             # Read all the lines directly
             lines = f.readlines()
 
-            npts = np.array(lines[4].split(' ')[1:4], dtype=np.int) + 1
+            npts = np.array(lines[4].split(" ")[1:4], dtype=np.int) + 1
 
             # Get the energy for each grid element
             affinity = [np.float(line) for line in lines[6:]]
@@ -102,11 +172,11 @@ class Map():
         Return a interpolate function from the grid and the affinity map.
         This helps to interpolate the energy of coordinates off the grid.
         """
-        return RegularGridInterpolator(self._grid, affinity_map, bounds_error=False, fill_value=np.inf)
+        return RegularGridInterpolator(self._edges, affinity_map, bounds_error=False, fill_value=np.inf)
 
-    def _generate_cartesian(self):
+    def _build_kdtree_from_grid(self):
         """
-        Generate all the coordinates xyz for each AutoDock map node
+        Return the kdtree and bin edges (x, y, z) of the AutoDock map
         """
         x = np.linspace(self._xmin, self._xmax, self._npts[0])
         y = np.linspace(self._ymin, self._ymax, self._npts[1])
@@ -114,50 +184,89 @@ class Map():
 
         # We use a tuple of numpy arrays and not a complete numpy array
         # because otherwise the output will be different if the grid is cubic or not
-        arr = tuple([x, y, z])
+        edges = tuple([x, y, z])
 
-        return arr
+        X, Y, Z = np.meshgrid(x, y, z)
+        xyz = np.stack((X.ravel(), Y.ravel(), Z.ravel()), axis=-1)
+        kdtree = spatial.cKDTree(xyz)
+
+        return kdtree, edges
 
     def _index_to_cartesian(self, idx):
         """
-        Return the cartesian coordinates associated to the index
+        Return the cartesian grid coordinates associated to the grid index
         """
-        # Transform 1D to 2D array
-        idx = np.atleast_2d(idx)
-
-        # Get coordinates x, y, z
-        x = self._grid[0][idx[:, 0]]
-        y = self._grid[1][idx[:, 1]]
-        z = self._grid[2][idx[:, 2]]
-
-        # Column: x, y, z
-        arr = np.stack((x, y, z), axis=-1)
-
-        return arr
+        return self._kdtree.mins + idx * self._spacing
 
     def _cartesian_to_index(self, xyz):
         """
-        Return the closest index of the cartesian coordinates
+        Return the closest grid index of the cartesian grid coordinates
         """
-        idx = []
+        idx = np.rint((xyz - self._kdtree.mins) / self._spacing).astype(np.int)
+        # All the index values outside the grid are clipped (limited) to the nearest index
+        np.clip(idx, [0, 0, 0], self._npts, idx)
 
-        # Otherwise we can't "broadcast" xyz in the grid
-        xyz = np.atleast_2d(xyz)
+        return idx
 
-        for i in range(xyz.shape[0]):
-            idx.append([np.abs(self._grid[0] - xyz[i, 0]).argmin(),
-                        np.abs(self._grid[1] - xyz[i, 1]).argmin(),
-                        np.abs(self._grid[2] - xyz[i, 2]).argmin()])
+    def size(self):
+        """Return the number of grid points in the grid.
 
-        # We want just to keep the struict number of dim useful
-        idx = np.squeeze(np.array(idx))
+        Returns:
+            int: number of grid points
+
+        """
+        return self._npts.prod()
+
+    def create_empty_map(self, name, fill_value=None):
+        """Initialize an empty map
+
+        Args:
+            name (str): name of the new map
+            fill_value (float): fill value (default: None)
+
+        Returns:
+            bool: True if succeeded or False otherwise
+
+        """
+        if not name in self._maps:
+            if fill_value is None:
+                new_map = np.zeros(self._npts)
+            else:
+                new_map = np.full(self._npts, fill_value)
+
+            self._maps[name] = new_map
+            self._maps_interpn[name] = self._generate_affinity_map_interpn(new_map)
+
+            return True
+        else:
+            print "Error: map %s already exists." % name
+            return False
+
+    def atoms_in_map(self, molecule):
+        """List of index of all the atoms in the map.
+
+        Args:
+            molecule (molecule): Molecule object
+
+        Returns:
+            ndarray: 1d Numpy array of atom indexes
+
+        """
+        xyz = molecule.atoms["xyz"]
+        in_out = self.is_in_map(xyz)
+        idx = np.arange(0, xyz.size)[in_out]
 
         return idx
 
     def is_in_map(self, xyz):
-        """
-        Check if coordinates xyz are in the AutoDock map
-        and return a boolean numpy array
+        """Check if coordinates are in the map.
+
+        Args:
+            xyz (array_like): 2d array of the 3d coordinates
+
+        Returns:
+            ndarray: 1d Numpy array of boolean
+
         """
         xyz = np.atleast_2d(xyz)
         x, y, z = xyz[:, 0], xyz[:, 1], xyz[:, 2]
@@ -170,177 +279,312 @@ class Map():
 
         return all_in
 
-    def get_energy(self, xyz, atom_type, method='linear'):
+    def is_close_to_edge(self, xyz, distance):
+        """Check if the points xyz is at a certain distance of the edge of the box.
+
+        Args:
+            xyz (array_like): 2d array of the 3d coordinates
+            distance (float): distance
+
+        Returns:
+            ndarray: 1d Numpy array of boolean
+
         """
-        Return the energy of each coordinates xyz
+        xyz = np.atleast_2d(xyz)
+        x, y, z = xyz[:, 0], xyz[:, 1], xyz[:, 2]
+
+        x_close = np.logical_or(np.abs(self._xmin - x) <= distance, np.abs(self._xmax - x) <= distance)
+        y_close = np.logical_or(np.abs(self._ymin - y) <= distance, np.abs(self._ymax - y) <= distance)
+        z_close = np.logical_or(np.abs(self._zmin - z) <= distance, np.abs(self._zmax - z) <= distance)
+        close_to = np.any((x_close, y_close, z_close), axis=0)
+
+        return close_to
+
+    def energy_coordinates(self, xyz, atom_type, method="linear"):
+        """Grid energy of each coordinates xyz.
+
+        Args:
+            xyz (array_like): 2d array of 3d coordinates
+            atom_type (str): name of the atom type
+            method (str): Interpolate method (default: linear)
+
+        Returns:
+            ndarray: 1d Numpy array of the energy values
+
         """
         return self._maps_interpn[atom_type](xyz, method=method)
 
-    def get_neighbor_points(self, xyz, min_radius=0, max_radius=5):
+    def energy(self, nd, ignore_atom_types=None, ignore_vdw_hb=False, 
+               ignore_electrostatic=False, ignore_desolvation=False, 
+               method="linear", sum_energies=True):
+        """Get energy interaction of a molecule based of the grid.
+
+        Args:
+            nd (ndarray): Structure numpy array with columns (i, xyz, q, t)
+            ignore_atom_types (list): list of atom types/terms to ignore (default: None)
+            ignore_electrostatic (bool): to ignore electrostatic term (default: False)
+            ignore_desolvation (bool): to ignore desolvation term (default: False)
+            method (str): Interpolate method (default: linear)
+
+        Returns:
+            float: Grid energy interaction
+
         """
-        Return all the coordinates xyz in a certaim radius around a point
-        """
-        imin, imax = [], []
+        energies = []
+        vdw_hb = 0.
+        elec = 0.
+        desolv = 0.
 
-        idx = self._cartesian_to_index(xyz)
+        if ignore_atom_types is None:
+            ignore_atom_types = []
 
-        # Number of grid points based on the grid spacing
-        n = np.int(np.rint(max_radius / self._spacing))
+        if not isinstance(ignore_atom_types, (list, tuple)):
+            ignore_atom_types = [ignore_atom_types]
 
-        # Be sure, we don't go beyond limits of the grid
-        for i in range(idx.shape[0]):
-            # This is for the min border
-            if idx[i] - n > 0:
-                imin.append(idx[i] - n)
+        atom_types = np.unique(nd["t"])
+        atom_types = set(atom_types).difference(ignore_atom_types)
+
+        for atom_type in atom_types:
+            if nd.size > 1:
+                index = np.where(nd["t"] == atom_type)[0]
+                xyz = nd[index]["xyz"]
             else:
-                imin.append(0)
+                xyz = nd["xyz"]
 
-            # This is for the max border
-            if idx[i] + n < self._npts[i]:
-                imax.append(idx[i] + n)
-            else:
-                imax.append(self._npts[i] - 1)
+            if not ignore_vdw_hb:
+                vdw_hb = self._maps_interpn[atom_type](xyz, method=method)
 
-        x = np.arange(imin[0], imax[0] + 1)
-        y = np.arange(imin[1], imax[1] + 1)
-        z = np.arange(imin[2], imax[2] + 1)
+            if not ignore_electrostatic:
+                if nd.size > 1:
+                    q = nd[index]["q"]
+                else:
+                    q = nd["q"]
 
-        X, Y, Z = np.meshgrid(x, y, z)
-        data = np.stack((X.ravel(), Y.ravel(), Z.ravel()), axis=-1)
+                elec = self._maps_interpn["Electrostatics"](xyz, method=method) * q
 
-        coordinates = self._index_to_cartesian(data)
-        distance = utils.get_euclidean_distance(coordinates, xyz)
+            if not ignore_desolvation:
+                desolv = self._maps_interpn["Desolvation"](xyz, method=method)
 
-        # We want coordinates only in between
-        selected_coordinates = coordinates[(distance >= min_radius) & (distance <= max_radius)]
+            energies.extend(vdw_hb + elec + desolv)
 
-        return selected_coordinates
+        if sum_energies:
+            return np.sum(energies)
+        else:
+            return np.array(energies)
 
-    def copy(self):
-        return copy.deepcopy(self)
+    def neighbor_points(self, xyz, radius, min_radius=0):
+        """Grid coordinates around a point at a certain distance.
 
-    def combine(self, name, atom_types, how='best', ad_map=None):
+        Args:
+            xyz (array_like): 3d coordinate of a point
+            radius (float): max radius
+            min_radius (float): min radius (default: 0)
+
+        Returns:
+            ndarray: 2d Numpy array of coordinates
+
         """
-        Funtion to combine autodock map together
+        coordinates = self._kdtree.data[self._kdtree.query_ball_point(xyz, radius)]
+        
+        if min_radius > 0:
+            distances = spatial.distance.cdist([xyz], coordinates, "euclidean")[0]
+            coordinates = coordinates[distances >= min_radius]
+
+        return coordinates
+
+    def apply_operation_on_maps(self, names, atom_types, expression):
+        """Apply mathematical expression on affinity grids.
+
+        Args:
+            names (list): name of the new or existing grid
+            atom_types (list): list of atom types
+            expression (str): maths expression that must contains x (x is the grid value)
+
+        Returns:
+            None
+
         """
+        if not isinstance(names, (list, tuple)):
+            names = [names]
+
+        if not isinstance(atom_types, (list, tuple)):
+            atom_types = [atom_types]
+
+        assert len(atom_types) == len(names), "Names and atom_types lengths are not matching."
+
+        if not "x" in expression:
+            print "Error: operation cannot be applied, x is not defined."
+            return None
+
+        for name, atom_type in zip(names, atom_types):
+            try:
+                x = self._maps[atom_type]
+                # When "eval" a new copy of the map is created
+                x = eval(expression)
+
+                # Update map and interpolator
+                self._maps[name] = x
+                self._maps_interpn[name] = self._generate_affinity_map_interpn(x)
+            except:
+                print "Warning: This map %s does not exist." % (atom_type)
+                continue
+
+    def add_bias(self, name, coordinates, bias_value, radius):
+        """Add energy bias to map using Juan method.
+
+        Args:
+            name (str): name of the new or existing map
+            coordinates (array_like): 2d array of 3d coordinates
+            bias_value (float): energy bias value to add (in kcal/mol)
+            radius (float): radius of the bias (in Angtrom)
+
+        Returns:
+            None
+
+        """
+        coordinates = np.atleast_2d(coordinates)
+
+        if name in self._maps:
+            new_map = self._maps[name]
+        else:
+            new_map = np.zeros(self._npts)
+
+        # We add all the bias one by one in the new map
+        for coordinate in coordinates:
+            sphere_xyz = self.neighbor_points(coordinate, radius)
+            indexes = self._cartesian_to_index(sphere_xyz)
+
+            distances = spatial.distance.cdist([coordinate], sphere_xyz, "euclidean")[0]
+            bias_energy = bias_value * np.exp(-1. * (distances ** 2) / (radius ** 2))
+
+            new_map[indexes[:,0], indexes[:,1], indexes[:,2]] += bias_energy
+
+        # And we replace the original one only at the end, it is faster
+        self._maps[name] = new_map
+        self._maps_interpn[name] = self._generate_affinity_map_interpn(new_map)
+
+    def combine(self, name, atom_types, how="best", ad_map=None):
+        """Funtion to combine Autoock map together.
+
+        Args:
+            name (str): name of the new or existing grid
+            atom_types (list): list of atom types combined
+            how (str)): combination methods: best, add, replace (default: best)
+            ad_map (Map): another Map object (default: None)
+
+        Returns:
+            bool: True if succeeded or False otherwise
+
+        """
+        selected_maps = []
         same_grid = True
         indices = np.index_exp[:, :, :]
 
+        if not isinstance(atom_types, (list, tuple)):
+            atom_types = [atom_types]
+
+        if how == "replace":
+            assert ad_map is not None, "Another map has to be specified for the replace mode."
+            assert len(atom_types) == 1, "Multiple atom types cannot replace the same atom type."
+
+        if name not in self._maps:
+            self._maps[name] = np.zeros(self._npts)
+
+        """ Get the common maps, the requested ones and the actual ones that we have 
+        and check maps that we cannot process because there are not present in one
+        of the ad_map.
+        """
+        selected_types = set(self._maps.keys()) & set(atom_types)
         if ad_map is not None:
-            # Check if the grid are the same between the two ad_maps
-            # And we do it like this because grid are tuples of numpy array
-            same_grid = all([np.array_equal(x, y) for x, y in zip(self._grid, ad_map._grid)])
+            selected_types = set(selected_types) & set(ad_map._maps.keys())
+        unselected_types = set(selected_types) - set(atom_types)
 
-        # Check if the grid are the same between the two ad_maps
+        if not selected_types:
+            print "Warning: no maps were selected from %s list." % atom_types
+            return False
+        if unselected_types:
+            print "Warning: %s maps can not be combined." % " ".join(unselected_types)
+        
+        """ Check if the grid are the same between the two ad_maps.
+        And we do it like this because grid are tuples of numpy array.
+        """
+        if ad_map is not None:
+            same_grid = all([np.array_equal(x, y) for x, y in zip(self._edges, ad_map._edges)])
+
         if ad_map is not None and same_grid is False:
-
+            """ If the grids are not the same between the two ad_maps, we have to
+            retrieve the indices of the self map (reference) that corresponds to the
+            cordinates of the ad_map.
+            """
             ix_min, iy_min, iz_min = self._cartesian_to_index([ad_map._xmin, ad_map._ymin, ad_map._zmin])
-            ix_max, iy_max, iz_max = self._cartesian_to_index([ad_map._xmax, ad_map._ymax, ad_map._zmax]) + 1
+            ix_max, iy_max, iz_max = self._cartesian_to_index([ad_map._xmax, ad_map._ymax, ad_map._zmax])
 
-            x = self._grid[0][ix_min:ix_max]
-            y = self._grid[1][iy_min:iy_max]
-            z = self._grid[2][iz_min:iz_max]
+            x = self._edges[0][ix_min:ix_max]
+            y = self._edges[1][iy_min:iy_max]
+            z = self._edges[2][iz_min:iz_max]
 
             X, Y, Z = np.meshgrid(x, y, z)
             grid = np.stack((X.ravel(), Y.ravel(), Z.ravel()), axis=-1)
+            
+            """ All the coordinates outside ad_map are clipped, to avoid inf value
+            during the interpolation. This is not the best way of doing that 
+            because because we lose the exact correspondance between the index 
+            and the coordinates in the self map.
+            """
+            np.clip(grid, [ad_map._xmin, ad_map._ymin, ad_map._zmin], 
+                    [ad_map._xmax, ad_map._ymax, ad_map._zmax], grid)
 
             indices = np.index_exp[ix_min:ix_max, iy_min:iy_max, iz_min:iz_max]
 
-            # If ad_map smaller than self in every dimension
-            # If ad_map is bigger than self in any dimension
-
-        # Get the common maps, the requested ones and the actual ones that we have
-        selected_types = set(self._maps.keys()) & set(atom_types)
-
-        if ad_map is not None:
-            selected_types = set(selected_types) & set(ad_map._maps.keys())
-
-        # Check maps that we cannot process because there are
-        # not present in one of the ad_map
-        unselected_types = set(selected_types) - set(atom_types)
-
-        if unselected_types:
-            print "Those maps can't be combined: %s" % ', '.join(unselected_types)
-
-        selected_maps = []
-
         # Select maps
         for selected_type in selected_types:
-
-            selected_maps.append(self._maps[selected_type][indices])
+            if how != "replace":
+                selected_maps.append(self._maps[selected_type][indices])
 
             if ad_map is not None:
                 if same_grid:
                     selected_maps.append(ad_map._maps[selected_type])
                 else:
-                    energy = ad_map.get_energy(grid, selected_type)
-                    print energy.shape
-                    energy = np.reshape(energy, (len(x), len(y), len(z)))
-                    # I have to check why I have to do this!
+                    energy = ad_map.energy_coordinates(grid, selected_type)
+                    # Reshape and swap x and y axis, right? Easy.
+                    # Thank you Diogo Santos Martins!!
+                    energy = np.reshape(energy, (y.shape[0], x.shape[0], z.shape[0]))
                     energy = np.swapaxes(energy, 0, 1)
 
                     selected_maps.append(energy)
 
-        if name not in self._maps:
-            self._maps[name] = np.zeros(self._npts)
+        if selected_types:
+            # Combine all the maps
+            if how == "best":
+                self._maps[name][indices] = np.nanmin(selected_maps, axis=0)
+            elif how == "add":
+                self._maps[name][indices] = np.nansum(selected_maps, axis=0)
+            elif how == "replace":
+                self._maps[name][indices] = selected_maps[0]
 
-        # Combine all the maps
-        if how == 'best':
-            self._maps[name][indices] = np.nanmin(selected_maps, axis=0)
-        elif how == 'add':
-            self._maps[name][indices] = np.nansum(selected_maps, axis=0)
+            # Update the interpolate energy function
+            self._maps_interpn[name] = self._generate_affinity_map_interpn(self._maps[name])
 
-        # Update the interpolate energy function
-        self._maps_interpn[name] = self._generate_affinity_map_interpn(self._maps[name])
-
-    def transform_grid(self, rotation, translation):
-        """
-        Transform the grid by applying rotation and translation
-        """
-        X, Y, Z = np.meshgrid(self._grid[0], self._grid[1], self._grid[2])
-        grid = np.stack((X.ravel(), Y.ravel(), Z.ravel()), axis=-1)
-
-        # Apply rotation and translation
-        # http://ajcr.net/Basic-guide-to-einsum/ (we don't use einsum, but it's cool!)
-        grid = np.dot(grid, rotation) + translation
-
-        # Keep only unique point
-        # We don't want to store the whole grid
-        new_grid = tuple((np.unique(grid[:, 0]), np.unique(grid[:, 1]), np.unique(grid[:, 2])))
-
-        self.update_grid(new_grid)
-
-    def update_grid(self, new_grid):
-        """
-        Update the grid and all the information derived (center, map_interpn..)
-        """
-        # Make sure that the new grid has the same dimension as the old one
-        same_shape = all([x.size == y.size for x, y in zip(self._grid, new_grid)])
-
-        if same_shape is True:
-
-            # Update grid
-            self._grid = new_grid
-            # Update all other informations
-            self._center = np.mean(self._grid, axis=1)
-            self._xmin, self._xmax = np.min(self._grid[0]), np.max(self._grid[0])
-            self._ymin, self._ymax = np.min(self._grid[1]), np.max(self._grid[1])
-            self._zmin, self._zmax = np.min(self._grid[2]), np.max(self._grid[2])
-
-            # Update interpolate energy functions with the new grid
-            for map_type in self._maps.iterkeys():
-                self._maps_interpn[map_type] = self._generate_affinity_map_interpn(self._maps[map_type])
+        return True
 
     def to_pdb(self, fname, map_type, max_energy=None):
-        """
-        Write the AutoDock map in a PDB file
+        """Export AutoDock map in PDB format.
+
+        Args:
+            fname (str): PDB file pathname
+            mapt_type (str): atom type name
+            max_energy (float): max limit energy (default: None)
+
+        Returns:
+            None
+
         """
         idx = np.array(np.where(self._maps[map_type] <= max_energy)).T
 
         i = 0
         line = "ATOM  %5d  D   DUM Z%4d    %8.3f%8.3f%8.3f  1.00%6.2f           D\n"
 
-        with open(fname, 'w') as w:
+        with open(fname, "w") as w:
             for j in range(idx.shape[0]):
 
                 v = self._maps[atom_type][idx[j][0], idx[j][1], idx[j][2]]
@@ -348,12 +592,24 @@ class Map():
                 if v > 999.99:
                     v = 999.99
 
-                w.write(line % (i, i, self._grid[0][idx[j][0]], self._grid[1][idx[j][1]], self._grid[2][idx[j][2]], v))
+                w.write(line % (i, i, self._edges[0][idx[j][0]], self._edges[1][idx[j][1]], self._edges[2][idx[j][2]], v))
                 i += 1
 
-    def to_map(self, map_types=None, prefix=None, grid_parameter_file='grid.gpf',
-               grid_data_file='maps.fld', macromolecule='molecule.pdbqt'):
-        """Write one or multiple AutoDock map in map format"""
+    def to_map(self, map_types=None, prefix=None, grid_parameter_file="grid.gpf",
+               grid_data_file="maps.fld", macromolecule="molecule.pdbqt"):
+        """Export AutoDock maps.
+
+        Args:
+            map_types (list): list of atom types to export
+            prefix (str): prefix name file (default: None)
+            grid_parameter_file (str): name of the gpf file (default: grid.gpf)
+            grid_data_file (str): name of the fld file (default: maps.fld)
+            macromolecule (str): name of the receptor (default: molecule.pdbqt)
+
+        Returns:
+            None
+
+        """
         if map_types is None:
             map_types = self._maps.keys()
         elif not isinstance(map_types, (list, tuple)):
@@ -361,22 +617,22 @@ class Map():
 
         for map_type in map_types:
             if map_type in self._maps:
-                filename = '%s.map' % map_type
+                filename = "%s.map" % map_type
                 if prefix is not None:
-                    filename = '%s.%s' % (prefix, filename)
+                    filename = "%s.%s" % (prefix, filename)
 
-                with open(filename, 'w') as w:
+                with open(filename, "w") as w:
                     npts = np.array([n if not n % 2 else n - 1 for n in self._npts])
 
                     # Write header
-                    w.write('GRID_PARAMETER_FILE %s\n' % grid_parameter_file)
-                    w.write('GRID_DATA_FILE %s\n' % grid_data_file)
-                    w.write('MACROMOLECULE %s\n' % macromolecule)
-                    w.write('SPACING %s\n' % self._spacing)
-                    w.write('NELEMENTS %s\n' % ' '.join(npts.astype(str)))
-                    w.write('CENTER %s\n' % ' '.join(self._center.astype(str)))
+                    w.write("GRID_PARAMETER_FILE %s\n" % grid_parameter_file)
+                    w.write("GRID_DATA_FILE %s\n" % grid_data_file)
+                    w.write("MACROMOLECULE %s\n" % macromolecule)
+                    w.write("SPACING %s\n" % self._spacing)
+                    w.write("NELEMENTS %s\n" % " ".join(npts.astype(str)))
+                    w.write("CENTER %s\n" % " ".join(self._center.astype(str)))
                     # Write grid (swap x and z axis before)
                     m = np.swapaxes(self._maps[map_type], 0, 2).flatten()
-                    w.write('\n'.join(m.astype(str)))
+                    w.write("\n".join(m.astype(str)))
             else:
-                print 'Error: Map %s does not exist.' % map_type
+                print "Error: Map %s does not exist." % map_type
