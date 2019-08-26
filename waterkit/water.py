@@ -19,29 +19,41 @@ from molecule import Molecule
 
 class Water(Molecule):
 
-    def __init__(self, xyz, atom_type="W", partial_charge=0., anchor_xyz=None, vector_xyz=None, anchor_type=None):
+    def __init__(self, xyz, atom_type="W", partial_charge=0., hb_anchor=None, hb_vector=None, hb_type=None):
         """Initialize a Water object.
     
         Args:
-            xyz (array_like): 3d coordinates
+            xyz (array_like): 3d coordinates of the oxygen water molecule
             atom_type (str): atom types of the spherical water molecule (default: OW)
             partial_charge (float): partial charge of the spherical water molecule (default: -0.834)
-            anchor_xyz (array_like): 3d coordinates of the anchor point
-            vector_xyz (array_like): 3d coordinates of HB vector
-            anchor_type (str): type of anchor point (acceptor or donor)
+            hb_anchor (array_like): 3d coordinates of the HB anchor (Default: [0, 0, 0])
+            hb_vector (array_like): 3d coordinates of the HB vector (Default:)
+            hb_type (str): type of the HB anchor (acceptor or donor)
 
         """
         self.atoms = None
         self.hydrogen_bonds = None
         self.rotatable_bonds = None
-        self._anchor = None
-        self._anchor_type = anchor_type
+
+        if hb_anchor is None:
+            self.hb_anchor = np.array([0, 0, 0])
+        else:
+            self.hb_anchor = hb_anchor
+
+        # If no hb vector is specified, the water molecule
+        # is optimally placed on the hb anchor
+        if hb_vector is None:
+            self.hb_vector = xyz
+        else:
+            self.hb_vector = hb_vector
+
+        if hb_type is None:
+            self.hb_type = "acceptor"
+        else:
+            self.hb_type = hb_type
 
         # Add the oxygen atom
         self._add_atom(xyz, atom_type, partial_charge)
-        # Store all the informations about the anchoring
-        if all(v is not None for v in [anchor_xyz, vector_xyz]):
-            self._set_anchor(anchor_xyz, vector_xyz)
 
     @classmethod
     def from_file(cls, fname, atom_type="W", partial_charge=0.):
@@ -117,12 +129,6 @@ class Water(Molecule):
         else:
             return False
 
-    def _set_anchor(self, anchor_xyz, vector_xyz):
-        """Add information about the anchoring."""
-        # IDEA: This info should be accessible with attributes hba, hbv and type
-        anchor_vector = anchor_xyz + utils.normalize(utils.vector(vector_xyz, anchor_xyz))
-        self._anchor = np.array([anchor_xyz, anchor_vector])
-
     def is_water(self):
         """Tell if it is a water or not."""
         return True
@@ -185,15 +191,6 @@ class Water(Molecule):
             print "Error: water model %s unknown." % water_model
             return False
 
-        """ If no anchor information was defined, we define
-        it as a donor water molecule with the first hydrogen atom
-        pointing to the a random direction.
-        """
-        if self._anchor_type is None:
-            self._anchor_type = "acceptor"
-        if self._anchor is None:
-            self._anchor = [np.random.rand(3), None]
-
         if water_model == "tip3p":
             distances = [0.9572, 0.9572, 1.0]
             angles = [104.52, 127.74]
@@ -202,7 +199,7 @@ class Water(Molecule):
             angles = [104.52, 109.47]
 
         # If donor, we started by building the lone-pairs first
-        if self._anchor_type == "donor":
+        if self.hb_type == "donor":
             distances.reverse()
             angles.reverse()
 
@@ -210,7 +207,7 @@ class Water(Molecule):
 
         # For both TIP3P and TIP5P
         # Vector between O and the Acceptor/Donor atom
-        v = utils.vector(oxygen_xyz, self._anchor[0])
+        v = utils.vector(oxygen_xyz, self.hb_anchor)
         v = utils.normalize(v)
         # Compute a vector perpendicular to v
         p = oxygen_xyz + utils.get_perpendicular_vector(v)
@@ -220,7 +217,7 @@ class Water(Molecule):
         a2_xyz = utils.rotate_point(a1_xyz, oxygen_xyz, p, np.radians(angles[0]))
         a2_xyz = utils.resize_vector(a2_xyz, distances[1], oxygen_xyz)
 
-        if water_model == "tip3p" and self._anchor_type == "donor":
+        if water_model == "tip3p" and self.hb_type == "donor":
             # Build the second H/Lp using the perpendicular vector p
             a3_xyz = utils.rotate_point(a2_xyz, oxygen_xyz, p, np.radians(angles[1]))
             a3_xyz = utils.resize_vector(a3_xyz, distances[2], oxygen_xyz)
@@ -252,13 +249,13 @@ class Water(Molecule):
 
         # Select the right atom to add and their order
         if water_model == "tip3p":
-            if self._anchor_type == "acceptor":
+            if self.hb_type == "acceptor":
                 atoms = [a1_xyz, a2_xyz]
             else:
                 atoms = [a2_xyz, a3_xyz]
         elif water_model == "tip5p":
             # Order them: H, H, Lp, Lp, we want hydrogen atoms first
-            if self._anchor_type == "acceptor":
+            if self.hb_type == "acceptor":
                 atoms = [a1_xyz, a2_xyz, a3_xyz, a4_xyz]
             else:
                 atoms = [a3_xyz, a4_xyz, a1_xyz, a2_xyz]
