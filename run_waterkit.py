@@ -20,8 +20,6 @@ def cmd_lineparser():
     parser = argparse.ArgumentParser(description="waterkit")
     parser.add_argument("-i", "--mol", dest="mol_file", required=True,
                         action="store", help="receptor file")
-    parser.add_argument("-x", "--wat", dest="wat_file", default=None,
-                        action="store", help="xray water file")
     parser.add_argument("-m", "--fld", dest="fld_file", required=True,
                         action="store", help="autodock fld file")
     parser.add_argument("-l", "--layer", dest="n_layer", default=0, type=int,
@@ -33,7 +31,7 @@ def cmd_lineparser():
                         help="how water molecules are choosed")
     parser.add_argument("-w", "--water", dest="water_model", default="tip3p",
                         choices=["tip3p", "tip5p"], action="store",
-                        help="how water molecules are choosed")
+                        help="water model used (tip3p or tip5p)")
     parser.add_argument("-o", "--output", dest="output_prefix", default="water",
                         action="store", help="prefix add to output files")
     return parser.parse_args()

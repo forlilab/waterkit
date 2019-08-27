@@ -301,7 +301,7 @@ class WaterSampler():
 
         # Fire off AutoGrid
         water_map = self._ag.run(receptor_file, ligand_types, center, npts, 
-                           spacing, smooth, dielectric, clean=True)
+                                 spacing, smooth, dielectric, clean=True)
 
         # For the TIP3P and TIP5P models
         water_map.apply_operation_on_maps(hw_type, e_type, "x * %f" % hw_q)
@@ -325,6 +325,8 @@ class WaterSampler():
         spacing = self._ad_map._spacing
         boxsize = np.array([8, 8, 8])
         npts = np.round(boxsize / spacing).astype(np.int)
+
+        print self._temperature
 
         if self._how == "best":
             add_noise = False
