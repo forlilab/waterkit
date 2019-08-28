@@ -183,6 +183,7 @@ class WaterSampler():
             is_close = ad_map.is_close_to_edge(coord_sphere, from_edges)
             coord_sphere = coord_sphere[~is_close]
 
+        # It is mandatory to normalize the hb_vector, otherwise you don't get the angle right
         hb_vector = water.hb_anchor + utils.normalize(utils.vector(water.hb_vector, water.hb_anchor))
         angle_sphere = utils.get_angle(coord_sphere, water.hb_anchor, hb_vector)
 

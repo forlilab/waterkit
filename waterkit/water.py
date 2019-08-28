@@ -27,7 +27,7 @@ class Water(Molecule):
             atom_type (str): atom types of the spherical water molecule (default: OW)
             partial_charge (float): partial charge of the spherical water molecule (default: -0.834)
             hb_anchor (array_like): 3d coordinates of the HB anchor (Default: [0, 0, 0])
-            hb_vector (array_like): 3d coordinates of the HB vector (Default:)
+            hb_vector (array_like): 3d coordinates of the HB vector (Default: xyz variable)
             hb_type (str): type of the HB anchor (acceptor or donor)
 
         """
