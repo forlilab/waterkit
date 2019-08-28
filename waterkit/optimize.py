@@ -183,7 +183,8 @@ class WaterSampler():
             is_close = ad_map.is_close_to_edge(coord_sphere, from_edges)
             coord_sphere = coord_sphere[~is_close]
 
-        angle_sphere = utils.get_angle(coord_sphere, water.hb_anchor, water.hb_vector)
+        hb_vector = water.hb_anchor + utils.normalize(utils.vector(water.hb_vector, water.hb_anchor))
+        angle_sphere = utils.get_angle(coord_sphere, water.hb_anchor, hb_vector)
 
         coord_sphere = coord_sphere[angle_sphere >= self._angle]
         energy_sphere = ad_map.energy_coordinates(coord_sphere, atom_type=oxygen_type)
@@ -325,8 +326,6 @@ class WaterSampler():
         spacing = self._ad_map._spacing
         boxsize = np.array([8, 8, 8])
         npts = np.round(boxsize / spacing).astype(np.int)
-
-        print self._temperature
 
         if self._how == "best":
             add_noise = False
