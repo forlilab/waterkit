@@ -1,3 +1,5 @@
+[![made-with-python](https://img.shields.io/badge/Made%20with-Python-1f425f.svg)](https://www.python.org/) [![GitHub license](https://img.shields.io/github/license/Naereen/StrapDown.js.svg)](https://github.com/Naereen/StrapDown.js/blob/master/LICENSE) [![PyPI version fury.io](https://img.shields.io/badge/version-0.3-green.svg)](https://pypi.python.org/pypi/ansicolortags/) 
+
 # Waterkit
 Tool to predict water molecules placement and energy in ligand binding sites
 
@@ -107,3 +109,6 @@ tleap -s -f protein.leap.in > protein.leap.out
 run_gist -i protein_system.prmtop -t protein.nc -l ligand.pdb -g 48 48 48 -f 10000
 ```
 The PDB coordinate file ```ligand.pdb``` is a simply PDB file containing a dummy atom that will define the center of the box. Usually you would choose the same parameters as the AutoGrid maps (```npts``` and ```gridcenter```). Unlike AutoGrid, the default the grid spacing in SSTMap is 0.5 A, so you will have to choose box dimension accordingly to match the Autogrid maps dimensions.
+
+### ????
+### PROFIT!!!
