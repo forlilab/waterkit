@@ -152,7 +152,7 @@ atom_par Na   3.74  0.003 00.0000   0.00000  0.0  0.0  0  -1  -1  4 # Na+ Aqvist
 atom_par K    5.32  0.000 00.0000   0.00000  0.0  0.0  0  -1  -1  4 # K+ Aqvist JPC 1990,94,8021. (adapted)
 atom_par Cl   4.94  0.100 00.0000   0.00000  0.0  0.0  0  -1  -1  4 # Cl- Smith, JCP 1994,100:5,3757.
 # Soft Sticky Dipole (SSD) model
-atom_par OD   3.01  3.661 00.0000   0.00000  0.0  0.0  0  -1  -1  2 # Non H-bonding spherical water model
+atom_par OD   2.80  3.661 00.0000   0.00000  0.0  0.0  0  -1  -1  2 # Non H-bonding spherical water model
 # TIP3P model
 atom_par OW   3.54  0.152 00.0000   0.00000  0.0  0.0  0  -1  -1  2 # Non H-bonding TIP3P water model
 atom_par HW   0.00  0.000 00.0000   0.00000  0.0  0.0  0  -1  -1  3 # Non H-bonding TIP3P water model
