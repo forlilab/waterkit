@@ -99,7 +99,7 @@ seq -f "water_%05g" 1 10000 | parallel --jobs 16 python run_waterkit.py -i prote
 1. Create Amber trajectory with `make_trajectory.py` script
 ```bash
 python make_trajectory.py -r protein_prepared.pdb -w traj -o protein
-tleap -s -f protein.tleap.in > protein.tleap.out
+tleap -s -f protein.leap.in > protein.leap.out
 ```
 
 2. Run GIST
