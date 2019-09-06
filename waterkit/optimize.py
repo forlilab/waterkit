@@ -8,14 +8,16 @@
 
 import imp
 import os
-import uuid
+import time
 
 import numpy as np
 import pandas as pd
 from scipy.cluster.hierarchy import linkage, fcluster
+from scipy.spatial.transform import Rotation
 
 import utils
-from autogrid import AutoGrid
+from autodock_map import Map
+from molecule import Molecule
 from forcefield import AutoDockForceField
 
 
@@ -37,6 +39,9 @@ class WaterSampler():
         # Boltzmann constant (kcal/mol)
         self._kb = 0.0019872041
 
+        d = imp.find_module("waterkit")[1]
+
+        # Water orientations set
         """ Load pre-generated water molecules (only hydrogens)
         We will use those to sample the orientation."""
         n_atoms = 2
@@ -45,40 +50,33 @@ class WaterSampler():
             usecols += [6, 7, 8, 9, 10, 11]
             n_atoms += 2
 
-        d = imp.find_module("waterkit")[1]
         w_orientation_file = os.path.join(d, "data/water_orientations.txt")
         water_orientations = np.loadtxt(w_orientation_file, usecols=usecols)
         shape = (water_orientations.shape[0], n_atoms, 3)
         self._water_orientations = water_orientations.reshape(shape)
 
-        # AutoGrid initialization and ADFF
-        ad_parameters_file = os.path.join(d, "data/AD4_parameters.dat")
-        #gpf_file = os.path.join(d, "data/nbp_r_eps.gpf")
-        #self._ag = AutoGrid(param_file=ad_parameters_file, gpf_file=gpf_file)
-        self._ag = AutoGrid(param_file=ad_parameters_file)
-        self._adff = water_box._adff
+        # Water map reference
+        if self._water_model == "tip3p":
+            atom_types = ["SW", "OW", "HW"]
+            map_files = ["data/water/tip3p/water_VW.map",
+                         "data/water/tip3p/water_OW.map",
+                         "data/water/tip3p/water_HW.map"]
+            map_files = [os.path.join(d, map_file) for map_file in map_files]
+            water_ref_file = os.path.join(d, "data/water/tip3p/water.pdbqt")
+        elif self._water_model == "tip5p":
+            atom_types = ["SW", "OT", "HT", "LP"]
+            map_files = ["data/water/tip5p/water_VW.map",
+                         "data/water/tip5p/water_OT.map",
+                         "data/water/tip5p/water_HT.map",
+                         "data/water/tip5p/water_LP.map"]
+            map_files = [os.path.join(d, map_file) for map_file in map_files]
+            water_ref_file = os.path.join(d, "data/water/tip5p/water.pdbqt")
 
-    def _boltzmann_choice(self, energies, size=None):
-        """Choose state i based on boltzmann probability."""
-        energies = np.array(energies)
-        
-        d = np.exp(-energies / (self._kb * self._temperature))
-        d_sum = np.sum(d)
+        self._water_map = Map(map_files, atom_types)
+        self._water_ref = Molecule.from_file(water_ref_file)
 
-        if d_sum > 0:
-            p = d / np.sum(d)
-        else:
-            # It means that energies are too high
-            return None
-
-        if size > 1:
-            # If some prob. in p are zero, ValueError: size of nonzero p is lower than size
-            non_zero = np.count_nonzero(p)
-            size = non_zero if non_zero < size else size
-
-        i = np.random.choice(d.shape[0], size, False, p)
-        
-        return i
+        # Pairwise forcefield
+        #self._adff = water_box._adff
 
     def _optimize_disordered_waters(self, waters, connections):
         """Optimize water molecules on rotatable bonds."""
@@ -147,7 +145,7 @@ class WaterSampler():
                 if self._how == "best":
                     i = np.argmin(energies)
                 elif self._how == "boltzmann":
-                    i = self._boltzmann_choice(energies)
+                    i = utils.boltzmann_choices(energies, self._temperature)
 
                 disordered_energies.append(energies[i])
 
@@ -206,7 +204,7 @@ class WaterSampler():
         if self._how == "best":
             order = np.argsort(energies)
         elif self._how == "boltzmann":
-            order = self._boltzmann_choice(energies, len(energies))
+            order = utils.boltzmann_choices(energies, self._temperature, len(energies))
 
         return order
 
@@ -224,7 +222,7 @@ class WaterSampler():
             if self._how == "best":
                 idx = energy_sphere.argmin()
             elif self._how == "boltzmann":
-                idx = self._boltzmann_choice(energy_sphere)
+                idx = utils.boltzmann_choices(energy_sphere, self._temperature)
 
             if idx is not None:
                 new_coord = coord_sphere[idx]
@@ -261,7 +259,7 @@ class WaterSampler():
         if self._how == "best":
             idx = np.argmin(energies)
         elif self._how == "boltzmann":
-            idx = self._boltzmann_choice(energies)
+            idx = utils.boltzmann_choices(energies, self._temperature)
 
         if idx is not None:
             # Update the coordinates with the selected orientation, except oxygen (i + 2)
@@ -273,60 +271,70 @@ class WaterSampler():
         """If we do not find anything, at least we return the energy
         of the current water molecule. """
         return ad_map.energy(water.atom_informations(), ignore_electrostatic=True, 
-                                   ignore_desolvation=True)
+                             ignore_desolvation=True)
 
-    def _update_maps(self, receptor_file, center, npts):
-        dielectric = self._water_box._dielectric
-        smooth = self._water_box._smooth
+    def _update_maps(self, water):
+
+        """ If we choose the closest point in the grid and not the coordinates of the
+        oxygen as the center of the grid, it is because we want to avoid any edge effect
+        when we will combine the small box to the bigger box, and also the energy is
+        not interpolated but it is coming from the grid directly.
+        """
         spacing = self._ad_map._spacing
+        ad_map = self._ad_map
+        boxsize = np.array([8, 8, 8])
+        npts = np.round(boxsize / spacing).astype(np.int) // 2 * 2 + 1
+        water_xyz = water.coordinates()
 
-        e_type = "Electrostatics"
-        sw_type = "OD"
-        atom_types_replaced = [sw_type]
-        ligand_types = [sw_type]
+        # The center is the closest grid point from the water molecule
+        center_xyz = self._ad_map.neighbor_points(water.coordinates(1)[0], spacing)[0]
+        center_index = self._ad_map._cartesian_to_index(center_xyz)
 
+        # Get grid indices in the receptor box
+        # Necessary, in order to add the water map to the receptor map
+        size_half_box = ((npts - 1) / 2)
+        i_min = np.clip(center_index - size_half_box, [0, 0, 0], ad_map._npts)
+        i_max = np.clip(center_index + size_half_box + 1, [0, 0, 0], ad_map._npts)
+        indices = np.index_exp[i_min[0]:i_max[0], i_min[1]:i_max[1], i_min[2]:i_max[2]]
+
+        # Convert the indices in xyz coordinates, and translate it in order
+        # that the water molecule is at the origin
+        x = np.arange(i_min[0], i_max[0])
+        y = np.arange(i_min[1], i_max[1])
+        z = np.arange(i_min[2], i_max[2])
+        X, Y, Z = np.meshgrid(x, y, z)
+        grid_index = np.stack((X.ravel(), Y.ravel(), Z.ravel()), axis=-1)
+        grid_xyz = ad_map._index_to_cartesian(grid_index)
+        grid_xyz -= water_xyz[0]
+
+        # Get the quaternion between the current water and the water reference
+        # The water is translating to the origin before
+        q = utils.quaternion_rotate(water_xyz - water_xyz[0], self._water_ref.coordinates())
+
+        # Rotate the grid!
+        r = Rotation.from_quat(q)
+        rotated_grid_xyz = r.apply(grid_xyz)
+
+        atom_types = ["SW"]
         if self._water_model == "tip3p":
-            ow_type = "OW"
-            hw_type = "HW"
-            ow_q = -0.834
-            hw_q = 0.417
-            atom_types_replaced += [ow_type, hw_type]
-            ligand_types += [ow_type]
+            atom_types += ["OW", "HW"]
         elif self._water_model == "tip5p":
-            ot_type = "OT"
-            hw_type = "HT"
-            lw_type = "LP"
-            hw_q = 0.241
-            lw_q = -0.241
-            atom_types_replaced += [ot_type, hw_type, lw_type]
-            ligand_types += [ot_type]
+            atom_types += ["OT", "HT", "LP"]
 
-        # Fire off AutoGrid
-        water_map = self._ag.run(receptor_file, ligand_types, center, npts, 
-                                 spacing, smooth, dielectric, clean=True)
+        # Interpolation baby!
+        for atom_type in atom_types:
+            energy = self._water_map.energy_coordinates(rotated_grid_xyz, atom_type)
+            energy = np.swapaxes(energy.reshape((y.shape[0], x.shape[0], z.shape[0])), 0, 1)
 
-        # For the TIP3P and TIP5P models
-        water_map.apply_operation_on_maps(hw_type, e_type, "x * %f" % hw_q)
-        if self._water_model == "tip3p":
-            water_map.apply_operation_on_maps(e_type, e_type, "x * %f" % ow_q)
-            water_map.combine(ow_type, [ow_type, e_type], how="add")
-        elif self._water_model == "tip5p":
-            water_map.apply_operation_on_maps(lw_type, e_type, "x * %f" % lw_q)
+            ad_map._maps[atom_type][indices] += energy
+            ad_map._maps_interpn[atom_type] = ad_map._generate_affinity_map_interpn(ad_map._maps[atom_type])
 
-        # And we update the receptor map
-        for atom_type in atom_types_replaced:
-            self._ad_map.combine(atom_type, atom_type, "add", water_map)
-
-    def sample_grid(self, waters, connections=None, opt_disordered=True):
+    def sample_grid(self, waters, connections=None, tmp_dir=".", opt_disordered=True):
         """Optimize position of water molecules."""
-        shell_id = self._water_box.number_of_shells()
-
         df = {}
         data = []
         to_be_removed = []
-        spacing = self._ad_map._spacing
-        boxsize = np.array([8, 8, 8])
-        npts = np.round(boxsize / spacing).astype(np.int)
+        shell_id = self._water_box.number_of_shells()
 
         if self._how == "best":
             add_noise = False
@@ -340,10 +348,6 @@ class WaterSampler():
         # The placement order is based on the best energy around each hydrogen anchor point
         water_orders = self._optimize_placement_order_grid(waters, from_edges=1.)
         to_be_removed.extend(set(np.arange(len(waters))) - set(water_orders))
-
-        # We do not want name overlap between different replicates
-        short_uuid = str(uuid.uuid4())[0:8]
-        water_file = "%s.pdbqt" % short_uuid
 
         """ And now we optimize all water individually. All the
         water molecules are outside the box or with a positive
@@ -365,29 +369,20 @@ class WaterSampler():
                 # Optimize the orientation
                 energy_orientation = self._optimize_orientation_grid(water)
 
+                #if energy_orientation > self._energy_cutoff:
+                #    delta_e = np.min([1.0, np.exp(-energy_orientation / (self._kb * self._temperature))])
+                #    p = np.random.rand()
+
                 # The last great energy filter
-                if energy_orientation < self._energy_cutoff:
+                # Accept the water molecule if energy is favorable
+                # Or apply Metropolis criterion for bad orientation only (energy > energy_cutoff)
+                if energy_orientation < self._energy_cutoff: # or p < delta_e:
                     data.append((shell_id + 1, energy_position, energy_orientation))
-
-                    """ If we choose the closest point in the grid and not the coordinates of the
-                    oxygen as the center of the grid, it is because we want to avoid any edge effect
-                    when we will combine the small box to the bigger box, and also the energy is
-                    not interpolated but it is coming from the grid directly.
-                    """
-                    center = self._ad_map.neighbor_points(water.coordinates(1)[0], spacing)[0]
-
-                    water.to_file(water_file, "pdbqt")
-                    self._update_maps(water_file, center, npts)
+                    self._update_maps(water)
                 else:
                     to_be_removed.append(i)
             else:
                 to_be_removed.append(i)
-
-        try:
-            os.remove(water_file)
-        except OSError:
-            # It means that no water was added during the sampling
-            pass
 
         # Keep only the good waters
         waters = [waters[i] for i in water_orders if not i in to_be_removed]

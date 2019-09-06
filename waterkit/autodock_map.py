@@ -242,6 +242,29 @@ class Map():
             print "Error: map %s already exists." % name
             return False
 
+    def add_map(self, name, new_map):
+        """Add a map
+        
+        Args:
+            name (str): name of the new map
+            grid (array_like): grid
+
+        """
+        if not isinstance(new_map, np.ndarray):
+            new_map = np.array(new_map)
+
+        if not np.array_equal(new_map.shape, self._npts):
+            print "Error: new grid does not have the same dimension (%s != %s)" % (new_map.shape, self._npts)
+            return False
+
+        if not name in self._maps:
+            self._maps[name] = new_map
+            self._maps_interpn[name] = self._generate_affinity_map_interpn(new_map)
+            return True
+        else:
+            print "Error: map %s already exists." % name
+            return False
+
     def atoms_in_map(self, molecule):
         """List of index of all the atoms in the map.
 

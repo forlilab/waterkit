@@ -33,7 +33,7 @@ class AutoGrid():
         """
         self._exec_path = exec_path
         self._param_file = param_file
-        
+
         if gpf_file is not None:
             self._nbp_r_eps = self._load_nbp_r_eps_from_gpf(gpf_file)
         else:
@@ -81,32 +81,38 @@ class AutoGrid():
         if not isinstance(atom_types, (list, tuple)):
             atom_types = [atom_types]
 
-        receptor = Molecule.from_file(receptor_file, guess_hydrogen_bonds=False,
-                                      guess_disordered_hydrogens=False)
+        receptor = Molecule.from_file(receptor_file, False, False)
         receptor_types = set(receptor.atom_types())
-        receptor_name = receptor_file.split("/")[-1].split(".")[0]
+
+        receptor_dir, receptor_filename = os.path.split(receptor_file)
+        receptor_name = receptor_filename.split(".")[0]
+
+        gpf_file = os.path.join(receptor_dir, "%s.gpf" % receptor_name)
+        glg_file = os.path.join(receptor_dir, "%s.glg" % receptor_name)
+        fld_file = os.path.join(receptor_dir, "%s_maps.fld" % receptor_name)
+        xyz_file = os.path.join(receptor_dir, "%s_maps.xyz" % receptor_name)
+        map_files = [os.path.join(receptor_dir, "%s.%s.map" % (receptor_name, t)) for t in atom_types]
+        e_file = os.path.join(receptor_dir, "%s.e.map" % receptor_name)
+        d_file = os.path.join(receptor_dir, "%s.d.map" % receptor_name)
 
         ag_str = "npts %d %d %d\n" % (npts[0], npts[1], npts[2])
         ag_str += "parameter_file %s\n" % self._param_file
-        ag_str += "gridfld %s_maps.fld\n" % receptor_name
+        ag_str += "gridfld %s\n" % fld_file
         ag_str += "spacing %.3f\n" % spacing
         ag_str += "receptor_types " + " ".join(receptor_types) + "\n"
         ag_str += "ligand_types " + " ".join(atom_types) + "\n"
         ag_str += "receptor %s\n" % receptor_file
         ag_str += "gridcenter %.3f %.3f %.3f\n" % (center[0], center[1], center[2])
         ag_str += "smooth %.3f\n" % smooth
-        for atom_type in atom_types:
-            ag_str += "map %s.%s.map\n" % (receptor_name, atom_type)
-        ag_str += "elecmap %s.e.map\n" % receptor_name
-        ag_str += "dsolvmap %s.d.map\n" % receptor_name
+        for map_file in map_files:
+            ag_str += "map %s\n" % map_file
+        ag_str += "elecmap %s\n" % e_file
+        ag_str += "dsolvmap %s\n" % d_file
         ag_str += "dielectric %.3f\n" % dielectric
         if self._nbp_r_eps is not None:
             for nbp in self._nbp_r_eps:
                 ag_str += "nbp_r_eps %.3f %.3f %d %d %s %s\n" % (nbp[0], nbp[1], nbp[2],
                                                                  nbp[3], nbp[4], nbp[5])
-
-        gpf_file = "%s.gpf" % receptor_name
-        glg_file = "%s.glg" % receptor_name
 
         with open(gpf_file, "w") as w:
             w.write(ag_str)
@@ -114,16 +120,17 @@ class AutoGrid():
         cmd_line = "%s -p %s -l %s" % (self._exec_path, gpf_file, glg_file)
         utils.execute_command(cmd_line)
 
-        ad_map = Map.from_fld("%s_maps.fld" % receptor_name)
+        ad_map = Map.from_fld(os.path.join(receptor_dir, "%s_maps.fld" % receptor_name))
 
         if clean:
-            map_files = glob("%s*.map" % receptor_name)
             for map_file in map_files:
                 os.remove(map_file)
 
-            os.remove("%s_maps.fld" % receptor_name)
-            os.remove("%s_maps.xyz" % receptor_name)
-            os.remove("%s.gpf" % receptor_name)
-            os.remove("%s.glg" % receptor_name)
+            os.remove(e_file)
+            os.remove(d_file)
+            os.remove(fld_file)
+            os.remove(xyz_file)
+            os.remove(gpf_file)
+            os.remove(glg_file)
 
         return ad_map

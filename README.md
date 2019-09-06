@@ -12,7 +12,6 @@ You need, at a minimum (requirements):
 * Scipy
 * AmberTools (protein preparation)
 * ParmED (conversion to PDBQT file)
-* parallel (multicore)
 * mdtraj (SSTMap dependency)
 * SSTMap (solvation calculation)
 * Sphinx (documentation)
@@ -69,11 +68,11 @@ parameter_file AD4_parameters.dat
 gridfld protein_maps.fld
 spacing 0.375
 receptor_types HP HO C3 HC HA O2 C* NA NB C8 CB C CO CN CC H CA O N S CX C2 CR N2 N3 CW CT OH H1 H4 H5
-ligand_types OD OW OT
+ligand_types SW OW OT
 receptor protein_prepared.pdbqt
 gridcenter 0.0 0.0 0.0
 smooth 0
-map protein_OD.map
+map protein_SW.map
 map protein_OW.map
 map protein_OT.map
 elecmap protein_e.map
@@ -93,7 +92,7 @@ autogrid4 -p protein_grid.gpf -l protein_grid.glg
 ```bash
 mkdir traj
 # Generate 10.000 frames using 16 cpus
-seq -f "water_%05g" 1 10000 | parallel --jobs 16 python run_waterkit.py -i protein_prepared.pdbqt -m protein_maps.fld -o traj/{}
+python run_waterkit.py -i protein_prepared.pdbqt -m protein_maps.fld -n 10000 -j 16 -o traj
 ```
 
 ### Run Grid Inhomogeneous Solvation Theory (GIST) with SSTMap

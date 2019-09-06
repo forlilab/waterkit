@@ -239,6 +239,55 @@ def sphere_grid_points(center, spacing, radius, min_radius=0):
     return points_in_sphere
 
 
+def makeW(r1, r2, r3, r4=0):
+    """matrix involved in quaternion rotation
+    
+    source: https://github.com/charnley/rmsd
+    """
+    W = np.asarray([
+        [r4, r3, -r2, r1],
+        [-r3, r4, r1, r2],
+        [r2, -r1, r4, r3],
+        [-r1, -r2, -r3, r4]])
+    return W
+
+
+def makeQ(r1, r2, r3, r4=0):
+    """matrix involved in quaternion rotation
+    
+    source: https://github.com/charnley/rmsd
+    """
+    Q = np.asarray([
+        [r4, -r3, r2, r1],
+        [r3, r4, -r1, r2],
+        [-r2, r1, r4, r3],
+        [-r1, -r2, -r3, r4]])
+    return Q
+
+
+def quaternion_rotate(Y, X):
+    """Calculate the rotation between two set of coordinates
+
+    source: https://github.com/charnley/rmsd
+
+    Args:
+        X (ndarray): (N,D) matrix, where N is points and D is dimension.
+        Y: (ndarray): (N,D) matrix, where N is points and D is dimension.
+
+    Returns:
+        ndarray : quaternion
+    """
+    N = X.shape[0]
+    W = np.asarray([makeW(*Y[k]) for k in range(N)])
+    Q = np.asarray([makeQ(*X[k]) for k in range(N)])
+    Qt_dot_W = np.asarray([np.dot(Q[k].T, W[k]) for k in range(N)])
+    W_minus_Q = np.asarray([W[k] - Q[k] for k in range(N)])
+    A = np.sum(Qt_dot_W, axis=0)
+    eigen = np.linalg.eigh(A)
+    r = eigen[1][:, eigen[0].argmax()]
+    return r
+
+
 def rotate_vector_by_quaternion(v, q):
     """Rotate point using a quaternion."""
     # https://gamedev.stackexchange.com/questions/28395/rotating-vector3-by-a-quaternion
@@ -259,10 +308,12 @@ def shoemake(coordinates):
     return np.dstack((t1 * np.sin(s1), t1 * np.cos(s1), 
                       t2 * np.sin(s2), t2 * np.cos(s2)))[0]
 
+
 def random_quaternion(n=1):
     """Create n random quaternions."""
     u = np.random.random(size=(n, 3))
     return shoemake(u)
+
 
 def execute_command(cmd_line):
     """Simple function to execute bash command."""
@@ -270,3 +321,77 @@ def execute_command(cmd_line):
     p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     output, errors = p.communicate()
     return output, errors
+
+
+def split_list_in_chunks(size, n):
+    return [(l[0], l[-1]) for l in np.array_split(xrange(size), n)]
+
+
+def boltzmann_probabilities(energies, temperature):
+    # Boltzmann constant (kcal/mol)
+    kb = 0.0019872041
+    energies = np.array(energies)
+
+    d = np.exp(-energies / (kb * temperature))
+    d_sum = np.sum(d)
+
+    if d_sum > 0:
+        p = d / d_sum
+    else:
+        # It means that energies are too high
+        return np.zeros(energies.shape[0])
+
+    return p
+
+
+def boltzmann_choices(energies, temperature, size=None):
+    """Choose state i based on boltzmann probability."""
+    p = boltzmann_probabilities(energies, temperature)
+
+    if np.sum(p) == 0.:
+        return None
+
+    if size > 1:
+        # If some prob. in p are zero, ValueError: size of nonzero p is lower than size
+        non_zero = np.count_nonzero(p)
+        size = non_zero if non_zero < size else size
+
+    i = np.random.choice(len(energies), size, False, p)
+
+    return i
+
+
+def prepare_water_map(ad_map, water_model="tip3p"):
+    e_type = "Electrostatics"
+
+    """In TIP3P and TIP5P models, hydrogen atoms and lone-pairs does not
+    have VdW radius, so their interactions with the receptor are purely
+    based on electrostatics. So the HD and Lp maps are just the electrostatic
+    map. Each map is multiplied by the partial charge. So it is just a
+    look-up table to get the energy for each water molecule.
+    """
+    if water_model == "tip3p":
+        ow_type = "OW"
+        hw_type = "HW"
+        ow_q = -0.834
+        hw_q = 0.417
+    elif water_model == "tip5p":
+        ot_type = "OT"
+        hw_type = "HT"
+        lw_type = "LP"
+        hw_q = 0.241
+        lw_q = -0.241
+    else:
+        print "Error: water model %s unknown." % water_model
+        return False
+
+    # For the TIP3P and TIP5P models
+    ad_map.apply_operation_on_maps(hw_type, e_type, "x * %f" % hw_q)
+
+    if water_model == "tip3p":
+        ad_map.apply_operation_on_maps(e_type, e_type, "x * %f" % ow_q)
+        ad_map.combine(ow_type, [ow_type, e_type], how="add")
+    elif water_model == "tip5p":
+        ad_map.apply_operation_on_maps(lw_type, e_type, "x * %f" % lw_q)
+
+    return True

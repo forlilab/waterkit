@@ -29,11 +29,15 @@ def cmd_lineparser():
     parser.add_argument("-c", "--choice", dest="how", default="boltzmann",
                         choices=["best", "boltzmann"], action="store",
                         help="how water molecules are choosed")
+    parser.add_argument("-n", "--n_frames", dest="n_frames", default=1, type=int,
+                        action="store", help="number of frames to generate")
+    parser.add_argument("-j", "--n_jobs", dest="n_jobs", default=1., type=int,
+                        action="store", help="number of jobs to run in parallel")
     parser.add_argument("-w", "--water", dest="water_model", default="tip3p",
                         choices=["tip3p", "tip5p"], action="store",
                         help="water model used (tip3p or tip5p)")
-    parser.add_argument("-o", "--output", dest="output_prefix", default="water",
-                        action="store", help="prefix add to output files")
+    parser.add_argument("-o", "--output", dest="output_dir", default=".",
+                        action="store", help="output directory")
     return parser.parse_args()
 
 
@@ -43,9 +47,11 @@ def main():
     fld_file = args.fld_file
     water_model = args.water_model
     n_layer = args.n_layer
+    n_frames = args.n_frames
+    n_jobs = args.n_jobs
     temperature = args.temperature
     how = args.how
-    output_prefix = args.output_prefix
+    output_dir = args.output_dir
 
     """If the user does not provide any of these elements,
     we take those available per default in waterkit."""
@@ -58,12 +64,8 @@ def main():
     ad_map = Map.from_fld(fld_file)
 
     # Go waterkit!!
-    k = WaterKit()
-    k.hydrate(molecule, ad_map, ad_forcefield, 
-              water_model, how, temperature, n_layer)
-
-    # Write output files
-    k.write_shells(output_prefix, water_model)
+    k = WaterKit(ad_forcefield, water_model, how, temperature, n_layer, n_frames, n_jobs)
+    k.hydrate(molecule, ad_map, output_dir)
 
 if __name__ == "__main__":
     main()

@@ -6,7 +6,9 @@
 # Class to manage water box
 #
 
+import os
 import copy
+from string import ascii_uppercase
 
 import numpy as np
 import openbabel as ob
@@ -35,7 +37,7 @@ class WaterBox():
         columns = ["molecule_i", "atom_i"]
         self.df["kdtree_relations"] = pd.DataFrame(columns=columns)
 
-        self._add_map(ad_map)
+        self.map = ad_map.copy()
         self._add_receptor(receptor)
 
         # Forcefields, forcefield parameters and water model
@@ -50,45 +52,6 @@ class WaterBox():
     def copy(self):
         """Return deepcopy of WaterBox."""
         return copy.deepcopy(self)
-
-    def _add_map(self, ad_map):
-        """Add the receptor and the corresponding ad_map to the waterbox."""
-        self.map = ad_map.copy()
-
-        e_type = "Electrostatics"
-        sw_type = "OD"
-
-        """In TIP3P and TIP5P models, hydrogen atoms and lone-pairs does not
-        have VdW radius, so their interactions with the receptor are purely
-        based on electrostatics. So the HD and Lp maps are just the electrostatic 
-        map. Each map is multiplied by the partial charge. So it is just a
-        look-up table to get the energy for each water molecule.
-        """
-        if self._water_model == "tip3p":
-            ow_type = "OW"
-            hw_type = "HW"
-            ow_q = -0.834
-            hw_q = 0.417
-        elif self._water_model == "tip5p":
-            ot_type = "OT"
-            hw_type = "HT"
-            lw_type = "LP"
-            hw_q = 0.241
-            lw_q = -0.241
-        else:
-            print "Error: water model %s unknown." % self._water_model
-            return False
-
-        # For the TIP3P and TIP5P models
-        self.map.apply_operation_on_maps(hw_type, e_type, "x * %f" % hw_q)
-
-        if self._water_model == "tip3p":
-            self.map.apply_operation_on_maps(e_type, e_type, "x * %f" % ow_q)
-            self.map.combine(ow_type, [ow_type, e_type], how="add")
-        elif self._water_model == "tip5p":
-            self.map.apply_operation_on_maps(lw_type, e_type, "x * %f" % lw_q)
-
-        return True
 
     def _add_receptor(self, receptor):
         """Add the receptor and the corresponding ad_map to the waterbox."""
@@ -346,12 +309,17 @@ class WaterBox():
             bool: True if water molecules were added or False otherwise
 
         """
-        type_sw = "OD"
+        sw_type = "SW"
         partial_charge = 0.0
         shell_id = self.number_of_shells()
         molecules = self.molecules_in_shell(shell_id)
 
-        waters, connections = self._place_optimal_spherical_waters(molecules, type_sw, partial_charge)
+        # If multiple instances of WaterBox are running in parallel
+        # we might have end up with the same result. So we force numpy to
+        # generate different random numbers
+        np.random.seed(map(ord, os.urandom(10)))
+
+        waters, connections = self._place_optimal_spherical_waters(molecules, sw_type, partial_charge)
 
         # Only the receptor contains disordered hydrogens
         if shell_id == 0:
@@ -372,44 +340,58 @@ class WaterBox():
         else:
             return False
 
-    def to_pdbqt(self, fname):
-        """Write all the content of the water box in a PDBQT file.
+    def to_pdb(self, fname, water_model="tip3p", include_receptor=True):
+        """Write all the content of the water box in a PDB file.
 
-        We cannot use OpenBabel to write the PDBQT file of water molecules 
-        because it is using the default AutoDock atom types (OA, HD, ...).
-        But it is used for the receptor.
+        We cannot use OpenBabel to write the PDB file of water molecules
+        because it is always changing the atom types...
 
         Args:
             fname (str): name of the output file
+            water_model (str): water model we want to use to export the water (default: tip3p)
+            include_receptor (bool): include or exclude the receptor (default: True)
 
         Returns:
             None
 
         """
+        i = 1
+        j = 1
         output_str = ""
-        pdbqt_str = "ATOM  %5d %-4s %-3s  %4d    %8.3f%8.3f%8.3f  0.00 0.00     %6.3f %-2s\n"
+        pdb_str = "ATOM  %5d  %-4s%-3s%2s%4d    %8.3f%8.3f%8.3f  1.00  1.00          %2s\n"
 
-        atoms = self.molecules[0].atoms
-        for atom in atoms:
-            x, y, z = atom["xyz"]
-            output_str += pdbqt_str % (atom["i"], atom["name"], atom["resname"], atom["resnum"],
-                                       x, y, z, atom["q"], atom["t"])
+        shell_id = self.number_of_shells()
+        water_shells = [self.molecules_in_shell(i) for i in range(1, shell_id + 1)]
 
-        # Get the index of the nex atom and residue
-        i = atom["i"] + 1
-        j = atom["resnum"] + 1
-
-        # And we do it manually for the water molecules
-        for key in self.molecules.keys()[1:]:
-            atoms = self.molecules[key].atoms
-
+        if include_receptor:
+            atoms = self.molecules[0].atoms
             for atom in atoms:
                 x, y, z = atom["xyz"]
-                output_str += pdbqt_str % (i, atom["name"], atom["resname"], j,
-                                           x, y, z, atom["q"], atom["t"])
-                i += 1
+                output_str += pdb_str % (atom["i"], atom["name"], atom["resname"], "A", atom["resnum"],
+                                         x, y, z, atom["t"])
 
-            j += 1
+            # Get the index of the nex atom and residue
+            i = atom["i"] + 1
+            j = atom["resnum"] + 1
+
+        for water_shell, chain in zip(water_shells, ascii_uppercase[1:]):
+            j = 1
+
+            for water in water_shell:
+                c = water.coordinates()
+
+                output_str += pdb_str % (i, "O", "HOH", chain, j, c[0][0], c[0][1], c[0][2], "O")
+                output_str += pdb_str % (i + 1, "H1", "HOH", chain, j, c[1][0], c[1][1], c[1][2], "H")
+                output_str += pdb_str % (i + 2, "H2", "HOH", chain, j, c[2][0], c[2][1], c[2][2], "H")
+                i += 2
+
+                if water_model == 'tip5p':
+                    output_str += pdb_str % (i + 3, "L1", "HOH", chain, j, c[3][0], c[3][1], c[3][2], "L")
+                    output_str += pdb_str % (i + 4, "L2", "HOH", chain, j, c[4][0], c[4][1], c[4][2], "L")
+                    i += 2
+
+                i += 1
+                j += 1
 
         # ... but we add it again at the end
         output_str += "TER\n"
