@@ -57,7 +57,7 @@ $ python amber2pdbqt.py -t prmtop -c rst7 -o protein
 
 The following protein coordinate files will be generated: ```protein_prepared.pdbqt``` and ```protein_prepared.pdb```. The PDBQT file will be used by WaterKit and the PDB file will be used to create the trajectory file at the end.
 
-### Grid calculation with autogrid4
+### Sample water molecule positions with WaterKit
 
 1. Create Grid Protein File (GPF)
 ```
@@ -81,13 +81,12 @@ dielectric 1
 
 Depending of your system, you would have at least to modify the grid parameters (```npts```, ```gridcenter```) and the receptor atom types list (```receptor_types```). An example of GPF file (```protein_grid.gpf```) as well as the AutoDock parameters (```AD4_parameters.dat```) are provided. Those files are located in the ```data``` waterkit module's directory.
 
-2. Run autogrid4
+2. Pre-calculate grid maps with autogrid4
 ```bash
 $ autogrid4 -p protein_grid.gpf -l protein_grid.glg
 ```
 
-### Sample water molecule positions with WaterKit
-
+3. Run WaterKit
 ```bash
 $ mkdir traj
 # Generate 10.000 frames using 16 cpus
