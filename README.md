@@ -10,10 +10,9 @@ You need, at a minimum (requirements):
 * OpenBabel
 * Numpy 
 * Scipy
-* AmberTools (protein preparation)
-* ParmED (conversion to PDBQT file)
-* mdtraj (SSTMap dependency)
-* SSTMap (solvation calculation)
+* Pandas
+* AmberTools (protein preparation and gist calculations)
+* ParmED (files conversion)
 * Sphinx (documentation)
 * Sphinx_rtd_theme (documentation)
 
@@ -21,9 +20,8 @@ You need, at a minimum (requirements):
 
 I highly recommand you to install the Anaconda distribution (https://www.continuum.io/downloads) if you want a clean python environnment with nearly all the prerequisites already installed. To install everything properly, you just have to do this:
 ```bash
-conda install -c conda-forge openbabel parmed parallel mdtraj
+conda install -c conda-forge openbabel parmed
 conda install -c ambermd ambertools
-conda install -c solvationtools sstmap
 ```
 
 To install the `WaterKit` package
@@ -104,10 +102,19 @@ tleap -s -f protein.leap.in > protein.leap.out
 ```
 
 2. Run GIST
-```bash
-run_gist -i protein_system.prmtop -t protein.nc -l ligand.pdb -g 48 48 48 -f 10000
 ```
-The PDB coordinate file ```ligand.pdb``` is a simply PDB file containing a dummy atom that will define the center of the box. Usually you would choose the same parameters as the AutoGrid maps (```npts``` and ```gridcenter```). Unlike AutoGrid, the default the grid spacing in SSTMap is 0.5 A, so you will have to choose box dimension accordingly to match the Autogrid maps dimensions.
+parm protein_system.prmtop
+trajin protein.nc
+gist gridspacn 0.5 gridcntr 0.0 0.0 0.0 griddim 48 48 48
+go
+quit
+```
+
+Usually you would choose the same parameters as the AutoGrid maps (```npts``` and ```gridcenter```). Unlike AutoGrid, the default the grid spacing in GIST is 0.5 A, so you will have to choose box dimension accordingly to match the Autogrid maps dimensions. More informations on GIST are available here: https://amber-md.github.io/cpptraj/CPPTRAJ.xhtml#magicparlabel-4672
+
+```bash
+cpptraj -i gist.inp
+```
 
 ### ????
 ### PROFIT!!!

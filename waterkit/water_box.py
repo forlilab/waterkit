@@ -6,8 +6,13 @@
 # Class to manage water box
 #
 
+from __future__ import division
+from __future__ import print_function
+from __future__ import absolute_import
+
 import os
 import copy
+import sys
 from string import ascii_uppercase
 
 import numpy as np
@@ -15,9 +20,9 @@ import openbabel as ob
 import pandas as pd
 from scipy import spatial
 
-import utils
-from water import Water
-from optimize import WaterSampler
+from .water import Water
+from .optimize import WaterSampler
+from . import utils
 
 
 class WaterBox():
@@ -72,8 +77,10 @@ class WaterBox():
         if not isinstance(molecules, (list, tuple)):
             molecules = [molecules]
 
+        molecule_ids = list(self.molecules.keys())
+
         try:
-            last_key = np.max(self.molecules.keys())
+            last_key = np.max(molecule_ids)
         except:
             # We initliaze at -1, make first molecule at index 0
             last_key = -1
@@ -145,7 +152,7 @@ class WaterBox():
             self.df[where] = self.df[where].append(data, sort=False)
             self.df[where].reset_index(drop=True, inplace=True)
         except:
-            print "Error: Cannot add informations to %s dataframe." % where
+            print("Error: Cannot add informations to %s dataframe." % where)
 
     def _update_informations_in_shell(self, data, shell_id, key):
         """Update shell information."""
@@ -211,7 +218,7 @@ class WaterBox():
 
         """
         if self._kdtree is None:
-            print "Warning: KDTree is empty."
+            print("Warning: KDTree is empty.")
             return pd.DataFrame(columns=["molecule_i", "atom_i"])
 
         index = self._kdtree.query_ball_point(xyz, radius, p=2)
@@ -317,7 +324,13 @@ class WaterBox():
         # If multiple instances of WaterBox are running in parallel
         # we might have end up with the same result. So we force numpy to
         # generate different random numbers
-        np.random.seed(map(ord, os.urandom(10)))
+        try:
+            # Python 3
+            rand = int.from_bytes(os.urandom(4), sys.byteorder)
+        except:
+            # Python 2
+            rand = int(os.urandom(4).encode('hex'), 16)
+        np.random.seed(rand)
 
         waters, connections = self._place_optimal_spherical_waters(molecules, sw_type, partial_charge)
 

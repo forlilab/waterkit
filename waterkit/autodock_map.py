@@ -6,6 +6,10 @@
 # Class to manage autodock maps
 #
 
+from __future__ import division
+from __future__ import print_function
+from __future__ import absolute_import
+
 import collections
 import os
 import re
@@ -15,7 +19,7 @@ import numpy as np
 from scipy import spatial
 from scipy.interpolate import RegularGridInterpolator
 
-import utils
+from . import utils
 
 
 class Map():
@@ -239,7 +243,7 @@ class Map():
 
             return True
         else:
-            print "Error: map %s already exists." % name
+            print("Error: map %s already exists." % name)
             return False
 
     def add_map(self, name, new_map):
@@ -254,7 +258,7 @@ class Map():
             new_map = np.array(new_map)
 
         if not np.array_equal(new_map.shape, self._npts):
-            print "Error: new grid does not have the same dimension (%s != %s)" % (new_map.shape, self._npts)
+            print("Error: new grid does not have the same dimension (%s != %s)" % (new_map.shape, self._npts))
             return False
 
         if not name in self._maps:
@@ -262,7 +266,7 @@ class Map():
             self._maps_interpn[name] = self._generate_affinity_map_interpn(new_map)
             return True
         else:
-            print "Error: map %s already exists." % name
+            print("Error: map %s already exists." % name)
             return False
 
     def atoms_in_map(self, molecule):
@@ -436,7 +440,7 @@ class Map():
         assert len(atom_types) == len(names), "Names and atom_types lengths are not matching."
 
         if not "x" in expression:
-            print "Error: operation cannot be applied, x is not defined."
+            print("Error: operation cannot be applied, x is not defined.")
             return None
 
         for name, atom_type in zip(names, atom_types):
@@ -449,7 +453,7 @@ class Map():
                 self._maps[name] = x
                 self._maps_interpn[name] = self._generate_affinity_map_interpn(x)
             except:
-                print "Warning: This map %s does not exist." % (atom_type)
+                print("Warning: This map %s does not exist." % (atom_type))
                 continue
 
     def add_bias(self, name, coordinates, bias_value, radius):
@@ -523,10 +527,10 @@ class Map():
         unselected_types = set(selected_types) - set(atom_types)
 
         if not selected_types:
-            print "Warning: no maps were selected from %s list." % atom_types
+            print("Warning: no maps were selected from %s list." % atom_types)
             return False
         if unselected_types:
-            print "Warning: %s maps can not be combined." % " ".join(unselected_types)
+            print("Warning: %s maps can not be combined." % " ".join(unselected_types))
         
         """ Check if the grid are the same between the two ad_maps.
         And we do it like this because grid are tuples of numpy array.
@@ -658,4 +662,4 @@ class Map():
                     m = np.swapaxes(self._maps[map_type], 0, 2).flatten()
                     w.write("\n".join(m.astype(str)))
             else:
-                print "Error: Map %s does not exist." % map_type
+                print("Error: Map %s does not exist." % map_type)

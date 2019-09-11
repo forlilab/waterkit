@@ -6,6 +6,10 @@
 # Class for molecule
 #
 
+from __future__ import division
+from __future__ import print_function
+from __future__ import absolute_import
+
 import imp
 import os
 import re
@@ -13,9 +17,9 @@ import re
 import numpy as np
 import openbabel as ob
 
-import utils
-from typer import RotatableBonds
-from typer import HydrogenBonds
+from .typer import RotatableBonds
+from .typer import HydrogenBonds
+from . import utils
 
 
 class Molecule():
@@ -31,8 +35,8 @@ class Molecule():
         """
         i = 0
         j = 0
-        dtype = [("i", "i4"), ("name", "S4"), ("resname", "S3"), ("resnum", "i4"),
-                 ("xyz", "f4", (3)), ("q", "f4"), ("t", "S5")]
+        dtype = [("i", "i4"), ("name", "U4"), ("resname", "U3"), ("resnum", "i4"),
+                 ("xyz", "f4", (3)), ("q", "f4"), ("t", "U5")]
         self.atoms = np.zeros(OBMol.NumAtoms(), dtype)
         self.hydrogen_bonds = None
         self.rotatable_bonds = None
@@ -348,4 +352,4 @@ class Molecule():
             with open(fname, "w") as w:
                 w.write(output_str)
         else:
-            print "Error: There is no hydrogen bond anchors."
+            print("Error: There is no hydrogen bond anchors.")

@@ -6,6 +6,12 @@
 # Utils functions
 #
 
+from __future__ import division
+from __future__ import print_function
+from __future__ import absolute_import
+
+import tempfile
+import errno
 import subprocess
 
 import numpy as np
@@ -315,6 +321,19 @@ def random_quaternion(n=1):
     return shoemake(u)
 
 
+def is_writable(pathname):
+    try:
+        testfile = tempfile.TemporaryFile(dir=pathname)
+        testfile.close()
+    except OSError as e:
+        if e.errno == errno.EACCES:  # 13
+            return False
+        e.filename = pathname
+        raise
+
+    return True
+
+
 def execute_command(cmd_line):
     """Simple function to execute bash command."""
     args = cmd_line.split()
@@ -324,7 +343,7 @@ def execute_command(cmd_line):
 
 
 def split_list_in_chunks(size, n):
-    return [(l[0], l[-1]) for l in np.array_split(xrange(size), n)]
+    return [(l[0], l[-1]) for l in np.array_split(range(size), n)]
 
 
 def boltzmann_probabilities(energies, temperature):
@@ -351,7 +370,7 @@ def boltzmann_choices(energies, temperature, size=None):
     if np.sum(p) == 0.:
         return None
 
-    if size > 1:
+    if size is not None and size > 1:
         # If some prob. in p are zero, ValueError: size of nonzero p is lower than size
         non_zero = np.count_nonzero(p)
         size = non_zero if non_zero < size else size
@@ -382,7 +401,7 @@ def prepare_water_map(ad_map, water_model="tip3p"):
         hw_q = 0.241
         lw_q = -0.241
     else:
-        print "Error: water model %s unknown." % water_model
+        print("Error: water model %s unknown." % water_model)
         return False
 
     # For the TIP3P and TIP5P models

@@ -6,13 +6,18 @@
 # The core of the WaterKit program
 #
 
+from __future__ import division
+from __future__ import print_function
+from __future__ import absolute_import
+
 import gc
 import os
+import sys
 import time
 import multiprocessing as mp
 
-import utils
-from water_box import WaterBox
+from .water_box import WaterBox
+from . import utils
 
 
 def _hydrate_single(water_box, n_layer=0, start=0, stop=1, output_dir="."):
@@ -91,6 +96,12 @@ class WaterKit():
             output_dir (str): output directory for the trajectory
 
         """
+        try:
+            utils.is_writable(output_dir)
+        except:
+            print("Error: output directory %s not found!" % output_dir)
+            sys.exit(1)
+
         jobs = []
         chunks = utils.split_list_in_chunks(self._n_frames, self._n_jobs)
 

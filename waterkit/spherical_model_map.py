@@ -6,13 +6,17 @@
 # Spherical water map
 #
 
+from __future__ import division
+from __future__ import print_function
+from __future__ import absolute_import
+
 import os
 import imp
 import multiprocessing as mp
 
 import numpy as np
 
-import utils
+from . import utils
 
 
 def _water_grid_calculation(xyzs, ad_map, atom_types, temperature, water_orientations):
@@ -52,7 +56,7 @@ class SphericalWaterMap:
         elif self._water_model == "tip5p":
             self._atom_types = ["OT", "HT", "HT", "LP", "LP"]
         else:
-            print "Error: water model %s unknown." % self._water_model
+            print("Error: water model %s unknown." % self._water_model)
             return False
             
         """ Load pre-generated water molecules (only hydrogens)
@@ -79,7 +83,7 @@ class SphericalWaterMap:
         queue = mp.Manager().Queue()
             
         if name in ad_map._maps:
-            print "Error: map %s already exists." % name
+            print("Error: map %s already exists." % name)
             return False
             
         m_copy = ad_map.copy()

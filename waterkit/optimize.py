@@ -6,6 +6,10 @@
 # Class for water network optimizer
 #
 
+from __future__ import division
+from __future__ import print_function
+from __future__ import absolute_import
+
 import imp
 import os
 import time
@@ -15,10 +19,10 @@ import pandas as pd
 from scipy.cluster.hierarchy import linkage, fcluster
 from scipy.spatial.transform import Rotation
 
-import utils
-from autodock_map import Map
-from molecule import Molecule
-from forcefield import AutoDockForceField
+from .autodock_map import Map
+from .molecule import Molecule
+from .forcefield import AutoDockForceField
+from . import utils
 
 
 class WaterSampler():
@@ -292,7 +296,7 @@ class WaterSampler():
 
         # Get grid indices in the receptor box
         # Necessary, in order to add the water map to the receptor map
-        size_half_box = ((npts - 1) / 2)
+        size_half_box = ((npts - 1) // 2)
         i_min = np.clip(center_index - size_half_box, [0, 0, 0], ad_map._npts)
         i_max = np.clip(center_index + size_half_box + 1, [0, 0, 0], ad_map._npts)
         indices = np.index_exp[i_min[0]:i_max[0], i_min[1]:i_max[1], i_min[2]:i_max[2]]
