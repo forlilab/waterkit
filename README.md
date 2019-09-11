@@ -6,7 +6,7 @@ Tool to predict water molecules placement and energy in ligand binding sites
 ## Prerequisites
 
 You need, at a minimum (requirements):
-* Python (=2.7)
+* Python (=2.7 || =3.7)
 * OpenBabel
 * Numpy 
 * Scipy
@@ -94,7 +94,7 @@ $ mkdir traj
 $ python run_waterkit.py -i protein_prepared.pdbqt -m protein_maps.fld -n 10000 -j 16 -o traj
 ```
 
-### Run Grid Inhomogeneous Solvation Theory (GIST) with SSTMap
+### Run Grid Inhomogeneous Solvation Theory (GIST)
 
 1. Create Amber trajectory with `make_trajectory.py` script
 ```bash
