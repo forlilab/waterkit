@@ -52,7 +52,7 @@ Conversion to PDBQT using AmberTools19 (http://ambermd.org/GetAmber.php) and `am
 ```bash
 $ pdb4amber -i protein.pdb -o protein_clean.pdb --dry --leap-template --nohyd
 $ tleap -s -f leap.template.in > leap.template.out
-$ python amber2pdbqt.py -t prmtop -c rst7 -o protein
+$ amber2pdbqt.py -t prmtop -c rst7 -o protein
 ```
 
 The following protein coordinate files will be generated: ```protein_prepared.pdbqt``` and ```protein_prepared.pdb```. The PDBQT file will be used by WaterKit and the PDB file will be used to create the trajectory file at the end.
@@ -90,14 +90,14 @@ $ autogrid4 -p protein_grid.gpf -l protein_grid.glg
 ```bash
 $ mkdir traj
 # Generate 10.000 frames using 16 cpus
-$ python run_waterkit.py -i protein_prepared.pdbqt -m protein_maps.fld -n 10000 -j 16 -o traj
+$ run_waterkit.py -i protein_prepared.pdbqt -m protein_maps.fld -n 10000 -j 16 -o traj
 ```
 
 ### Run Grid Inhomogeneous Solvation Theory (GIST)
 
 1. Create Amber trajectory with `make_trajectory.py` script
 ```bash
-$ python make_trajectory.py -r protein_prepared.pdb -w traj -o protein
+$ make_trajectory.py -r protein_prepared.pdb -w traj -o protein
 $ tleap -s -f protein.leap.in > protein.leap.out
 ```
 
