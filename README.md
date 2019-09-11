@@ -89,7 +89,7 @@ $ autogrid4 -p protein_grid.gpf -l protein_grid.glg
 ### Sample water molecule positions with WaterKit
 
 ```bash
-mkdir traj
+$ mkdir traj
 # Generate 10.000 frames using 16 cpus
 $ python run_waterkit.py -i protein_prepared.pdbqt -m protein_maps.fld -n 10000 -j 16 -o traj
 ```
