@@ -102,7 +102,7 @@ $ python make_trajectory.py -r protein_prepared.pdb -w traj -o protein
 $ tleap -s -f protein.leap.in > protein.leap.out
 ```
 
-2. Run GIST
+2. Create input file for cpptraj
 ```
 # gist.inp
 parm protein_system.prmtop
@@ -113,6 +113,8 @@ quit
 ```
 
 Usually you would choose the same parameters as the AutoGrid maps (```npts``` and ```gridcenter```). Unlike AutoGrid, the default the grid spacing in GIST is 0.5 A, so you will have to choose box dimension accordingly to match the Autogrid maps dimensions. More informations on GIST are available here: https://amber-md.github.io/cpptraj/CPPTRAJ.xhtml#magicparlabel-4672
+
+3. Run GIST
 
 ```bash
 $ cpptraj -i gist.inp
