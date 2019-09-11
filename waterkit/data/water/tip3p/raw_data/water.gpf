@@ -1,13 +1,14 @@
 npts 150 150 150
 parameter_file AD4_parameters.dat
-gridfld water_ref_maps.fld
+gridfld water_maps.fld
 spacing 0.100
 receptor_types OW HW
-ligand_types OW
-receptor water_ref.pdbqt
+ligand_types OW VW
+receptor water.pdbqt
 gridcenter 0.000 0.000 0.000
 smooth 0.000
-map water_ref.OW.map
-elecmap water_ref.e.map
-dsolvmap water_ref.d.map
+map water.OW.map
+map water.VW.map
+elecmap water.e.map
+dsolvmap water.d.map
 dielectric 1.000
