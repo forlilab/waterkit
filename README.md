@@ -20,26 +20,26 @@ You need, at a minimum (requirements):
 
 I highly recommand you to install the Anaconda distribution (https://www.continuum.io/downloads) if you want a clean python environnment with nearly all the prerequisites already installed. To install everything properly, you just have to do this:
 ```bash
-conda install -c conda-forge openbabel parmed
-conda install -c ambermd ambertools
+$ conda install -c conda-forge openbabel parmed
+$ conda install -c ambermd ambertools
 ```
 
 To install the `WaterKit` package
 ```bash
-python setup.py install
+$ python setup.py install
 ```
 
 For the documentation only
 ```bash
-conda install sphinx sphinx_rtd_theme
+$ conda install sphinx sphinx_rtd_theme
 ```
 
 ## Documentation
 
 Build documentation with Sphinx
 ```bash
-cd docs
-make html
+$ cd docs
+$ make html
 ```
 
 Open the file ```build/html/index.html``` with your favorite browser (Google Chrome is evil).
@@ -50,9 +50,9 @@ Open the file ```build/html/index.html``` with your favorite browser (Google Chr
 
 Conversion to PDBQT using AmberTools19 (http://ambermd.org/GetAmber.php) and `amber2pdbqt.py` script
 ```bash
-pdb4amber -i protein.pdb -o protein_clean.pdb --dry --leap-template --nohyd
-tleap -s -f leap.template.in > leap.template.out
-amber2pdbqt.py -t prmtop -c rst7 -o protein
+$ pdb4amber -i protein.pdb -o protein_clean.pdb --dry --leap-template --nohyd
+$ tleap -s -f leap.template.in > leap.template.out
+$ python amber2pdbqt.py -t prmtop -c rst7 -o protein
 ```
 
 The following protein coordinate files will be generated: ```protein_prepared.pdbqt``` and ```protein_prepared.pdb```. The PDBQT file will be used by WaterKit and the PDB file will be used to create the trajectory file at the end.
@@ -61,6 +61,7 @@ The following protein coordinate files will be generated: ```protein_prepared.pd
 
 1. Create Grid Protein File (GPF)
 ```
+# protein_grid.gpf
 npts 64 64 64
 parameter_file AD4_parameters.dat
 gridfld protein_maps.fld
@@ -82,7 +83,7 @@ Depending of your system, you would have at least to modify the grid parameters 
 
 2. Run autogrid4
 ```bash
-autogrid4 -p protein_grid.gpf -l protein_grid.glg
+$ autogrid4 -p protein_grid.gpf -l protein_grid.glg
 ```
 
 ### Sample water molecule positions with WaterKit
@@ -90,19 +91,20 @@ autogrid4 -p protein_grid.gpf -l protein_grid.glg
 ```bash
 mkdir traj
 # Generate 10.000 frames using 16 cpus
-python run_waterkit.py -i protein_prepared.pdbqt -m protein_maps.fld -n 10000 -j 16 -o traj
+$ python run_waterkit.py -i protein_prepared.pdbqt -m protein_maps.fld -n 10000 -j 16 -o traj
 ```
 
 ### Run Grid Inhomogeneous Solvation Theory (GIST) with SSTMap
 
 1. Create Amber trajectory with `make_trajectory.py` script
 ```bash
-python make_trajectory.py -r protein_prepared.pdb -w traj -o protein
-tleap -s -f protein.leap.in > protein.leap.out
+$ python make_trajectory.py -r protein_prepared.pdb -w traj -o protein
+$ tleap -s -f protein.leap.in > protein.leap.out
 ```
 
 2. Run GIST
 ```
+# gist.inp
 parm protein_system.prmtop
 trajin protein.nc
 gist gridspacn 0.5 gridcntr 0.0 0.0 0.0 griddim 48 48 48
@@ -113,7 +115,7 @@ quit
 Usually you would choose the same parameters as the AutoGrid maps (```npts``` and ```gridcenter```). Unlike AutoGrid, the default the grid spacing in GIST is 0.5 A, so you will have to choose box dimension accordingly to match the Autogrid maps dimensions. More informations on GIST are available here: https://amber-md.github.io/cpptraj/CPPTRAJ.xhtml#magicparlabel-4672
 
 ```bash
-cpptraj -i gist.inp
+$ cpptraj -i gist.inp
 ```
 
 ### ????
