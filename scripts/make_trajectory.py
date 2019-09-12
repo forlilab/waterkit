@@ -4,6 +4,10 @@
 # make_trajectory
 #
 
+from __future__ import division
+from __future__ import print_function
+from __future__ import absolute_import
+
 import argparse
 import copy
 import glob
@@ -50,7 +54,7 @@ def max_water(water_filenames):
     return max_water, idx
 
 
-def write_system_pdb_file(fname, receptor, water_filenames):
+def write_system_pdb_file(fname, receptor, water_filenames, overwrite=True):
     """Create topology file
     
     Args:
@@ -67,9 +71,9 @@ def write_system_pdb_file(fname, receptor, water_filenames):
     # ParmED really want a symmetry attributes to write the PDB file
     receptor_copy.symmetry = None
     try:
-        receptor_copy.save(fname, format="pdb")
+        receptor_copy.save(fname, format="pdb", overwrite=overwrite)
     except IOError:
-        print "Error: file %s already exists." % fname
+        print("Error: file %s already exists." % fname)
         sys.exit(0)
 
 

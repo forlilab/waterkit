@@ -4,6 +4,10 @@
 # amber2pdbqt
 #
 
+from __future__ import division
+from __future__ import print_function
+from __future__ import absolute_import
+
 import argparse
 
 import parmed as pmd
@@ -20,7 +24,7 @@ def cmd_lineparser():
     return parser.parse_args()
 
 
-def write_pdb_file(output_name, molecule):
+def write_pdb_file(output_name, molecule,  overwrite=True):
     """Write PDB file
 
     Args:
@@ -28,7 +32,7 @@ def write_pdb_file(output_name, molecule):
         molecule (parmed): parmed molecule object
 
     """
-    molecule.save(output_name)
+    molecule.save(output_name, format="pdb", overwrite=overwrite)
 
 def write_pdbqt_file(output_name, molecule):
     """Write PDBQT file
