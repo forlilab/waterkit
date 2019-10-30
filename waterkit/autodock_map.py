@@ -646,7 +646,7 @@ class Map():
             if map_type in self._maps:
                 filename = "%s.map" % map_type
                 if prefix is not None:
-                    filename = "%s.%s" % (prefix, filename)
+                    filename = "%s_%s" % (prefix, filename)
 
                 with open(filename, "w") as w:
                     npts = np.array([n if not n % 2 else n - 1 for n in self._npts])
