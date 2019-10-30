@@ -210,7 +210,10 @@ class WaterSampler():
         elif self._how == "boltzmann":
             order = utils.boltzmann_choices(energies, self._temperature, len(energies))
 
-        return order
+        if order is None:
+            return []
+        else:
+            return order
 
     def _optimize_position_grid(self, water, add_noise=False, from_edges=None):
         """Optimize the position of the spherical water molecule. 
@@ -337,7 +340,7 @@ class WaterSampler():
         """Optimize position of water molecules."""
         df = {}
         data = []
-        to_be_removed = []
+        unfavorable_water_indices = []
         shell_id = self._water_box.number_of_shells()
 
         if self._how == "best":
@@ -349,9 +352,12 @@ class WaterSampler():
             self._optimize_disordered_waters(waters, connections)
             #self._sample_disordered_groups(waters, connections)
 
-        # The placement order is based on the best energy around each hydrogen anchor point
+        """ The placement order is based on the best energy around each hydrogen anchor point
+        But if it returns [], it means the most favorable spots for placing water molecules
+        are definitively not that favorable, likely they are all outside the box.
+        """
         water_orders = self._optimize_placement_order_grid(waters, from_edges=1.)
-        to_be_removed.extend(set(np.arange(len(waters))) - set(water_orders))
+        unfavorable_water_indices.extend(set(np.arange(len(waters))) - set(water_orders))
 
         """ And now we optimize all water individually. All the
         water molecules are outside the box or with a positive
@@ -384,15 +390,15 @@ class WaterSampler():
                     data.append((shell_id + 1, energy_position, energy_orientation))
                     self._update_maps(water)
                 else:
-                    to_be_removed.append(i)
+                    unfavorable_water_indices.append(i)
             else:
-                to_be_removed.append(i)
+                unfavorable_water_indices.append(i)
 
         # Keep only the good waters
-        waters = [waters[i] for i in water_orders if not i in to_be_removed]
+        waters = [waters[i] for i in water_orders if not i in unfavorable_water_indices]
         # Keep connections of the good waters
         if connections is not None:
-            index = connections.loc[connections["molecule_j"].isin(to_be_removed)].index
+            index = connections.loc[connections["molecule_j"].isin(unfavorable_water_indices)].index
             connections.drop(index, inplace=True)
             # Renumber the water molecules
             connections["molecule_j"] = range(0, len(waters))
