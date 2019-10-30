@@ -27,12 +27,6 @@ def cmd_lineparser():
     parser.add_argument("-w", "--dir", dest="water_directory", required=True,
                         action="store", help="path of the directory containing the water \
                         pdb files")
-    parser.add_argument("-b", "--box", dest="box_dimension", nargs=6, 
-                        default=[100, 100, 100, 90, 90, 90], action="store", 
-                        help="box dimension")
-    parser.add_argument("-d", "--dummy", dest="dummy_water_xyz", nargs=3, 
-                        default=[0, 0, 0], action="store", 
-                        help="dummy water coordinates")
     parser.add_argument("-o", "--output", dest="output_name", default="protein_water",
                         action="store", help="output name (netcdf format)")
     return parser.parse_args()
@@ -46,9 +40,27 @@ def max_water(water_filenames):
 
     Return:
         int: number of max water molecules
+        int: index of the file in the water filenames list
     """
     sizes = [os.path.getsize(f) for f in water_filenames]
     idx = np.argmax(sizes)
+    m = pmd.load_file(water_filenames[idx])
+    max_water = len(m.residues)
+    return max_water, idx
+
+
+def min_water(water_filenames):
+    """Return the min number of water molecules seen
+
+    Args:
+        water_filenames (array-like): list of filenames of the water files
+
+    Return:
+        int: number of min water molecules
+        int: index of the file in the water filenames list
+    """
+    sizes = [os.path.getsize(f) for f in water_filenames]
+    idx = np.argmin(sizes)
     m = pmd.load_file(water_filenames[idx])
     max_water = len(m.residues)
     return max_water, idx
@@ -104,8 +116,7 @@ def write_tleap_input_file(fname, pdb_filename):
         w.write(output_str)
 
 
-def write_trajectory_file(fname, receptor, water_filenames, 
-                          dummy_water_xyz=[0, 0, 0], box=[100, 100, 100, 90, 90, 90]):
+def write_trajectory_file(fname, receptor, water_filenames):
     """Create netcdf trajectory from the water pdb file
 
     Args:
@@ -117,9 +128,41 @@ def write_trajectory_file(fname, receptor, water_filenames,
 
     """
     max_n_waters, idx = max_water(water_filenames)
+    min_n_waters, _ = min_water(water_filenames)
+    buffer_n_waters = max_n_waters - min_n_waters
+    max_n_water_atoms = max_n_waters * 3
+
     n_atoms = receptor.coordinates.shape[0]
     max_n_atoms = n_atoms + (max_n_waters * 3)
     coordinates = np.zeros(shape=(max_n_atoms, 3))
+
+    # Boz dimension
+    box_center = np.mean(receptor.coordinates, axis=0)
+
+    x_min, x_max = np.min(receptor.coordinates[:, 0]), np.max(receptor.coordinates[:, 0])
+    y_min, y_max = np.min(receptor.coordinates[:, 1]), np.max(receptor.coordinates[:, 1])
+    z_min, z_max = np.min(receptor.coordinates[:, 2]), np.max(receptor.coordinates[:, 2])
+    box_size = np.max([np.abs(x_max - x_min), np.abs(y_max - y_min), np.abs(z_max - z_min)]) + 40
+
+    box = [box_size, box_size, box_size, 90, 90, 90]
+
+    # Dummy water coordinates
+    dum_water_x = np.array([0, 0, 0])
+    dum_water_y = np.array([0, 0.756, 0.586])
+    dum_water_z = np.array([0, -0.756, 0.586])
+
+    radius = (box_size / 2.) - 2.
+    z = np.random.uniform(-radius, radius, buffer_n_waters)
+    p = np.random.uniform(0, np.pi * 2, buffer_n_waters)
+    x = np.sqrt(radius**2 - z**2) * np.cos(p)
+    y = np.sqrt(radius**2 - z**2) * np.sin(p)
+    oxygen_xyz = np.stack((x, y, z), axis=-1)
+    oxygen_xyz += box_center
+
+    dummy_water_xyz = np.zeros(shape=(buffer_n_waters * 3, 3))
+    dummy_water_xyz[0::3] = oxygen_xyz
+    dummy_water_xyz[1::3] = oxygen_xyz + dum_water_y
+    dummy_water_xyz[2::3] = oxygen_xyz + dum_water_z
 
     # Already add the coordinates from the receptor
     coordinates[:n_atoms] = receptor.coordinates
@@ -130,11 +173,12 @@ def write_trajectory_file(fname, receptor, water_filenames,
         m = pmd.load_file(water_filename)
 
         last_atom_id = len(m.residues) * 3
+        water_xyz = m["@O, H1, H2"].coordinates
 
         # Get all the TIP3P water molecules
-        coordinates[n_atoms:n_atoms + last_atom_id] = m["@O, H1, H2"].coordinates
+        coordinates[n_atoms:n_atoms + last_atom_id] = water_xyz
         # Add the dummy water molecules
-        coordinates[n_atoms + last_atom_id:] = dummy_water_xyz
+        coordinates[n_atoms + last_atom_id:] = dummy_water_xyz[:max_n_water_atoms - water_xyz.shape[0]]
 
         trj.add_coordinates(coordinates)
         trj.add_box(box)
@@ -146,8 +190,6 @@ def main():
     args = cmd_lineparser()
     receptor_filename = args.receptor_filename
     water_directory = args.water_directory
-    box_dimension = args.box_dimension
-    dummy_water_xyz = args.dummy_water_xyz
     output_name = args.output_name
 
     water_filenames = sorted(glob.glob("%s/*" % water_directory))
@@ -156,8 +198,7 @@ def main():
 
     write_tleap_input_file("%s.leap.in" % output_name, "%s_system.pdb" % output_name)
     write_system_pdb_file("%s_system.pdb" % output_name, receptor, water_filenames)
-    write_trajectory_file("%s.nc" % output_name, receptor, water_filenames,
-                          dummy_water_xyz, box_dimension)
+    write_trajectory_file("%s.nc" % output_name, receptor, water_filenames)
 
 
 if __name__ == '__main__':
