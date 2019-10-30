@@ -380,8 +380,9 @@ def boltzmann_choices(energies, temperature, size=None):
     return i
 
 
-def prepare_water_map(ad_map, water_model="tip3p"):
+def prepare_water_map(ad_map, water_model="tip3p", dielectric=1.):
     e_type = "Electrostatics"
+    dielectric = np.float(dielectric)
 
     """In TIP3P and TIP5P models, hydrogen atoms and lone-pairs does not
     have VdW radius, so their interactions with the receptor are purely
@@ -405,12 +406,12 @@ def prepare_water_map(ad_map, water_model="tip3p"):
         return False
 
     # For the TIP3P and TIP5P models
-    ad_map.apply_operation_on_maps(hw_type, e_type, "x * %f" % hw_q)
+    ad_map.apply_operation_on_maps(hw_type, e_type, "x * %f / %f" % (hw_q, dielectric))
 
     if water_model == "tip3p":
-        ad_map.apply_operation_on_maps(e_type, e_type, "x * %f" % ow_q)
+        ad_map.apply_operation_on_maps(e_type, e_type, "x * %f / %f" % (ow_q, dielectric))
         ad_map.combine(ow_type, [ow_type, e_type], how="add")
     elif water_model == "tip5p":
-        ad_map.apply_operation_on_maps(lw_type, e_type, "x * %f" % lw_q)
+        ad_map.apply_operation_on_maps(lw_type, e_type, "x * %f / %f" % (lw_q, dielectric))
 
     return True
