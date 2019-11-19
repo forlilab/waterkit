@@ -343,7 +343,10 @@ def execute_command(cmd_line):
 
 
 def split_list_in_chunks(size, n):
-    return [(l[0], l[-1]) for l in np.array_split(range(size), n)]
+    if size <= n:
+        return [(i, i + 1) for i in range(size)]
+    else:
+        return [(l[0], l[-1]) for l in np.array_split(range(size), n)]
 
 
 def boltzmann_probabilities(energies, temperature):
