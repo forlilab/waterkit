@@ -11,6 +11,7 @@ from __future__ import print_function
 from __future__ import absolute_import
 
 import os
+import sys
 import imp
 import multiprocessing as mp
 
@@ -19,32 +20,37 @@ import numpy as np
 from . import utils
 
 
-def _water_grid_calculation(xyzs, ad_map, atom_types, temperature, water_orientations):
+def _water_grid_calculation(xyzs, ad_map, atom_types, temperature, water_orientations, verbose=False):
     energy = ad_map.energy_coordinates(xyzs, atom_types[0])
-    
+
     for i, xyz in enumerate(xyzs):
         tmp_energy = energy[i]
         new_orientations = xyz + water_orientations
         
         for j, atom_type in enumerate(atom_types[1:]):
             tmp_energy += ad_map.energy_coordinates(new_orientations[:, j], atom_type)
-            
+
         p = utils.boltzmann_probabilities(tmp_energy, temperature)
         tmp_energy[tmp_energy == np.inf] = 0.0
         energy[i] = np.sum(tmp_energy * p)
+
+        if (i % 100 == 0) and verbose:
+            sys.stdout.write("\rGrid points calculated:  %5.2f / 100 %%" % (np.float(i) / xyzs.shape[0] * 100.))
+            sys.stdout.flush()
     
     return energy
 
 
-def _run_single(job_id, queue, xyzs, ad_map, atom_types, temperature, water_orientations):
-    energy = _water_grid_calculation(xyzs, ad_map, atom_types, temperature, water_orientations)
+def _run_single(job_id, queue, xyzs, ad_map, atom_types, temperature, water_orientations, verbose=False):
+    energy = _water_grid_calculation(xyzs, ad_map, atom_types, temperature, water_orientations, verbose)
     queue.put((job_id, energy))
     
 
 class SphericalWaterMap:
-    def __init__(self, water_model="tip3p", temperature=300.0, n_jobs=-1):
+    def __init__(self, water_model="tip3p", temperature=300.0, n_jobs=-1, verbose=False):
         self._temperature = temperature
         self._water_model = water_model
+        self._verbose = verbose
         
         if n_jobs == -1:
             self._n_jobs = mp.cpu_count()
@@ -88,13 +94,11 @@ class SphericalWaterMap:
             
         m_copy = ad_map.copy()
         xyzs = ad_map._kdtree.data
-            
-        utils.prepare_water_map(m_copy, self._water_model)
 
         for i, chunk in enumerate(chunks):
             job = mp.Process(target=_run_single, args=(i, queue, xyzs[chunk[0]:chunk[1]+1], m_copy, 
                                                        self._atom_types, self._temperature, 
-                                                       self._water_orientations))
+                                                       self._water_orientations, self._verbose))
             job.start()
             jobs.append(job)
 
@@ -115,4 +119,6 @@ class SphericalWaterMap:
             
         ad_map.add_map(name, new_map)
 
+        if self._verbose:
+            print("\n")
 
