@@ -46,7 +46,7 @@ def main():
     ad_map = Map.from_fld(fld_file)
     utils.prepare_water_map(ad_map, water_model, dieletric)
 
-    s = SphericalWaterMap(water_model, temperature, n_jobs)
+    s = SphericalWaterMap(water_model, temperature, n_jobs, verbose=True)
     s.run(ad_map, "SW")
 
     ad_map.to_map("SW", "%s/" % output_dir)
