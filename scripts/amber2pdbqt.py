@@ -58,6 +58,9 @@ def write_pdbqt_file(output_name, molecule):
         else:
             atom_type = atom.type
 
+        # AutoGrid does not accept atom type name of length > 2
+        atom_type = atom_type[:2]
+
         output_str += pdbqt_str % (atom.idx + 1, name, resname, resid, atom.xx, 
                                    atom.xy, atom.xz, atom.charge, atom_type)
 
