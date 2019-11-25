@@ -50,7 +50,7 @@ Open the file ```build/html/index.html``` with your favorite browser (Google Chr
 
 Conversion to PDBQT using AmberTools19 (http://ambermd.org/GetAmber.php) and `amber2pdbqt.py` script
 ```bash
-$ pdb4amber -i protein.pdb -o protein_clean.pdb --dry --leap-template --nohyd
+$ pdb4amber -i protein.pdb -o protein_clean.pdb --dry --nohyd --no-conect --leap-template
 $ tleap -s -f leap.template.in > leap.template.out
 $ amber2pdbqt.py -t prmtop -c rst7 -o protein
 ```
