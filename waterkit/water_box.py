@@ -52,7 +52,7 @@ class WaterBox():
         self._smooth = 0.
         self._adff = ad_forcefield
         # Initialize the sampling method
-        self._wopt = WaterSampler(self, self._how, angle=110, temperature=self._temperature)
+        self._wopt = WaterSampler(self, self._how, temperature=self._temperature)
 
     def copy(self):
         """Return deepcopy of WaterBox."""
