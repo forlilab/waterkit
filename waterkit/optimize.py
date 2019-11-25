@@ -27,7 +27,7 @@ from . import utils
 
 class WaterSampler():
 
-    def __init__(self, water_box, how="best", min_distance=2.4, max_distance=3.2, angle=110,
+    def __init__(self, water_box, how="best", min_distance=2.5, max_distance=3.6,  angle=90,
                  energy_cutoff=0, temperature=298.15):
         self._water_box = water_box
         self._water_model = water_box._water_model
@@ -62,14 +62,14 @@ class WaterSampler():
         # Water map reference
         if self._water_model == "tip3p":
             atom_types = ["SW", "OW", "HW"]
-            map_files = ["data/water/tip3p/water_VW.map",
+            map_files = ["data/water/tip3p/water_SW.map",
                          "data/water/tip3p/water_OW.map",
                          "data/water/tip3p/water_HW.map"]
             map_files = [os.path.join(d, map_file) for map_file in map_files]
             water_ref_file = os.path.join(d, "data/water/tip3p/water.pdbqt")
         elif self._water_model == "tip5p":
             atom_types = ["SW", "OT", "HT", "LP"]
-            map_files = ["data/water/tip5p/water_VW.map",
+            map_files = ["data/water/tip5p/water_SW.map",
                          "data/water/tip5p/water_OT.map",
                          "data/water/tip5p/water_HT.map",
                          "data/water/tip5p/water_LP.map"]
@@ -149,7 +149,7 @@ class WaterSampler():
                 if self._how == "best":
                     i = np.argmin(energies)
                 elif self._how == "boltzmann":
-                    i = utils.boltzmann_choices(energies, self._temperature)
+                    i = utils.boltzmann_choices(energies, self._temperature)[0]
 
                 disordered_energies.append(energies[i])
 
@@ -201,19 +201,25 @@ class WaterSampler():
             _, energy_sphere = self._neighbor_points_grid(water, from_edges)
 
             if energy_sphere.size:
+                energy_sphere[energy_sphere == 0.] = np.inf
                 energies.append(np.min(energy_sphere))
             else:
                 energies.append(np.inf)
+
+        energies = np.array(energies)
 
         if self._how == "best":
             order = np.argsort(energies)
         elif self._how == "boltzmann":
             order = utils.boltzmann_choices(energies, self._temperature, len(energies))
 
-        if order is None:
-            return []
-        else:
+        if order.size > 0:
+            decisions = utils.boltzmann_acceptance_rejection(energies[order], self._temperature, self._energy_cutoff)
+            order = order[decisions]
+
             return order
+        else:
+            return np.array([])
 
     def _optimize_position_grid(self, water, add_noise=False, from_edges=None):
         """Optimize the position of the spherical water molecule. 
@@ -231,8 +237,8 @@ class WaterSampler():
             elif self._how == "boltzmann":
                 idx = utils.boltzmann_choices(energy_sphere, self._temperature)
 
-            if idx is not None:
-                new_coord = coord_sphere[idx]
+            if idx.size > 0:
+                new_coord = coord_sphere[idx[0]]
 
                 if add_noise:
                     limit = ad_map._spacing / 2.
@@ -240,11 +246,11 @@ class WaterSampler():
 
                 # Update the coordinates
                 water.translate(utils.vector(water.coordinates(1), new_coord))
-                return energy_sphere[idx]
+                return energy_sphere[idx[0]]
 
         """If we do not find anything, at least we return the energy
         of the current water molecule. """
-        return ad_map.energy_coordinates(water.coordinates(1), atom_type=oxygen_type)
+        return ad_map.energy_coordinates(water.coordinates(1), atom_type=oxygen_type)[0]
 
     def _optimize_orientation_grid(self, water):
         """Optimize the orientation of the TIP5P water molecule using the grid. """
@@ -268,12 +274,12 @@ class WaterSampler():
         elif self._how == "boltzmann":
             idx = utils.boltzmann_choices(energies, self._temperature)
 
-        if idx is not None:
+        if idx.size > 0:
             # Update the coordinates with the selected orientation, except oxygen (i + 2)
-            new_orientation = water_orientations[idx]
+            new_orientation = water_orientations[idx[0]]
             for i, xyz in enumerate(new_orientation):
                 water.update_coordinates(xyz, i + 2)
-            return energies[idx]
+            return energies[idx[0]]
 
         """If we do not find anything, at least we return the energy
         of the current water molecule. """
@@ -350,7 +356,6 @@ class WaterSampler():
 
         if opt_disordered and connections is not None:
             self._optimize_disordered_waters(waters, connections)
-            #self._sample_disordered_groups(waters, connections)
 
         """ The placement order is based on the best energy around each hydrogen anchor point
         But if it returns [], it means the most favorable spots for placing water molecules
@@ -359,34 +364,26 @@ class WaterSampler():
         water_orders = self._optimize_placement_order_grid(waters, from_edges=1.)
         unfavorable_water_indices.extend(set(np.arange(len(waters))) - set(water_orders))
 
-        """ And now we optimize all water individually. All the
-        water molecules are outside the box or with a positive
-        energy are considered as bad and are removed.
+        """ And now we sample the position of all the water individually. The
+        acceptance of the new position/orientation is based on the metropolis
+        acceptance-rejection criteria. But per default, everything is accepted
+        with a favorable energy (< 0 kcal/mol).
         """
         for i in water_orders:
             water = waters[i]
 
             energy_position = self._optimize_position_grid(water, add_noise, from_edges=1.)
 
-            """ Before going further we check the energy. If the spherical water 
-            has already a bad energy there is no point of going further and try to
-            orient it.
-            """
-            if energy_position < self._energy_cutoff:
+            # The first great filter
+            if utils.boltzmann_acceptance_rejection(energy_position, self._temperature, self._energy_cutoff)[0]:
                 # Build the explicit water
                 water.build_explicit_water(self._water_model)
 
                 # Optimize the orientation
                 energy_orientation = self._optimize_orientation_grid(water)
 
-                #if energy_orientation > self._energy_cutoff:
-                #    delta_e = np.min([1.0, np.exp(-energy_orientation / (self._kb * self._temperature))])
-                #    p = np.random.rand()
-
                 # The last great energy filter
-                # Accept the water molecule if energy is favorable
-                # Or apply Metropolis criterion for bad orientation only (energy > energy_cutoff)
-                if energy_orientation < self._energy_cutoff: # or p < delta_e:
+                if utils.boltzmann_acceptance_rejection(energy_orientation, self._temperature, self._energy_cutoff)[0]:
                     data.append((shell_id + 1, energy_position, energy_orientation))
                     self._update_maps(water)
                 else:

@@ -21,22 +21,44 @@ from . import utils
 
 
 def _water_grid_calculation(xyzs, ad_map, atom_types, temperature, water_orientations, verbose=False):
-    energy = ad_map.energy_coordinates(xyzs, atom_types[0])
+    energy = np.zeros(shape=(xyzs.shape[0]))
+    """ We want to avoid any edges effects, so we exclude 
+    the grid points that are too close from the edges.
+    """
+    not_close_to_egdes = ~ad_map.is_close_to_edge(xyzs, distance=1.)
 
-    for i, xyz in enumerate(xyzs):
+    energy[not_close_to_egdes] = ad_map.energy_coordinates(xyzs[not_close_to_egdes], atom_types[0])
+
+    n = 0
+    n_total = np.sum(not_close_to_egdes)
+
+    for i in np.where(not_close_to_egdes)[0]:
         tmp_energy = energy[i]
-        new_orientations = xyz + water_orientations
+        new_orientations = xyzs[i] + water_orientations
         
+        # Get the energy of each orientation
         for j, atom_type in enumerate(atom_types[1:]):
             tmp_energy += ad_map.energy_coordinates(new_orientations[:, j], atom_type)
 
-        p = utils.boltzmann_probabilities(tmp_energy, temperature)
-        tmp_energy[tmp_energy == np.inf] = 0.0
-        energy[i] = np.sum(tmp_energy * p)
+        # Safeguard, inf values mean that we are outside the box
+        tmp_energy = tmp_energy[tmp_energy != np.inf]
 
-        if (i % 100 == 0) and verbose:
-            sys.stdout.write("\rGrid points calculated:  %5.2f / 100 %%" % (np.float(i) / xyzs.shape[0] * 100.))
+        """ If there is at least one favorable (< 0 kcal/mol) orientation
+        we compute the boltzmann average energy, otherwise it means that
+        we are in the receptor (clashes), and so we just compute the classic
+        energy average. 
+        """
+        if any(tmp_energy < 0):
+            p = utils.boltzmann_probabilities(tmp_energy, temperature)
+            energy[i] = np.sum(tmp_energy * p)
+        else:
+            energy[i] = np.mean(tmp_energy)
+
+        if (n % 100 == 0) and verbose:
+            sys.stdout.write("\rGrid points calculated:  %5.2f / 100 %%" % (np.float(n) / n_total * 100.))
             sys.stdout.flush()
+
+        n += 1
     
     return energy
 

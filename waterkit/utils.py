@@ -371,9 +371,12 @@ def boltzmann_choices(energies, temperature, size=None):
     p = boltzmann_probabilities(energies, temperature)
 
     if np.sum(p) == 0.:
-        return None
+        return np.array([])
 
-    if size is not None and size > 1:
+    if size is None:
+        size = 1
+
+    if size > 1:
         # If some prob. in p are zero, ValueError: size of nonzero p is lower than size
         non_zero = np.count_nonzero(p)
         size = non_zero if non_zero < size else size
@@ -381,6 +384,32 @@ def boltzmann_choices(energies, temperature, size=None):
     i = np.random.choice(len(energies), size, False, p)
 
     return i
+
+
+def boltzmann_acceptance_rejection(energies, temperature=300, cutoff=None):
+    kb = 0.0019872041
+
+    energies = np.ravel(energies)
+    
+    if cutoff is not None:
+        decisions = energies < cutoff
+    else:
+        decisions = np.zeros(shape=energies.shape[0], dtype=np.bool)
+
+    if all(decisions):
+        return decisions
+    else:
+        unfavorable_indices = np.where(decisions == False)
+        unfavorable_energies = energies[unfavorable_indices]
+
+        delta_e = np.exp(-unfavorable_energies / (kb * temperature))
+        delta_e[delta_e >= 1] = 1.
+
+        p = np.random.rand(unfavorable_energies.shape[0])
+
+        decisions[unfavorable_indices] = p < delta_e
+
+        return decisions
 
 
 def prepare_water_map(ad_map, water_model="tip3p", dielectric=1.):
