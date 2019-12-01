@@ -73,6 +73,7 @@ def write_system_pdb_file(fname, receptor, water_filenames, overwrite=True):
         fname (str): output name for the topology file
         receptor_filename (str): filename of the receptor file
         water_filenames (list): list of filenames of the water files
+        overwrite (bool): overwrite or not the PDB file (default: True)
 
     """
     max_n_waters, idx = max_water(water_filenames)
@@ -123,8 +124,6 @@ def write_trajectory_file(fname, receptor, water_filenames):
         fname (str): output name for the trajectory
         receptor_filename (str): filename of the receptor pdb file
         water_filenames (list): list of filenames of the water files
-        dummy_water_xyz (array-like): xyz coordinates of the dummy to add
-        box (array-like): box dimension (x, y, z, alpha, beta, gamma)
 
     """
     max_n_waters, idx = max_water(water_filenames)
@@ -169,7 +168,7 @@ def write_trajectory_file(fname, receptor, water_filenames):
 
     trj = NetCDFTraj.open_new(fname, natom=max_n_atoms, box=True, crds=True)
 
-    for water_filename in water_filenames:
+    for i, water_filename in enumerate(water_filenames):
         m = pmd.load_file(water_filename)
 
         last_atom_id = len(m.residues) * 3
@@ -182,6 +181,7 @@ def write_trajectory_file(fname, receptor, water_filenames):
 
         trj.add_coordinates(coordinates)
         trj.add_box(box)
+        trj.add_time(i + 1)
 
     trj.close()
 
