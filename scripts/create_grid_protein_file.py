@@ -9,11 +9,7 @@ import os
 import warnings
 
 import numpy as np
-from MDAnalysis import Universe
 
-
-# Ignore all the warnings (unrecognized atom types MDAnalysis)
-warnings.filterwarnings("ignore")
 
 def cmd_lineparser():
     """ Function to parse argument command line """
@@ -21,124 +17,110 @@ def cmd_lineparser():
     parser.add_argument("-r", "--receptor", dest="receptor_file", required=True,
                         action="store", help="receptor file (PDBQT)")
     group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument("-l", "--ligand", dest="ligand_file",
+    group.add_argument("-l", "--ligand", dest="ligand_file", default=None,
                         action="store", help="ligand file")
-    group.add_argument("-c", "--residues", dest="csv_file",
-                        action="store", help="csv file with residues (resid,segid)")
+    group.add_argument("-c", "--center", dest="box_center", nargs=3, type=float,
+                        action="store", help="center of the box")
+    parser.add_argument("-s", "--size", dest="box_size", nargs=3, type=int, required=True,
+                        action="store", help="size of the box in Angstrom")
     parser.add_argument("-o", "--output", dest="output_file", default='protein.gpf',
                         action="store", help="output file")
-    parser.add_argument("--buffer", dest="buffer_space", default=11, type=int,
-                        action="store", help="buffer spacing")
-    parser.add_argument("--spacing", dest="spacing", default=0.375, type=float,
-                        action="store", help="grid spacing")
     return parser.parse_args()
 
 
-def read_residues_csv_file(csv_file):
-    """ Function to read the csv file, one
-    residue per line with format <resid,segid> """
-    residues = []
+def atom_types_from_pdbqt_file(pdbqt_file):
+    atom_types = []
 
-    with open(csv_file) as f:
+    with open(pdbqt_file) as f:
         lines = f.readlines()
 
         for line in lines:
-            try:
-                resid, segid = line.split(',')
-                residues.append((int(resid), segid.rstrip()))
-            except:
-                continue
+            atom_types.append(line[77:].rstrip())
 
-    return residues
+    atom_types = list(set(atom_types))
 
+    return atom_types
 
-def get_npts(box, center, spacing, buffer_space=0):
-    """ Function to compute the number of grid points """
-    box = box.T
-    
-    if np.abs(box[0][0] - center[0]) >= np.abs(box[0][1] - center[0]):
-        x = np.abs(box[0][0] - center[0]) + buffer_space
-    else:
-        x = np.abs(box[0][1] - center[0]) + buffer_space
-        
-    if np.abs(box[1][0] - center[1]) >= np.abs(box[1][1] - center[1]):
-        y = np.abs(box[1][0] - center[1]) + buffer_space
-    else:
-        y = np.abs(box[1][1] - center[1]) + buffer_space
-        
-    if np.abs(box[2][0] - center[2]) >= np.abs(box[2][1] - center[2]):
-        z = np.abs(box[2][0] - center[2]) + buffer_space
-    else:
-        z = np.abs(box[2][1] - center[2]) + buffer_space
-        
-    x = np.floor(x / spacing) * 2
-    y = np.floor(y / spacing) * 2
-    z = np.floor(z / spacing) * 2
+def molecule_centroid(pdb_file):
+    coordinates = []
+
+    with open(pdb_file) as f:
+        lines = f.readlines()
+
+        for line in lines:
+            if "ATOM" in line:
+                x = line[30:38]
+                y = line[38:46]
+                z = line[46:54]
+                coordinates.append((x, y, z))
+
+    coordinates = np.array(coordinates, dtype=np.float)
+    centroid = np.mean(coordinates, axis=0)
+
+    return centroid
+
+def number_of_grid_points(box_size, spacing=0.375):
+    """ Function to compute the number of grid points.
+
+    Args:
+        box_size (array-like): 3D dimensions of the box
+        spacing (float): spacing between grid point (default: 0.375)
+
+    Returns:
+        ndarray: number of grid points in each dimension
+
+    """
+    x = np.floor(box_size[0] / spacing) // 2 * 2 + 1
+    y = np.floor(box_size[1] / spacing) // 2 * 2 + 1
+    z = np.floor(box_size[2] / spacing) // 2 * 2 + 1
 
     npts = np.array([np.int(x), np.int(y), np.int(z)])
 
     return npts
 
-def create_gpf_file(npts, center, receptor_types, receptor_file, output_file='protein.gpf'):
+def create_gpf_file(fname, npts, center, receptor_types, receptor_file):
     """ Write the Protein Grid file"""
-    path_name = os.path.dirname(receptor_file)
     receptor_name = os.path.basename(receptor_file).split('.')[0]
-
-    if not path_name:
-        path_name = '.'
 
     grid_str = ("npts {npts}\n"                       
                 "parameter_file AD4_parameters.dat\n"
-                "gridfld {path}/{name}_maps.fld\n"     
+                "gridfld {name}_maps.fld\n"     
                 "spacing 0.375\n"
                 "receptor_types {receptor_types}\n"
-                "ligand_types OD OW OT\n"
-                "receptor {path}/{name}.pdbqt\n"       
+                "ligand_types SW OW\n"
+                "receptor {name}.pdbqt\n"       
                 "gridcenter {center}\n"
                 "smooth 0\n"
-                "map {path}/{name}_OD.map\n"
-                "map {path}/{name}_OW.map\n"
-                "map {path}/{name}_OT.map\n"
-                "elecmap {path}/{name}_e.map\n"
-                "dsolvmap {path}/{name}_d.map\n"
+                "map {name}_SW.map\n"
+                "map {name}_OW.map\n"
+                "elecmap {name}_e.map\n"
+                "dsolvmap {name}_d.map\n"
                 "dielectric 1\n"
                )
 
-    tmp_str = grid_str.format(path=path_name, name=receptor_name,
+    tmp_str = grid_str.format(name=receptor_name,
                               receptor_types=' '.join(receptor_types),
                               npts=' '.join([str(x) for x in npts]),
-                              center=' '.join([str(x) for x in center]))
+                              center=' '.join(['%8.3f' % x for x in center]))
 
-    with open(output_file, 'w') as w:
+    with open(fname, 'w') as w:
         w.write(tmp_str)
 
 def main():
     args = cmd_lineparser()
     receptor_file = args.receptor_file
     ligand_file = args.ligand_file
-    csv_file = args.csv_file
+    box_center = args.box_center
+    box_size = args.box_size
     output_file = args.output_file
-    buffer_space = args.buffer_space
-    spacing = args.spacing
 
-    receptor = Universe(receptor_file)
+    if ligand_file is not None:
+        box_center = molecule_centroid(ligand_file)
 
-    if ligand_file:
-        ligand = Universe(ligand_file).select_atoms('all')
-    elif csv_file:
-        residues = read_residues_csv_file(csv_file)
-        selection = ' or '.join(['(resid %d and segid %s)' % residue for residue in residues])
-        ligand = receptor.select_atoms(selection)
-        
-    # Get the center/box of the selection
-    center = ligand.centroid(pbc=False)
-    box = ligand.bbox(pbc=False)
-    # Get number of grid points
-    npts = get_npts(box, center, spacing, buffer_space)
-    # Get receptor types
-    receptor_types = np.unique(receptor.atoms.types)
+    npts = number_of_grid_points(box_size)
+    receptor_types = atom_types_from_pdbqt_file(receptor_file)
 
-    create_gpf_file(npts, center, receptor_types, receptor_file, output_file)
+    create_gpf_file(output_file, npts, box_center, receptor_types, receptor_file)
 
 if __name__ == '__main__':
     main()

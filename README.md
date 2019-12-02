@@ -60,31 +60,16 @@ The following protein coordinate files will be generated: ```protein_prepared.pd
 ### Sample water molecule positions with WaterKit
 
 1. Create Grid Protein File (GPF)
+```bash
+$ create_grid_protein_file.py -r protein_prepared.pdbqt -c 0 0 0 -s 24 24 24 -o protein.gpf
 ```
-# protein_grid.gpf
-npts 64 64 64
-parameter_file AD4_parameters.dat
-gridfld protein_maps.fld
-spacing 0.375
-receptor_types HP HO C3 HC HA O2 C* NA NB C8 CB C CO CN CC H CA O N S CX C2 CR N2 N3 CW CT OH H1 H4 H5
-ligand_types SW OW OT
-receptor protein_prepared.pdbqt
-gridcenter 0.0 0.0 0.0
-smooth 0
-map protein_SW.map
-map protein_OW.map
-map protein_OT.map
-elecmap protein_e.map
-dsolvmap protein_d.map
-dielectric 1
-```
-
-Depending of your system, you would have at least to modify the grid parameters (```npts```, ```gridcenter```) and the receptor atom types list (```receptor_types```). An example of GPF file (```protein_grid.gpf```) as well as the AutoDock parameters (```AD4_parameters.dat```) are provided. Those files are located in the ```data``` waterkit module's directory.
 
 2. Pre-calculate grid maps with autogrid4
 ```bash
 $ autogrid4 -p protein_grid.gpf -l protein_grid.glg
 ```
+
+The AutoDock parameters (```AD4_parameters.dat```) are provided and located in the ```data``` directory of the waterkit module.
 
 3. Run WaterKit
 ```bash
