@@ -23,12 +23,24 @@ def cmd_lineparser():
                         action="store", help="center of the box")
     parser.add_argument("-s", "--size", dest="box_size", nargs=3, type=int, required=True,
                         action="store", help="size of the box in Angstrom")
+    parser.add_argument("-w", "--water", dest="water_model", default="tip3p",
+                        choices=["tip3p", "tip5p"], action="store",
+                        help="water model used (tip3p or tip5p)")
     parser.add_argument("-o", "--output", dest="output_file", default='protein.gpf',
                         action="store", help="output file")
     return parser.parse_args()
 
 
 def atom_types_from_pdbqt_file(pdbqt_file):
+    """ Get all the unique atom types
+    
+    Args:
+        pdbqt_filename (str): pathname to PDBQT file
+
+    Returns:
+        list: atom types
+
+    """
     atom_types = []
 
     with open(pdbqt_file) as f:
@@ -41,7 +53,17 @@ def atom_types_from_pdbqt_file(pdbqt_file):
 
     return atom_types
 
+
 def molecule_centroid(pdb_file):
+    """ Get the centroid of the molecule
+
+    Args:
+        pdb_file (str): pathname to PDB/PDBQT file
+    
+    Returns:
+        ndarrays: centroid
+
+    """
     coordinates = []
 
     with open(pdb_file) as f:
@@ -58,6 +80,7 @@ def molecule_centroid(pdb_file):
     centroid = np.mean(coordinates, axis=0)
 
     return centroid
+
 
 def number_of_grid_points(box_size, spacing=0.375):
     """ Function to compute the number of grid points.
@@ -78,49 +101,72 @@ def number_of_grid_points(box_size, spacing=0.375):
 
     return npts
 
-def create_gpf_file(fname, npts, center, receptor_types, receptor_file):
-    """ Write the Protein Grid file"""
-    receptor_name = os.path.basename(receptor_file).split('.')[0]
 
-    grid_str = ("npts {npts}\n"                       
-                "parameter_file AD4_parameters.dat\n"
-                "gridfld {name}_maps.fld\n"     
-                "spacing 0.375\n"
-                "receptor_types {receptor_types}\n"
-                "ligand_types SW OW\n"
-                "receptor {name}.pdbqt\n"       
-                "gridcenter {center}\n"
-                "smooth 0\n"
-                "map {name}_SW.map\n"
-                "map {name}_OW.map\n"
-                "elecmap {name}_e.map\n"
-                "dsolvmap {name}_d.map\n"
-                "dielectric 1\n"
-               )
+def create_gpf_file(fname, receptor_file, receptor_types, atom_types, 
+                    center=(0., 0., 0.), npts=(32, 32, 32), spacing=0.375, smooth=0.5, 
+                    dielectric=-0.1465):
+    """ Write the Protein Grid file
+    
+    Args:
+        receptor_file (str): pathname of the PDBQT receptor file
+        receptor_types (list): list of the receptor atom types
+        atom_types (list): list of the ligand atom types
+        center (array_like): center of the grid (default: (0, 0, 0))
+        npts (array_like): size of the grid box (default: (32, 32, 32))
+        spacing (float): space between grid points (default: 0.375)
+        smooth (float): AutoDock energy smoothing (default: 0.5)
 
-    tmp_str = grid_str.format(name=receptor_name,
-                              receptor_types=' '.join(receptor_types),
-                              npts=' '.join([str(x) for x in npts]),
-                              center=' '.join(['%8.3f' % x for x in center]))
+    """
+    _, receptor_filename = os.path.split(receptor_file)
+    receptor_name = receptor_filename.split(".")[0]
 
-    with open(fname, 'w') as w:
-        w.write(tmp_str)
+    fld_file =  "%s_maps.fld" % receptor_name
+    xyz_file =  "%s_maps.xyz" % receptor_name
+    map_files = ["%s_%s.map" % (receptor_name, t) for t in atom_types]
+    e_file = "%s_e.map" % receptor_name
+    d_file = "%s_d.map" % receptor_name
+
+    ag_str = "npts %d %d %d\n" % (npts[0], npts[1], npts[2])
+    ag_str += "parameter_file %s\n" % "AD4_parameters.dat"
+    ag_str += "gridfld %s\n" % fld_file
+    ag_str += "spacing %.3f\n" % spacing
+    ag_str += "receptor_types " + " ".join(receptor_types) + "\n"
+    ag_str += "ligand_types " + " ".join(atom_types) + "\n"
+    ag_str += "receptor %s\n" % receptor_filename
+    ag_str += "gridcenter %.3f %.3f %.3f\n" % (center[0], center[1], center[2])
+    ag_str += "smooth %.3f\n" % smooth
+    for map_file in map_files:
+        ag_str += "map %s\n" % map_file
+    ag_str += "elecmap %s\n" % e_file
+    ag_str += "dsolvmap %s\n" % d_file
+    ag_str += "dielectric %.3f\n" % dielectric
+
+    with open(fname, "w") as w:
+        w.write(ag_str)
+
 
 def main():
     args = cmd_lineparser()
     receptor_file = args.receptor_file
     ligand_file = args.ligand_file
-    box_center = args.box_center
+    center = args.box_center
     box_size = args.box_size
+    water_model = args.water_model
     output_file = args.output_file
 
     if ligand_file is not None:
-        box_center = molecule_centroid(ligand_file)
+        center = molecule_centroid(ligand_file)
+
+    if water_model == "tip3p":
+        atom_types = ["SW", "OW"]
+    else:
+        atom_types = ["SW", "OT"]
 
     npts = number_of_grid_points(box_size)
     receptor_types = atom_types_from_pdbqt_file(receptor_file)
 
-    create_gpf_file(output_file, npts, box_center, receptor_types, receptor_file)
+    create_gpf_file(output_file, receptor_file, receptor_types, atom_types, 
+                    center, npts, smooth=1, dielectric=1)
 
 if __name__ == '__main__':
     main()

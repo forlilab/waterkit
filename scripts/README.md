@@ -10,10 +10,10 @@ $ amber2pdbqt.py -t protein.prmtop -c protein.rst7 -o protein --pdb
 
 ## create_grid_protein_file
 
-Script to generate automatically the gpf file for WaterKit. Instead of specifying the center of the box ```-c```, one can passed a pdb/pdbqt file of the ligand with the option ```-l``` followed by the path of the file. The box will be centered at the centroid of the ligand. The argument ```-s```specify the dimensions of the box in Angstrom. The spacing between each grid points is 0.375 Angstrom per default.
+Script to generate automatically the gpf file for WaterKit. Instead of specifying the center of the box ```-c```, one can passed a pdb/pdbqt file of the ligand with the option ```-l``` followed by the path of the file. The box will be centered at the centroid of the ligand. The argument ```-s```specify the dimensions of the box in Angstrom. The spacing between each grid points is 0.375 Angstrom per default. There are two different water models ```-w```: tip3p or tip5p water models.
 
 ```bash
-$ create_grid_protein_file.py -r protein.pdbqt -c 0 0 0 -s 24 24 24 -o protein.gpf
+$ create_grid_protein_file.py -r protein.pdbqt -c 0 0 0 -s 24 24 24 -w "tip3p" -o protein.gpf
 ```
 
 ## make_trajectory
