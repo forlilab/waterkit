@@ -20,18 +20,15 @@ You need, at a minimum (requirements):
 
 I highly recommand you to install the Anaconda distribution (https://www.continuum.io/downloads) if you want a clean python environnment with nearly all the prerequisites already installed. To install everything properly, you just have to do this:
 ```bash
-$ conda install -c conda-forge openbabel parmed
-$ conda install -c ambermd ambertools
+$ conda create -n waterkit python=3.7
+$ conda activate waterkit
+$ conda install -c conda-forge -c ambermd -c omnia mkl numpy scipy pandas openbabel=2.4.1 \
+	parmed ambertools sphinx sphinx_rtd_theme
 ```
 
 To install the `WaterKit` package
 ```bash
-$ python setup.py install
-```
-
-For the documentation only
-```bash
-$ conda install sphinx sphinx_rtd_theme
+$ python setup.py build install
 ```
 
 ## Documentation
