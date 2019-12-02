@@ -1,5 +1,3 @@
-# Collection of scripts
-
 ## amber2pdbqt
 
 Script to convert Amber topology and coordinates files to PDBQT file for WaterKit. A suffix ```_prepared``` will be added to the output file name. If the argument ```-o``` is not defined, the output name will be the same as the input topology name. If the argument ```--pdb``` is specified, it will output also a PDB file.
