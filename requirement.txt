@@ -1,5 +1,0 @@
-numpy
-pybel
-openbabel
-pandas
-scipy
