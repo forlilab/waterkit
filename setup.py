@@ -2,7 +2,9 @@
 # -*- coding: utf-8 -*-
 
 import os
+import glob
 import fnmatch
+from setuptools import setup, find_packages
 
 
 def find_files(directory):
@@ -21,11 +23,20 @@ setup(name="waterkit",
       author="Jerome Eberhardt",
       author_email="jerome@scripps.edu",
       url="https://github.com/jeeberhardt/waterkit",
+      packages=find_packages(),
       scripts=["scripts/amber2pdbqt.py",
                "scripts/make_trajectory.py",
                "scripts/run_waterkit.py",
                "scripts/create_grid_protein_file.py"],
-      data_files=[("", find_files("waterkit/data"))],
+      package_data={
+            "waterkit" : ["data/*",
+                          "data/water/tip3p/*",
+                          "data/water/tip3p/raw_data/*",
+                          "data/water/tip5p/*",
+                          "data/water/tip5p/raw_data/*"]
+      },
+      data_files=[("", ["README.md", "LICENSE"]),
+                  ("scripts", find_files("scripts"))],
       include_package_data=True,
       zip_safe=False,
       license="MIT",
