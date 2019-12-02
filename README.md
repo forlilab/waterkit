@@ -52,7 +52,7 @@ Conversion to PDBQT using AmberTools19 (http://ambermd.org/GetAmber.php) and `am
 ```bash
 $ pdb4amber -i protein.pdb -o protein_clean.pdb --dry --nohyd --no-conect --leap-template
 $ tleap -s -f leap.template.in > leap.template.out
-$ amber2pdbqt.py -t prmtop -c rst7 -o protein
+$ amber2pdbqt.py -t prmtop -c rst7 -o protein --pdb
 ```
 
 The following protein coordinate files will be generated: ```protein_prepared.pdbqt``` and ```protein_prepared.pdb```. The PDBQT file will be used by WaterKit and the PDB file will be used to create the trajectory file at the end.

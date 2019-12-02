@@ -21,6 +21,8 @@ def cmd_lineparser():
                         action="store", help="coordinates file")
     parser.add_argument("-o", "--output", dest="output_name", default=None,
                         action="store", help="output name")
+    parser.add_argument("--pdb", dest="make_pdb", default=False,
+                        action="store_true", help="convert to pdb also")
     return parser.parse_args()
 
 
@@ -73,6 +75,7 @@ def main():
     top_file = args.top_file
     crd_file = args.crd_file
     output_name = args.output_name
+    make_pdb = args.make_pdb
 
     if output_name is None:
         output_name = top_file.split('.')[0]
@@ -80,8 +83,9 @@ def main():
     molecule = pmd.load_file(top_file, crd_file)
 
     # The PDB file will be use for the trajectory and
+    if make_pdb:
+        write_pdb_file("%s_prepared.pdb" % output_name, molecule)
     # the PDBQT file for WaterKit
-    write_pdb_file("%s_prepared.pdb" % output_name, molecule)
     write_pdbqt_file("%s_prepared.pdbqt" % output_name, molecule)
 
 
