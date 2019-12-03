@@ -26,11 +26,13 @@ $ conda install -c conda-forge -c omnia mkl numpy scipy pandas openbabel=2.4.1 p
     sphinx sphinx_rtd_theme
 ```
 
-The parallel version of AmberTools is not available yet through ```conda```, so we will have to manually install it. The AmberTools package can be dowdnloaded here: http://ambermd.org/GetAmber.php.
+The parallel version of AmberTools is not available yet through ```conda```, so we will have to manually install it. The AmberTools package can be downloaded here: http://ambermd.org/GetAmber.php.
 ```bash
 $ tar -xvf AmberTools19.tar.bz2
 $ cd amber18 # This is not an error
-$ ./configure -mpi --with-python `which python` --python-install global gnu # Linked to our conda environnment
+$ ./configure -mpi --with-python `which python` --python-install global gnu # Linked to our environnment
+$ make
+$ make install
 ```
 
 Finally, we can install the `WaterKit` package
