@@ -45,6 +45,8 @@ def max_water(water_filenames):
     sizes = [os.path.getsize(f) for f in water_filenames]
     idx = np.argmax(sizes)
     m = pmd.load_file(water_filenames[idx])
+    # We select only the water molecules, because we might have ions, etc...
+    m = m["@O, H1, H2"]
     max_water = len(m.residues)
     return max_water, idx
 
@@ -62,6 +64,8 @@ def min_water(water_filenames):
     sizes = [os.path.getsize(f) for f in water_filenames]
     idx = np.argmin(sizes)
     m = pmd.load_file(water_filenames[idx])
+    # We select only the water molecules, because we might have ions, etc...
+    m = m["@O, H1, H2"]
     max_water = len(m.residues)
     return max_water, idx
 
