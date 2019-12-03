@@ -32,7 +32,7 @@ $ tar -xvf AmberTools19.tar.bz2
 $ cd amber18 # This is not an error
 $ ./configure -mpi --skip-python gnu # No link to python
 $ make install
-$ ln -sf $AMBERHOME/bin/sander.MPI $CONDA_PREFIX/bin/sander.MPI
+$ ln -f $AMBERHOME/bin/sander.MPI $CONDA_PREFIX/bin/sander.MPI # Create hard link to conda env
 ```
 
 Finally, we can install the `WaterKit` package
