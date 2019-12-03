@@ -22,17 +22,17 @@ I highly recommand you to install the Anaconda distribution (https://www.continu
 ```bash
 $ conda create -n waterkit python=3.7
 $ conda activate waterkit
-$ conda install -c conda-forge -c omnia mkl numpy scipy pandas openbabel=2.4.1 parmed \
-    sphinx sphinx_rtd_theme
+$ conda install -c conda-forge -c ambermd -c omnia mkl numpy scipy pandas openbabel=2.4.1 \
+    parmed ambertools sphinx sphinx_rtd_theme
 ```
 
-The parallel version of AmberTools is not available yet through ```conda```, so we will have to install it manually. The AmberTools package can be downloaded here: http://ambermd.org/GetAmber.php. If you have already a parallel version of AmberTools installed on your machine, you can skip this step.
+The parallel version of ```sander.MPI``` is not available through Anaconda, so we will have to install it manually. The AmberTools package can be downloaded here: http://ambermd.org/GetAmber.php. If you have already a parallel version of ```sander.MPI``` installed on your machine, you can skip this step.
 ```bash
 $ tar -xvf AmberTools19.tar.bz2
 $ cd amber18 # This is not an error
-$ ./configure -mpi --with-python `which python` --python-install global gnu # Linked to our environnment
-$ make
+$ ./configure -mpi --skip-python gnu # No link to python
 $ make install
+$ ln -sf $AMBERHOME/bin/sander.MPI $CONDA_PREFIX/bin/sander.MPI
 ```
 
 Finally, we can install the `WaterKit` package
