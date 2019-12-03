@@ -22,12 +22,20 @@ I highly recommand you to install the Anaconda distribution (https://www.continu
 ```bash
 $ conda create -n waterkit python=3.7
 $ conda activate waterkit
-$ conda install -c conda-forge -c ambermd -c omnia mkl numpy scipy pandas openbabel=2.4.1 \
-	parmed ambertools sphinx sphinx_rtd_theme
+$ conda install -c conda-forge -c omnia mkl numpy scipy pandas openbabel=2.4.1 parmed sphinx sphinx_rtd_theme
 ```
 
-To install the `WaterKit` package
+The parallel version of AmberTools is not available yet through conda, so we will have to manually install it. The AmberTools package can be dowdnloaded here: http://ambermd.org/GetAmber.php.
 ```bash
+$ tar -xvf AmberTools19.tar.bz2
+$ cd amber18 # This is not an error
+$ ./configure -mpi --with-python `which python` --python-install global gnu # Will be directly linked to our conda environnment
+```
+
+Finally, we can install the `WaterKit` package
+```bash
+$ git clone https://github.com/jeeberhardt/waterkit
+$ cd waterkit
 $ python setup.py build install
 ```
 
@@ -45,7 +53,7 @@ Open the file ```build/html/index.html``` with your favorite browser (Google Chr
 
 ### Receptor preparation
 
-Conversion to PDBQT using AmberTools19 (http://ambermd.org/GetAmber.php) and `amber2pdbqt.py` script
+Conversion to PDBQT using AmberTools19 and `amber2pdbqt.py` script
 ```bash
 $ pdb4amber -i protein.pdb -o protein_clean.pdb --dry --nohyd --no-conect --leap-template
 $ tleap -s -f leap.template.in > leap.template.out
