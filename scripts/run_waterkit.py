@@ -11,13 +11,13 @@ from __future__ import print_function
 from __future__ import absolute_import
 
 import os
-import imp
 import argparse
 
 from waterkit import AutoDockForceField
 from waterkit import Map
 from waterkit import Molecule
 from waterkit import WaterKit
+from waterkit import utils
 
 
 def cmd_lineparser():
@@ -59,7 +59,7 @@ def main():
 
     """If the user does not provide any of these elements,
     we take those available per default in waterkit."""
-    d = imp.find_module("waterkit")[1]
+    d = utils.path_module("waterkit")
     ad_forcefield_file = os.path.join(d, "data/AD4_parameters.dat")
     ad_forcefield = AutoDockForceField(ad_forcefield_file, smooth=0, dielectric=1.)
 

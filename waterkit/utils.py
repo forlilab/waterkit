@@ -12,7 +12,14 @@ from __future__ import absolute_import
 
 import tempfile
 import errno
+import os
 import subprocess
+import sys
+
+if sys.version_info >= (3, ):
+    import importlib
+else:
+    import imp
 
 import numpy as np
 
@@ -340,6 +347,23 @@ def execute_command(cmd_line):
     p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
     output, errors = p.communicate()
     return output, errors
+
+
+def path_module(module_name):
+    try:
+        specs = importlib.machinery.PathFinder().find_spec(module_name)
+
+        if specs is not None:
+            return specs.submodule_search_locations[0]
+    except:
+        try:
+            _, path, _ = imp.find_module(module_name)
+            abspath = os.path.abspath(path)
+            return abspath
+        except ImportError:
+            return None
+
+    return None
 
 
 def split_list_in_chunks(size, n):

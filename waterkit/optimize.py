@@ -10,7 +10,6 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import absolute_import
 
-import imp
 import os
 import time
 
@@ -43,7 +42,7 @@ class WaterSampler():
         # Boltzmann constant (kcal/mol)
         self._kb = 0.0019872041
 
-        d = imp.find_module("waterkit")[1]
+        d = utils.path_module("waterkit")
 
         # Water orientations set
         """ Load pre-generated water molecules (only hydrogens)
