@@ -337,7 +337,7 @@ def is_writable(pathname):
 def execute_command(cmd_line):
     """Simple function to execute bash command."""
     args = cmd_line.split()
-    p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
     output, errors = p.communicate()
     return output, errors
 
