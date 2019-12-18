@@ -166,7 +166,7 @@ def main():
     receptor_types = atom_types_from_pdbqt_file(receptor_file)
 
     create_gpf_file(output_file, receptor_file, receptor_types, atom_types, 
-                    center, npts, smooth=1, dielectric=1)
+                    center, npts, smooth=0, dielectric=1)
 
 if __name__ == '__main__':
     main()
