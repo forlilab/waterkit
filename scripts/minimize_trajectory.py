@@ -41,15 +41,12 @@ def _minimize_single(input_filename, log_filename, prmtop_filename,
               " &cntrl\n"
               "  imin = 5,                            ! Apply to every frame in the input traj\n"
               "  maxcyc = %d,                         ! (maxcyc - ncyc) steps of CONJ\n"
-              "  ncyc = 10,                           ! 10 steps of SD\n"
-              "  ntmin = 1,                           ! SD + CONJ\n"
+              "  ntmin = 0,                           ! SD + CONJ\n"
               "  ntb = 0,                             ! No periodic box, PME is off\n"
-              "  igb = 0,                             ! In vacuum electrostatics and no virtual box\n"
-              "  cut = 9,                             ! Non-bonded cutoff\n"
-              "  nsnb = 25,                           ! Non-bonded list update every 100 steps\n"
+              "  igb = 6,                             ! In vacuum electrostatics\n"
+              "  cut = 35,                            ! Non-bonded cutoff\n"
+              "  nsnb = 50,                           ! Non-bonded list update every 100 steps\n"
               "  ntc = 1,                             ! No SHAKE\n"
-              "  intdiel = 1, \n"
-              "  extdiel = 1, \n"
               "  ntf = 1,                             ! Force evaluation, complete interaction is calculated\n"
               "  ntr = 1,                             ! Use harmonic constraints\n"
               "  restraint_wt = 2.5,                  ! Constraints of 2.5 kcal/mol\n"
@@ -78,6 +75,23 @@ def _minimize_single(input_filename, log_filename, prmtop_filename,
     return True
 
 
+def _box_information(traj_filename):
+    box = None
+
+    try:
+        traj = NetCDFTraj.open_old(traj_filename)
+
+        if traj.hasbox:
+            box = traj.box[0]
+
+        traj.close()
+    except FileNotFoundError:
+        print("Cannot find trajectory file: %s" % traj_filename)
+        sys.exit(0)
+
+    return box
+
+
 def _split_trajectory(prmtop_filename, traj_filename, n_chunk=2, prefix=None):
     trajout_filenames = []
     split_filename = "traj_split.inp"
@@ -89,7 +103,7 @@ def _split_trajectory(prmtop_filename, traj_filename, n_chunk=2, prefix=None):
     try:
         traj = NetCDFTraj.open_old(traj_filename)
     except FileNotFoundError:
-        print("Cannot find trajectory file: %s" % prmtop_filename)
+        print("Cannot find trajectory file: %s" % traj_filename)
         sys.exit(0)
 
     n_frames = traj.frame
@@ -122,10 +136,12 @@ def _split_trajectory(prmtop_filename, traj_filename, n_chunk=2, prefix=None):
     return trajout_filenames
 
 
-def _concatenate_trajectories(prmtop_filename, trajin_filenames, trajout_filename):
+def _concatenate_trajectories(prmtop_filename, trajin_filenames, trajout_filename, box=None):
     conc_filename = "traj_concatenate.inp"
 
     concin = "parm %s\n" % prmtop_filename
+    if box is not None:
+        concin += "box x %f y %f z %s alpha %d beta %d gamma %d\n" % (box[0], box[1], box[2], box[3], box[4], box[5])
     for trajin_filename in trajin_filenames:
         concin += "trajin %s\n" % trajin_filename
     concin += "trajout %s\n" % trajout_filename
@@ -158,6 +174,8 @@ class WaterMinimizer:
         jobs = []
         files_to_remove = ["restrt"]
 
+        box = _box_information(traj_filename)
+
         if self._n_jobs > 1:
             # Split trajectory
             traj_split_filenames = _split_trajectory(prmtop_filename, traj_filename, self._n_jobs)
@@ -182,10 +200,11 @@ class WaterMinimizer:
             for job in jobs:
                 job.join()
 
-            if self._n_jobs > 1:
-                # Concatenate trajectory
-                conc_status = _concatenate_trajectories(prmtop_filename, traj_min_filenames, output_filename)
+            # Concatenate trajectory
+            # Even if the trajectory was not splitted, we still have to add the box informations
+            conc_status = _concatenate_trajectories(prmtop_filename, traj_min_filenames, output_filename, box)
 
+            if self._n_jobs > 1:
                 # Cleaning...
                 if clean and conc_status:
                     files_to_remove.append("traj_split.inp")
