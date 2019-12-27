@@ -12,6 +12,7 @@ import argparse
 import multiprocessing as mp
 import os
 import sys
+import time
 
 from parmed.amber import NetCDFTraj
 
@@ -30,13 +31,21 @@ def cmd_lineparser():
                         action="store", help="number of jobs")
     parser.add_argument("-s", "--steps", dest="n_steps", default=50, type=int,
                         action="store", help="number of minimization steps")
+    parser.add_argument("--cutoff", dest="cutoff", default=35, type=int,
+                        action="store", help="non bonded cutoff")
+    parser.add_argument("--restraint", dest="restraint", default=2.5, type=float,
+                        action="store", help="harmonic restraint on protein heavy atoms")
     parser.add_argument("-o", "--output", dest="output_filename", default="protein_min.nc",
                         action="store", help="netcdf output trajectory name")
     return parser.parse_args()
 
 
 def _minimize_single(input_filename, log_filename, prmtop_filename,
-                     rst7_filename, trajin_filename, trajout_filename, n_steps):
+                     rst7_filename, trajin_filename, trajout_filename, 
+                     n_steps=50, cutoff=35, restraint=None):
+    if restraint is None:
+        restraint = 0
+
     mininp = ("Minimization of solvent orientation\n"
               " &cntrl\n"
               "  imin = 5,                            ! Apply to every frame in the input traj\n"
@@ -44,19 +53,25 @@ def _minimize_single(input_filename, log_filename, prmtop_filename,
               "  ntmin = 0,                           ! SD + CONJ\n"
               "  ntb = 0,                             ! No periodic box, PME is off\n"
               "  igb = 6,                             ! In vacuum electrostatics\n"
-              "  cut = 35,                            ! Non-bonded cutoff\n"
-              "  nsnb = 50,                           ! Non-bonded list update every 100 steps\n"
+              "  cut = %d,                            ! Non-bonded cutoff\n"
+              "  nsnb = %d,                           ! Non-bonded list update every 100 steps\n"
               "  ntc = 1,                             ! No SHAKE\n"
-              "  ntf = 1,                             ! Force evaluation, complete interaction is calculated\n"
-              "  ntr = 1,                             ! Use harmonic constraints\n"
-              "  restraint_wt = 2.5,                  ! Constraints of 2.5 kcal/mol\n"
-              "  restraintmask = '!@H= & !:WAT',      ! Constraints of heavy atoms except WAT\n"
-              "  ntx = 1,                             ! No velocities in the inpcrd file\n"
-              "  ntwx = 1,                            ! Every ntwx steps, the coordinates will be written to the mdcrd file\n"
-              "  ioutfm = 1                           ! Binary NetCDF trajectory\n"
-              "/\n")
+              "  ntf = 1,                             ! Force evaluation, complete interaction is calculated\n")
 
-    mininp = mininp % n_steps
+    if restraint != 0:
+        tmp = ("  ntr = 1,                             ! Use harmonic constraints\n"
+               "  restraint_wt = %.2f,                 ! Constraints of 2.5 kcal/mol\n"
+               "  restraintmask = '!@H= & !:WAT',      ! Constraints of heavy atoms except WAT\n")
+        mininp += tmp % restraint
+    else:
+        mininp += "  ntr = 0,                             ! No harmonic constraints\n"
+
+    mininp += ("  ntx = 1,                             ! No velocities in the inpcrd file\n"
+               "  ntwx = 1,                            ! Every ntwx steps, the coordinates will be written to the mdcrd file\n"
+               "  ioutfm = 1                           ! Binary NetCDF trajectory\n"
+               "/\n")
+
+    mininp = mininp % (n_steps, cutoff, n_steps)
 
     with open(input_filename, "w") as w:
         w.write(mininp)
@@ -163,8 +178,11 @@ def _concatenate_trajectories(prmtop_filename, trajin_filenames, trajout_filenam
 
 
 class WaterMinimizer:
-    def __init__(self, n_steps=50, n_jobs=-1):
+    def __init__(self, n_steps=50, cutoff=35, restraint=None, n_jobs=-1):
         self._n_steps = n_steps
+        self._cutoff = cutoff
+        self._restraint = restraint
+
         if n_jobs == -1:
             self._n_jobs = mp.cpu_count()
         else:
@@ -182,6 +200,9 @@ class WaterMinimizer:
         else:
             traj_split_filenames = [traj_filename]
 
+        # Dirty trick to be sure cpptraj finished writing
+        time.sleep(5)
+
         if traj_split_filenames:
             input_filenames = ["traj_min_%d.inp" % i for i in range(self._n_jobs)]
             log_filenames = ["traj_min_%d.out" % i for i in range(self._n_jobs)]
@@ -192,7 +213,7 @@ class WaterMinimizer:
                 args = (input_filenames[i], log_filenames[i],
                         prmtop_filename, rst7_filename, 
                         traj_split_filenames[i], traj_min_filenames[i],
-                        self._n_steps)
+                        self._n_steps, self._cutoff, self._restraint)
                 job = mp.Process(target=_minimize_single, args=args)
                 job.start()
                 jobs.append(job)
@@ -230,9 +251,11 @@ def main():
     traj_filename = args.traj_filename
     output_filename = args.output_filename
     n_steps = args.n_steps
+    cutoff = args.cutoff
+    restraint = args.restraint
     n_jobs = args.n_jobs
 
-    m = WaterMinimizer(n_steps, n_jobs)
+    m = WaterMinimizer(n_steps, cutoff, restraint, n_jobs)
     m.minimize_trajectory(prmtop_filename, rst7_filename, traj_filename, output_filename, True)
     
 
