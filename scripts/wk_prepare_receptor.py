@@ -9,6 +9,8 @@ from __future__ import print_function
 from __future__ import absolute_import
 
 import argparse
+import os
+import sys
 
 import parmed as pmd
 from pdb4amber import AmberPDBFixer
@@ -25,9 +27,8 @@ def cmd_lineparser():
     parser.add_argument("-i", "--in", required=True,
         dest="pdbin", help="PDB input file (default: stdin)",
         default='stdin')
-    parser.add_argument("-o", "--out", required=True,
-        dest="pdbout", help="PDBQT output file (default: stdout)",
-        default='stdout')
+    parser.add_argument("-o", "--out", default='protein',
+        dest="out_filename", help="output filename (default: protein)")
     parser.add_argument("-y", "--nohyd", action="store_true", default=False,
         dest="nohyd", help="remove all hydrogen atoms (default: no)")
     parser.add_argument("-d", "--dry", action="store_true", default=False,
@@ -43,7 +44,7 @@ def cmd_lineparser():
     return parser.parse_args()
 
 
-def write_pdb_file(output_name, molecule,  overwrite=True):
+def write_pdb_file(output_name, molecule,  overwrite=True, **kwargs):
     """Write PDB file
 
     Args:
@@ -51,7 +52,7 @@ def write_pdb_file(output_name, molecule,  overwrite=True):
         molecule (parmed): parmed molecule object
 
     """
-    molecule.save(output_name, format="pdb", overwrite=overwrite)
+    molecule.save(output_name, format="pdb", overwrite=overwrite, **kwargs)
 
 
 def write_pdbqt_file(output_name, molecule):
@@ -88,31 +89,52 @@ def write_pdbqt_file(output_name, molecule):
         w.write(output_str)
 
 
+def find_alt_residues(molecule):
+    alt_residues = set()
+        
+    for residue in molecule.residues:
+        chains.add(residue.chain)
+        for atom in residue.atoms:
+            if atom.other_locations:
+                alt_residues.add(residue)
+
+    return alt_residues
+
+def remove_alt_residues(molecule):
+    # remove altlocs label
+    for atom in molecule.atoms:
+        atom.altloc = ''
+        for oatom in atom.other_locations.values():
+            oatom.altloc = ''
+
 def main():
     args = cmd_lineparser()
     pdbin_filename = args.pdbin
-    pdbout_filename = args.pdbout
+    out_filename = args.out_filename
     nohyd = args.nohyd
     dry = args.dry
     mostpop = args.mostpop
-    model = args.model
-    pdb = args.pdb
+    model = args.model - 1
+
+    base_filename, extension = os.path.splitext(out_filename)
+    pdb_clean_filename = "%s_clean.pdb" % base_filename
+    pdbqt_prepared_filename = "%s_prepared.pdbqt" % base_filename
 
     try:
         receptor = pmd.load_file(pdbin_filename)
     except FileNotFoundError:
-        print "Error: Receptor file (%s) cannot be found." % pdbin_filename
+        print("Error: Receptor file (%s) cannot be found." % pdbin_filename)
+        sys.exit(0)
 
     pdbfixer = AmberPDBFixer(receptor)
 
     ns_names = pdbfixer.find_non_standard_resnames()
 
-
     # Remove all the hydrogens
     if nohyd:
         pdbfixer.parm.strip('@/H')
     # Remove water molecules
-    if dry
+    if dry:
         pdbfixer.remove_water()
     # Keep only standard-Amber residues
     pdbfixer.parm.strip('!:' + ','.join(AMBER_SUPPORTED_RESNAMES))
@@ -124,23 +146,37 @@ def main():
     # Find all the gaps
     gaplist = pdbfixer.find_gaps()
 
-    write_pdb_file("%s_prepared.pdb" % output_name, pdbfixer.parm)
+    remove_alt_residues(pdbfixer.parm)
+
+    final_coordinates = pdbfixer.parm.get_coordinates()[model]
+    write_kwargs = dict(coordinates=final_coordinates)
+    write_kwargs["increase_tercount"] = False # so CONECT record can work properly
+    write_kwargs["altlocs"] = "occupancy"
+
+    try:
+        write_pdb_file(pdb_clean_filename, pdbfixer.parm, **write_kwargs)
+    except:
+        print("Error: Could not write pdb file %s"  % pdb_clean_filename)
+        sys.exit(0)
+
     with open('leap.template.in', 'w') as w:
         final_ns_names = []
         
-        content = _make_leap_template(parm, final_ns_names, gaplist,
-                                      sslist, input_pdb=pdbout_filename, 
+        content = _make_leap_template(pdbfixer.parm, final_ns_names, gaplist,
+                                      sslist, input_pdb=pdb_clean_filename, 
                                       prmtop='prmtop', rst7='rst7')
         w.write(content)
 
     easy_call("tleap -s -f leap.template.in > leap.template.out", shell=True)
 
-    molecule = pmd.load_file('prmtop', 'rst7')
-    # The PDB file will be use for the trajectory and
-    if make_pdb:
-        write_pdb_file("%s_prepared.pdb" % output_name, pdbfixer.parm)
+    try:
+        molecule = pmd.load_file('prmtop', 'rst7')
+    except:
+        print("Error: Cannot load topology and coordinates Amber files")
+        sys.exit(0)
+
     # the PDBQT file for WaterKit
-    write_pdbqt_file("%s_prepared.pdbqt" % output_name, pdbfixer.parm)
+    write_pdbqt_file(pdbqt_prepared_filename, molecule)
 
 
 if __name__ == '__main__':
