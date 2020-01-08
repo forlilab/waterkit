@@ -47,11 +47,9 @@ Open the file ```build/html/index.html``` with your favorite browser (Google Chr
 
 ### Receptor preparation
 
-Conversion to PDBQT using AmberTools19 and `amber2pdbqt.py` script
+Conversion to PDBQT using AmberTools19 and `wk_prepare_receptor.py` script
 ```bash
-$ pdb4amber -i protein.pdb -o protein_clean.pdb --dry --nohyd --no-conect --leap-template
-$ tleap -s -f leap.template.in > leap.template.out
-$ amber2pdbqt.py -t prmtop -c rst7 -o protein --pdb
+$ wk_prepare_receptor.py -i protein.pdb -o protein_prepared --dry --nohyd --pdb --pdbqt
 ```
 
 The following protein coordinate files will be generated: ```protein_prepared.pdbqt``` and ```protein_prepared.pdb```. The PDBQT file will be used by WaterKit and the PDB file will be used to create the trajectory file at the end.
@@ -82,7 +80,7 @@ $ run_waterkit.py -i protein_prepared.pdbqt -m protein_maps.fld -n 10000 -j 16 -
 1. Create Amber trajectory with `make_trajectory.py` script
 ```bash
 $ make_trajectory.py -r protein_prepared.pdb -w traj -o protein
-$ tleap -s -f protein.leap.in > protein.leap.out
+$ wk_prepare_receptor.py -i protein_system.pdb -o protein_system
 ```
 
 2. Create input file for cpptraj
