@@ -39,6 +39,8 @@ def cmd_lineparser():
         "Use a negative number to keep all models")
     parser.add_argument("--pdb", dest="make_pdb", default=False,
         action="store_true", help="convert to pdb also")
+    parser.add_argument("--pdbqt", dest="make_pdbqt", default=False,
+        action="store_true", help="convert to pdbqt also")
     return parser.parse_args()
 
 
@@ -123,6 +125,7 @@ def main():
     mostpop = args.mostpop
     model = args.model - 1
     make_pdb = args.make_pdb
+    make_pdbqt = args.make_pdbqt
 
     logger = logging.getLogger('WaterKit receptor preparation')
     logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO"))
@@ -212,18 +215,20 @@ def main():
         logger.error("Could not generate topology/coordinates files with tleap")
         sys.exit(0)
 
-    # Write PDBQT file
-    try:
-        molecule = pmd.load_file(prmtop_filename, rst7_filename)
-    except:
-        logger.error("Cannot load topology and coordinates Amber files")
-        sys.exit(0)
+    if make_pdb or make_pdbqt:
+        # Write PDBQT file
+        try:
+            molecule = pmd.load_file(prmtop_filename, rst7_filename)
+        except:
+            logger.error("Cannot load topology and coordinates Amber files")
+            sys.exit(0)
 
-    if make_pdb:
-        write_pdb_file(pdb_prepared_filename, molecule)
+        if make_pdb:
+            write_pdb_file(pdb_prepared_filename, molecule)
 
-    # the PDBQT file for WaterKit
-    write_pdbqt_file(pdbqt_prepared_filename, molecule)
+        if make_pdbqt:
+            # the PDBQT file for WaterKit
+            write_pdbqt_file(pdbqt_prepared_filename, molecule)
 
 
 if __name__ == '__main__':
