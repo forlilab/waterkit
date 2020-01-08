@@ -122,12 +122,14 @@ def main():
     dry = args.dry
     mostpop = args.mostpop
     model = args.model - 1
+    make_pdb = args.make_pdb
 
     logger = logging.getLogger('WaterKit receptor preparation')
     logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO"))
 
     base_filename, extension = os.path.splitext(out_filename)
     pdb_clean_filename = "%s_clean.pdb" % base_filename
+    pdb_prepared_filename = "%s.pdb" % base_filename
     pdbqt_prepared_filename = "%s.pdbqt" % base_filename
     prmtop_filename = "%s.prmtop" % base_filename
     rst7_filename = "%s.rst7" % base_filename
@@ -216,6 +218,9 @@ def main():
     except:
         logger.error("Cannot load topology and coordinates Amber files")
         sys.exit(0)
+
+    if make_pdb:
+        write_pdb_file(pdb_prepared_filename, molecule)
 
     # the PDBQT file for WaterKit
     write_pdbqt_file(pdbqt_prepared_filename, molecule)
