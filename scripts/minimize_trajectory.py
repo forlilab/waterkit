@@ -14,6 +14,7 @@ import os
 import sys
 import time
 
+import numpy as np
 from parmed.amber import NetCDFTraj
 
 from waterkit import utils
@@ -42,7 +43,7 @@ def cmd_lineparser():
 
 def _minimize_single(input_filename, log_filename, prmtop_filename,
                      rst7_filename, trajin_filename, trajout_filename, 
-                     n_steps=50, cutoff=35, restraint=None):
+                     n_steps=50, cutoff=35, nsnb=25, restraint=None):
     if restraint is None:
         restraint = 0
 
@@ -50,15 +51,16 @@ def _minimize_single(input_filename, log_filename, prmtop_filename,
               " &cntrl\n"
               "  imin = 5,                            ! Apply to every frame in the input traj\n"
               "  maxcyc = %d,                         ! (maxcyc - ncyc) steps of CONJ\n"
-              "  ntmin = 0,                           ! SD + CONJ\n"
+              "  ntmin = 0,                           ! ONLY CONJ\n"
               "  ntb = 0,                             ! No periodic box, PME is off\n"
               "  igb = 6,                             ! In vacuum electrostatics\n"
               "  cut = %d,                            ! Non-bonded cutoff\n"
-              "  nsnb = %d,                           ! Non-bonded list update every 100 steps\n"
+              "  nsnb = %d,                           ! Non-bonded list update every x steps\n"
               "  ntc = 1,                             ! No SHAKE\n"
-              "  ntf = 1,                             ! Force evaluation, complete interaction is calculated\n")
+              "  ntf = 1,                             ! Force evaluation, complete interaction is calculated\n"
+              "  jfastw = 4,                          ! Do not use the fast SHAKE routines for waters\n")
 
-    if restraint != 0:
+    if restraint > 0:
         tmp = ("  ntr = 1,                             ! Use harmonic constraints\n"
                "  restraint_wt = %.2f,                 ! Constraints of 2.5 kcal/mol\n"
                "  restraintmask = '!@H= & !:WAT',      ! Constraints of heavy atoms except WAT\n")
@@ -71,7 +73,7 @@ def _minimize_single(input_filename, log_filename, prmtop_filename,
                "  ioutfm = 1                           ! Binary NetCDF trajectory\n"
                "/\n")
 
-    mininp = mininp % (n_steps, cutoff, n_steps)
+    mininp = mininp % (n_steps, cutoff, nsnb)
 
     with open(input_filename, "w") as w:
         w.write(mininp)
@@ -107,13 +109,7 @@ def _box_information(traj_filename):
     return box
 
 
-def _split_trajectory(prmtop_filename, traj_filename, n_chunk=2, prefix=None):
-    trajout_filenames = []
-    split_filename = "traj_split.inp"
-    trajout_name = "traj_split"
-    if prefix is not None:
-        trajout_name = prefix + "_" + trajout_name
-
+def _trajectory_n_frames(traj_filename):
     # Get number of frames in the trajectory
     try:
         traj = NetCDFTraj.open_old(traj_filename)
@@ -124,9 +120,42 @@ def _split_trajectory(prmtop_filename, traj_filename, n_chunk=2, prefix=None):
     n_frames = traj.frame
     traj.close()
 
+    return n_frames
+
+
+def _longest_distance_trajectory(traj_filename):
+    # Get number of frames in the trajectory
+    try:
+        traj = NetCDFTraj.open_old(traj_filename)
+    except FileNotFoundError:
+        print("Cannot find trajectory file: %s" % traj_filename)
+        sys.exit(0)
+
+    xyz = traj.coordinates
+    r = np.reshape(xyz, (xyz.shape[0] * xyz.shape[1], 3))
+    s = np.sum(r, axis=1)
+
+    xyz_min = r[np.argmin(s), :]
+    xyz_max = r[np.argmax(s), :]
+
+    distance = np.sqrt(np.sum((xyz_min - xyz_max)**2))
+
+    return distance
+
+
+def _split_trajectory(prmtop_filename, traj_filename, n_chunk=2, prefix=None):
+    trajout_filenames = []
+    split_filename = "traj_split.inp"
+    trajout_name = "traj_split"
+    if prefix is not None:
+        trajout_name = prefix + "_" + trajout_name
+
+    # Get number of frames in the trajectory
+    n_frames = _trajectory_n_frames(traj_filename)
+
     # Get start and stop for each part
     chunks = utils.split_list_in_chunks(n_frames, n_chunk)
-    
+
     splitin = "parm %s\n" % prmtop_filename
     splitin += "trajin %s\n" % traj_filename
     for i, chunk in enumerate(chunks):
@@ -178,9 +207,8 @@ def _concatenate_trajectories(prmtop_filename, trajin_filenames, trajout_filenam
 
 
 class WaterMinimizer:
-    def __init__(self, n_steps=50, cutoff=35, restraint=None, n_jobs=-1):
+    def __init__(self, n_steps=50, restraint=None, n_jobs=-1):
         self._n_steps = n_steps
-        self._cutoff = cutoff
         self._restraint = restraint
 
         if n_jobs == -1:
@@ -193,6 +221,7 @@ class WaterMinimizer:
         files_to_remove = ["restrt"]
 
         box = _box_information(traj_filename)
+        cutoff = np.ceil(_longest_distance_trajectory(traj_filename)).astype(np.int)
 
         if self._n_jobs > 1:
             # Split trajectory
@@ -201,19 +230,20 @@ class WaterMinimizer:
             traj_split_filenames = [traj_filename]
 
         # Dirty trick to be sure cpptraj finished writing
-        time.sleep(5)
+        time.sleep(15)
 
         if traj_split_filenames:
             input_filenames = ["traj_min_%d.inp" % i for i in range(self._n_jobs)]
             log_filenames = ["traj_min_%d.out" % i for i in range(self._n_jobs)]
             traj_min_filenames = ["traj_min_%d.nc" % i for i in range(self._n_jobs)]
+            nsnb = (int(_trajectory_n_frames(traj_filename) / self._n_jobs) * self._n_steps) + self._n_steps
 
             # Fire off!!
             for i in range(self._n_jobs):
                 args = (input_filenames[i], log_filenames[i],
                         prmtop_filename, rst7_filename, 
                         traj_split_filenames[i], traj_min_filenames[i],
-                        self._n_steps, self._cutoff, self._restraint)
+                        self._n_steps, cutoff, nsnb, self._restraint)
                 job = mp.Process(target=_minimize_single, args=args)
                 job.start()
                 jobs.append(job)
@@ -251,11 +281,10 @@ def main():
     traj_filename = args.traj_filename
     output_filename = args.output_filename
     n_steps = args.n_steps
-    cutoff = args.cutoff
     restraint = args.restraint
     n_jobs = args.n_jobs
 
-    m = WaterMinimizer(n_steps, cutoff, restraint, n_jobs)
+    m = WaterMinimizer(n_steps, restraint, n_jobs)
     m.minimize_trajectory(prmtop_filename, rst7_filename, traj_filename, output_filename, True)
     
 
