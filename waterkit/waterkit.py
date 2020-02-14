@@ -58,7 +58,7 @@ def _hydrate_single(water_box, n_layer=0, start=0, stop=1, output_dir="."):
 
 class WaterKit():
 
-    def __init__(self, ad_forcefield, water_model="tip3p", how="best",
+    def __init__(self, ad_forcefield, water_model="tip3p", water_grid_file=None, how="best",
                  temperature=300., n_layer=1, n_frames=1, n_jobs=1):
         """Initialize WaterKit.
 
@@ -74,6 +74,7 @@ class WaterKit():
         """
         self._ad_forcefield = ad_forcefield
         self._water_model = water_model
+        self._water_grid_file = water_grid_file
         self._how = how
         self._temperature = temperature
         self._n_layer = n_layer
@@ -108,7 +109,8 @@ class WaterKit():
         # It is more cleaner if we merge all the maps before
         utils.prepare_water_map(ad_map, self._water_model)
         # Initialize a box, might take a couple of times...
-        w = WaterBox(receptor, ad_map, self._ad_forcefield, self._water_model, self._how, self._temperature)
+        w = WaterBox(receptor, ad_map, self._ad_forcefield, self._water_model, 
+                     self._water_grid_file, self._how, self._temperature)
 
         # Fire off!!
         for chunk in chunks:

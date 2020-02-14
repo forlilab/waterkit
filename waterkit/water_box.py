@@ -27,7 +27,7 @@ from . import utils
 
 class WaterBox():
 
-    def __init__(self, receptor, ad_map, ad_forcefield, water_model="tip3p", how="boltzmann", temperature=300.):
+    def __init__(self, receptor, ad_map, ad_forcefield, water_model="tip3p", water_grid_file=None, how="boltzmann", temperature=300.):
         self.df = {}
         self.molecules = {}
         self.map = None
@@ -52,7 +52,7 @@ class WaterBox():
         self._smooth = 0.
         self._adff = ad_forcefield
         # Initialize the sampling method
-        self._wopt = WaterSampler(self, self._how, temperature=self._temperature)
+        self._wopt = WaterSampler(self, water_grid_file, self._how, temperature=self._temperature)
 
     def copy(self):
         """Return deepcopy of WaterBox."""

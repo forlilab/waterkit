@@ -26,7 +26,7 @@ from . import utils
 
 class WaterSampler():
 
-    def __init__(self, water_box, how="best", min_distance=2.5, max_distance=3.6,  angle=90,
+    def __init__(self, water_box, water_grid_file=None, how="best", min_distance=2.5, max_distance=3.6,  angle=90,
                  energy_cutoff=0, temperature=298.15):
         self._water_box = water_box
         self._water_model = water_box._water_model
@@ -53,6 +53,12 @@ class WaterSampler():
             usecols += [6, 7, 8, 9, 10, 11]
             n_atoms += 2
 
+        if water_grid_file is None:
+            if self._water_model == "tip3p":
+                water_grid_file = "data/water/tip3p/water_SW.map"
+            elif self._water_model == "tip5p":
+                water_grid_file = "data/water/tip5p/water_SW.map"
+
         w_orientation_file = os.path.join(d, "data/water_orientations.txt")
         water_orientations = np.loadtxt(w_orientation_file, usecols=usecols)
         shape = (water_orientations.shape[0], n_atoms, 3)
@@ -61,14 +67,14 @@ class WaterSampler():
         # Water map reference
         if self._water_model == "tip3p":
             atom_types = ["SW", "OW", "HW"]
-            map_files = ["data/water/tip3p/water_SW.map",
+            map_files = [water_grid_file,
                          "data/water/tip3p/water_OW.map",
                          "data/water/tip3p/water_HW.map"]
             map_files = [os.path.join(d, map_file) for map_file in map_files]
             water_ref_file = os.path.join(d, "data/water/tip3p/water.pdbqt")
         elif self._water_model == "tip5p":
             atom_types = ["SW", "OT", "HT", "LP"]
-            map_files = ["data/water/tip5p/water_SW.map",
+            map_files = [water_grid_file,
                          "data/water/tip5p/water_OT.map",
                          "data/water/tip5p/water_HT.map",
                          "data/water/tip5p/water_LP.map"]

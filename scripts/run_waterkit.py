@@ -40,6 +40,8 @@ def cmd_lineparser():
     parser.add_argument("-w", "--water", dest="water_model", default="tip3p",
                         choices=["tip3p", "tip5p"], action="store",
                         help="water model used (tip3p or tip5p)")
+    parser.add_argument("-wr", "--water_ref", dest="water_grid_file", default=None,
+                        action="store", help="water reference grid map")
     parser.add_argument("-o", "--output", dest="output_dir", default=".",
                         action="store", help="output directory")
     return parser.parse_args()
@@ -50,6 +52,7 @@ def main():
     mol_file = args.mol_file
     fld_file = args.fld_file
     water_model = args.water_model
+    water_grid_file = args.water_grid_file
     n_layer = args.n_layer
     n_frames = args.n_frames
     n_jobs = args.n_jobs
@@ -68,7 +71,7 @@ def main():
     ad_map = Map.from_fld(fld_file)
 
     # Go waterkit!!
-    k = WaterKit(ad_forcefield, water_model, how, temperature, n_layer, n_frames, n_jobs)
+    k = WaterKit(ad_forcefield, water_model, water_grid_file, how, temperature, n_layer, n_frames, n_jobs)
     k.hydrate(molecule, ad_map, output_dir)
 
 if __name__ == "__main__":
