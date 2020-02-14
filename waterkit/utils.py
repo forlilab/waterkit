@@ -431,7 +431,7 @@ def boltzmann_acceptance_rejection(energies, temperature=300, cutoff=None):
 
         p = np.random.rand(unfavorable_energies.shape[0])
 
-        decisions[unfavorable_indices] = p < delta_e
+        decisions[unfavorable_indices] = p <= delta_e
 
         return decisions
 
