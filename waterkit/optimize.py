@@ -26,14 +26,13 @@ from . import utils
 
 class WaterSampler():
 
-    def __init__(self, water_box, water_grid_file=None, how="best", min_distance=2.5, max_distance=3.6,  angle=90,
+    def __init__(self, water_box, water_grid_file=None, min_distance=2.5, max_distance=3.6,  angle=90,
                  energy_cutoff=0, temperature=298.15):
         self._water_box = water_box
         self._water_model = water_box._water_model
         self._ad_map = water_box.map
         self._receptor = water_box.molecules_in_shell(0)[0]
 
-        self._how = how
         self._min_distance = min_distance
         self._max_distance = max_distance
         self._angle = angle
@@ -150,11 +149,8 @@ class WaterSampler():
                     current_angle += rotation
                     angles.append(current_angle)
 
-                # Choose the best or the best-boltzmann state
-                if self._how == "best":
-                    i = np.argmin(energies)
-                elif self._how == "boltzmann":
-                    i = utils.boltzmann_choices(energies, self._temperature)[0]
+                # Pick state based on Boltzmann choices
+                i = utils.boltzmann_choices(energies, self._temperature)[0]
 
                 disordered_energies.append(energies[i])
 
@@ -213,10 +209,8 @@ class WaterSampler():
 
         energies = np.array(energies)
 
-        if self._how == "best":
-            order = np.argsort(energies)
-        elif self._how == "boltzmann":
-            order = utils.boltzmann_choices(energies, self._temperature, len(energies))
+        # Pick order based on Boltzmann choices
+        order = utils.boltzmann_choices(energies, self._temperature, len(energies))
 
         if order.size > 0:
             decisions = utils.boltzmann_acceptance_rejection(energies[order], self._temperature, self._energy_cutoff)
@@ -237,10 +231,8 @@ class WaterSampler():
         coord_sphere, energy_sphere = self._neighbor_points_grid(water, from_edges)
 
         if energy_sphere.size:
-            if self._how == "best":
-                idx = energy_sphere.argmin()
-            elif self._how == "boltzmann":
-                idx = utils.boltzmann_choices(energy_sphere, self._temperature)
+            # Pick position based on Boltzmann choices
+            idx = utils.boltzmann_choices(energy_sphere, self._temperature)
 
             if idx.size > 0:
                 new_coord = coord_sphere[idx[0]]
@@ -273,11 +265,8 @@ class WaterSampler():
         for i, atom_type in enumerate(water_info["t"][1:]):
             energies += ad_map.energy_coordinates(water_orientations[:,i], atom_type)
 
-        # Pick one orientation based the energy
-        if self._how == "best":
-            idx = np.argmin(energies)
-        elif self._how == "boltzmann":
-            idx = utils.boltzmann_choices(energies, self._temperature)
+        # Pick orientation based on Boltzmann choices
+        idx = utils.boltzmann_choices(energies, self._temperature)
 
         if idx.size > 0:
             # Update the coordinates with the selected orientation, except oxygen (i + 2)
@@ -353,11 +342,7 @@ class WaterSampler():
         data = []
         unfavorable_water_indices = []
         shell_id = self._water_box.number_of_shells()
-
-        if self._how == "best":
-            add_noise = False
-        else:
-            add_noise = True
+        add_noise = True
 
         if opt_disordered and connections is not None:
             self._optimize_disordered_waters(waters, connections)

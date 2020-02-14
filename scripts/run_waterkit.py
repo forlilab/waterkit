@@ -30,9 +30,6 @@ def cmd_lineparser():
                         action="store", help="number of layer to add")
     parser.add_argument("-t", "--temperature", dest="temperature", default=300., type=float,
                         action="store", help="temperature")
-    parser.add_argument("-c", "--choice", dest="how", default="boltzmann",
-                        choices=["best", "boltzmann"], action="store",
-                        help="how water molecules are choosed")
     parser.add_argument("-n", "--n_frames", dest="n_frames", default=1, type=int,
                         action="store", help="number of frames to generate")
     parser.add_argument("-j", "--n_jobs", dest="n_jobs", default=1., type=int,
@@ -57,7 +54,6 @@ def main():
     n_frames = args.n_frames
     n_jobs = args.n_jobs
     temperature = args.temperature
-    how = args.how
     output_dir = args.output_dir
 
     """If the user does not provide any of these elements,
@@ -71,7 +67,7 @@ def main():
     ad_map = Map.from_fld(fld_file)
 
     # Go waterkit!!
-    k = WaterKit(ad_forcefield, water_model, water_grid_file, how, temperature, n_layer, n_frames, n_jobs)
+    k = WaterKit(ad_forcefield, water_model, water_grid_file, temperature, n_layer, n_frames, n_jobs)
     k.hydrate(molecule, ad_map, output_dir)
 
 if __name__ == "__main__":
