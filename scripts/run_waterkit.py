@@ -56,18 +56,12 @@ def main():
     temperature = args.temperature
     output_dir = args.output_dir
 
-    """If the user does not provide any of these elements,
-    we take those available per default in waterkit."""
-    d = utils.path_module("waterkit")
-    ad_forcefield_file = os.path.join(d, "data/AD4_parameters.dat")
-    ad_forcefield = AutoDockForceField(ad_forcefield_file, smooth=0, dielectric=1.)
-
     # Read PDBQT/MOL2 file, Waterfield file and AutoDock grid map
     molecule = Molecule.from_file(mol_file)
     ad_map = Map.from_fld(fld_file)
 
     # Go waterkit!!
-    k = WaterKit(ad_forcefield, water_model, water_grid_file, temperature, n_layer, n_frames, n_jobs)
+    k = WaterKit(water_model, water_grid_file, temperature, n_layer, n_frames, n_jobs)
     k.hydrate(molecule, ad_map, output_dir)
 
 if __name__ == "__main__":

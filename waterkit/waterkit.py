@@ -58,11 +58,10 @@ def _hydrate_single(water_box, n_layer=0, start=0, stop=1, output_dir="."):
 
 class WaterKit():
 
-    def __init__(self, ad_forcefield, water_model="tip3p", water_grid_file=None, temperature=300., n_layer=1, n_frames=1, n_jobs=1):
+    def __init__(self, water_model="tip3p", water_grid_file=None, temperature=300., n_layer=1, n_frames=1, n_jobs=1):
         """Initialize WaterKit.
 
         Args:
-            ad_forcefield (AutoDockForceField): AutoDock forcefield for pairwise interactions
             water_model (str): Model used for the water molecule, tip3p or tip5p (default: tip3p)
             how (str): Method for water placement: "best" or "boltzmann" (default: best)
             temperature (float): Temperature in Kelvin, only used for Boltzmann sampling (default: 300)
@@ -71,7 +70,6 @@ class WaterKit():
             n_jobs (int): Number of parallel processes (default: -1)
 
         """
-        self._ad_forcefield = ad_forcefield
         self._water_model = water_model
         self._water_grid_file = water_grid_file
         self._temperature = temperature
@@ -107,7 +105,7 @@ class WaterKit():
         # It is more cleaner if we merge all the maps before
         utils.prepare_water_map(ad_map, self._water_model)
         # Initialize a box, might take a couple of times...
-        w = WaterBox(receptor, ad_map, self._ad_forcefield, self._water_model, self._water_grid_file, self._temperature)
+        w = WaterBox(receptor, ad_map, self._water_model, self._water_grid_file, self._temperature)
 
         # Fire off!!
         for chunk in chunks:
