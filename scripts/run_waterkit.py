@@ -13,7 +13,6 @@ from __future__ import absolute_import
 import os
 import argparse
 
-from waterkit import AutoDockForceField
 from waterkit import Map
 from waterkit import Molecule
 from waterkit import WaterKit

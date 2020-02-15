@@ -20,7 +20,6 @@ from scipy.spatial.transform import Rotation
 
 from .autodock_map import Map
 from .molecule import Molecule
-from .forcefield import AutoDockForceField
 from . import utils
 
 
@@ -82,9 +81,6 @@ class WaterSampler():
 
         self._water_map = Map(map_files, atom_types)
         self._water_ref = Molecule.from_file(water_ref_file)
-
-        # Pairwise forcefield
-        #self._adff = water_box._adff
 
     def _optimize_disordered_waters(self, waters, connections):
         """Optimize water molecules on rotatable bonds."""
