@@ -64,7 +64,7 @@ $ wk_create_grid_protein_file.py -r protein_prepared.pdbqt -c 0 0 0 -s 24 24 24 
 
 2. Pre-calculate grid maps with autogrid4
 ```bash
-$ autogrid4 -p protein_grid.gpf -l protein_grid.glg
+$ autogrid4 -p protein.gpf -l protein.glg
 ```
 
 The AutoDock parameters (```AD4_parameters.dat```) are provided and located in the ```data``` directory of the waterkit module.
