@@ -23,7 +23,7 @@ I highly recommand you to install the Anaconda distribution (https://www.continu
 $ conda create -n waterkit python=3.7
 $ conda activate waterkit
 $ conda install -c conda-forge -c ambermd -c omnia mkl numpy scipy pandas openbabel=2.4.1 \
-    parmed ambertools sphinx sphinx_rtd_theme
+    parmed ambertools openmm sphinx sphinx_rtd_theme
 ```
 
 Finally, we can install the `WaterKit` package
@@ -58,7 +58,7 @@ The following protein coordinate files will be generated: ```protein_prepared.pd
 
 1. Create Grid Protein File (GPF)
 ```bash
-$ create_grid_protein_file.py -r protein_prepared.pdbqt -c 0 0 0 -s 24 24 24 -o protein.gpf
+$ wk_create_grid_protein_file.py -r protein_prepared.pdbqt -c 0 0 0 -s 24 24 24 -o protein.gpf
 ```
 
 2. Pre-calculate grid maps with autogrid4
@@ -73,17 +73,16 @@ The AutoDock parameters (```AD4_parameters.dat```) are provided and located in t
 $ mkdir traj
 # Generate 10.000 frames using 16 cpus
 $ run_waterkit.py -i protein_prepared.pdbqt -m protein_maps.fld -n 10000 -j 16 -o traj
+# Create ensemble trajectory
+$ wk_make_trajectory.py -r protein_prepared.pdb -w traj -o protein
+$ wk_prepare_receptor.py -i protein_system.pdb -o protein_system
+# ... and minimize each conformation
+$ wk_minimize_trajectory.py -p protein_system.prmtop -c protein_system.rst7 -t protein.nc -j 16 -s 100 --restraint 2.5
 ```
 
 ### Run Grid Inhomogeneous Solvation Theory (GIST)
 
-1. Create Amber trajectory with `make_trajectory.py` script
-```bash
-$ make_trajectory.py -r protein_prepared.pdb -w traj -o protein
-$ wk_prepare_receptor.py -i protein_system.pdb -o protein_system
-```
-
-2. Create input file for cpptraj
+1. Create input file for cpptraj
 ```
 # gist.inp
 parm protein_system.prmtop
