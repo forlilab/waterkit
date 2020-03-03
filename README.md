@@ -12,6 +12,7 @@ You need, at a minimum (requirements):
 * Scipy
 * Pandas
 * AmberTools (protein preparation and gist calculations)
+* OpenMM (minimization)
 * ParmED (files conversion)
 * Sphinx (documentation)
 * Sphinx_rtd_theme (documentation)
