@@ -78,7 +78,7 @@ $ run_waterkit.py -i protein_prepared.pdbqt -m protein_maps.fld -n 10000 -j 16 -
 $ wk_make_trajectory.py -r protein_prepared.pdb -w traj -o protein
 $ wk_prepare_receptor.py -i protein_system.pdb -o protein_system
 # ... and minimize each conformation
-$ wk_minimize_trajectory.py -p protein_system.prmtop -c protein_system.rst7 -t protein.nc -j 16 -s 100 --restraint 2.5
+$ wk_minimize_trajectory.py -p protein_system.prmtop -t protein.nc -s 100 --restraint 2.5
 ```
 
 ### Run Grid Inhomogeneous Solvation Theory (GIST)
