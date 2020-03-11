@@ -16,7 +16,7 @@ import parmed as pmd
 from parmed.amber import NetCDFTraj
 from simtk.unit import Quantity, picoseconds, kilocalories_per_mole, angstroms, kelvin
 from simtk.openmm import CustomExternalForce, LangevinIntegrator, Platform
-from simtk.openmm.app import AmberPrmtopFile, HBonds, NoCutoff, Simulation 
+from simtk.openmm.app import AmberPrmtopFile, HBonds, CutoffNonPeriodic, Simulation 
 
 
 def cmd_lineparser():
@@ -54,14 +54,14 @@ def _box_information(traj_filename):
 
 
 class WaterMinimizer:
-    def __init__(self, n_steps=50, restraint=None, platform="CUDA", verbose=True):
+    def __init__(self, n_steps=100, restraint=None, platform="CUDA", verbose=True):
         self._n_steps = n_steps
         self._restraint = restraint
         self._platform = platform
         self._verbose = verbose
 
     def minimize_trajectory(self, prmtop_filename, traj_filename, output_filename):
-        nonbondedMethod = NoCutoff
+        nonbondedMethod = CutoffNonPeriodic
         nonbondedCutoff = 9 * angstroms
         rigidWater = True
         constraints = HBonds
@@ -90,7 +90,7 @@ class WaterMinimizer:
         for i, coordinates in enumerate(old_traj.coordinates):
             old_positions = Quantity(coordinates.tolist(), unit=angstroms)
 
-            if self._restraint > 0:
+            if self._restraint > 0 or self._restraint is not None:
                 # Add harmonic constraints on protein
                 force = CustomExternalForce("k * ((x-x0)^2 + (y-y0)^2 + (z-z0)^2)")
                 force.addGlobalParameter("k", K)
@@ -115,7 +115,7 @@ class WaterMinimizer:
             new_trj.add_box(box)
             new_trj.add_time(i + 1)
 
-            if self._restraint > 0 :
+            if self._restraint > 0 or self._restraint is not None:
                 system.removeForce(force_idx)
 
             if (i % 100 == 0) and self._verbose:
@@ -124,6 +124,8 @@ class WaterMinimizer:
 
         new_trj.close()
         old_traj.close()
+
+        print("")
 
 
 def main():
