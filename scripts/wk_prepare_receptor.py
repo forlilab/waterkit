@@ -94,7 +94,7 @@ def write_pdbqt_file(output_name, molecule):
 def convert_amber_to_autodock_types(molecule):
     molecule = copy.deepcopy(molecule)
 
-    amber_autodock_dict ={
+    amber_autodock_dict = {
         'N3': 'N',
         'H': 'HD',
         'CX': 'C',
@@ -131,10 +131,10 @@ def convert_amber_to_autodock_types(molecule):
     }
 
     for atom in molecule.atoms:
-        if atom.residue.name == 'TYR'  and atom.name == 'CZ' and atom.type == 'C':
-            atom_type = 'A'
+        if atom.residue.name == 'TYR' and atom.name == 'CZ' and atom.type == 'C':
+            atom.type = 'A'
         elif atom.residue.name == 'ARG' and atom.name == 'CZ' and atom.type == 'CA':
-            atom_type = 'C'
+            atom.type = 'C'
         else:
             atom.type = amber_autodock_dict[atom.type]
 
