@@ -9,6 +9,7 @@ from __future__ import print_function
 from __future__ import absolute_import
 
 import argparse
+import copy
 import logging
 import os
 import sys
@@ -41,6 +42,8 @@ def cmd_lineparser():
         action="store_true", help="convert to pdb also")
     parser.add_argument("--pdbqt", dest="make_pdbqt", default=False,
         action="store_true", help="convert to pdbqt also")
+    parser.add_argument("--ADtype", dest="ad_type", default=False,
+        action="store_true", help="Amber types are convert to AD types in the PDBQT file")
     return parser.parse_args()
 
 
@@ -88,6 +91,54 @@ def write_pdbqt_file(output_name, molecule):
     with open(output_name, "w") as w:
         w.write(output_str)
 
+def convert_amber_to_autodock_types(molecule):
+    molecule = copy.deepcopy(molecule)
+
+    amber_autodock_dict ={
+        'N3': 'N',
+        'H': 'HD',
+        'CX': 'C',
+        'HP': 'H',
+        'CT': 'C',
+        'HC': 'H',
+        'C': 'C',
+        'O': 'OA',
+        'N': 'N',
+        'H1': 'H',
+        'C3': 'C',
+        '3C': 'C',
+        'C2': 'C',
+        '2C': 'C',
+        'CO': 'C',
+        'O2': 'OA',
+        'OH': 'OA',
+        'HO': 'HD',
+        'CA': 'A',
+        'HA': 'H',
+        'S': 'SA',
+        'C8': 'C',
+        'N2': 'N',
+        'CC': 'A',
+        'NB': 'NA',
+        'CR': 'A',
+        'H5': 'H',
+        'NA': 'N',
+        'CW': 'A',
+        'H4': 'H',
+        'C*': 'A',
+        'CN': 'A',
+        'CB': 'A'
+    }
+
+    for atom in molecule.atoms:
+        if atom.residue.name == 'TYR'  and atom.name == 'CZ' and atom.type == 'C':
+            atom_type = 'A'
+        elif atom.residue.name == 'ARG' and atom.name == 'CZ' and atom.type == 'CA':
+            atom_type = 'C'
+        else:
+            atom.type = amber_autodock_dict[atom.type]
+
+    return molecule
 
 def find_alt_residues(molecule):
     alt_residues = set()
@@ -126,6 +177,7 @@ def main():
     model = args.model - 1
     make_pdb = args.make_pdb
     make_pdbqt = args.make_pdbqt
+    ad_type = args.ad_type
 
     logger = logging.getLogger('WaterKit receptor preparation')
     logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO"))
@@ -227,6 +279,9 @@ def main():
             write_pdb_file(pdb_prepared_filename, molecule)
 
         if make_pdbqt:
+            if ad_type:
+                molecule = convert_amber_to_autodock_types(molecule)
+
             # the PDBQT file for WaterKit
             write_pdbqt_file(pdbqt_prepared_filename, molecule)
 
