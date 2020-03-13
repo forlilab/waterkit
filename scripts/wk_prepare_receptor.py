@@ -123,6 +123,7 @@ def convert_amber_to_autodock_types(molecule):
         'CC': 'A',
         'NB': 'NA',
         'CR': 'A',
+        'CV': 'A',
         'H5': 'H',
         'NA': 'N',
         'CW': 'A',
