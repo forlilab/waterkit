@@ -113,6 +113,8 @@ def convert_amber_to_autodock_types(molecule):
         'O2': 'OA',
         'OH': 'OA',
         'HO': 'HD',
+        'SH': 'SA',
+        'HS': 'HS',
         'CA': 'A',
         'HA': 'H',
         'S': 'SA',
