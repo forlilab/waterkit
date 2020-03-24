@@ -45,10 +45,8 @@ class Molecule():
         # is doing chemical perception, and we want to read the
         # molecule as is.
         for x in ob.OBMolAtomIter(OBMol):
-            if not x.IsHydrogen() and x.ImplicitHydrogenCount() != 0:
-                x.SetImplicitValence(x.GetValence())
-                # Really, there is no implicit hydrogen
-                x.ForceImplH()
+            if x.GetAtomicNum() != 1 and x.GetImplicitHCount() != 0:
+                x.SetImplicitHCount(0)
 
         for r in ob.OBResidueIter(OBMol):
             for a in ob.OBResidueAtomIter(r):
@@ -88,19 +86,12 @@ class Molecule():
         """
         # Get name and file extension
         name, file_extension = os.path.splitext(fname)
-        # Read PDB file
-        obconv = ob.OBConversion()
-        
-        """ If the file is a PDBQT file, we read it as a simple PDB
-        file. Partial charges and atom types will be read separately. 
-        We have to do that because OB knows only the vanilla AutoDock
-        atom types (HD, OA,...)."""
-        if file_extension == ".pdbqt":
-            obconv.SetInFormat("pdb")
-        else:
-            obconv.SetInFormat(file_extension)
+        file_extension = file_extension.split(os.extsep)[-1]
 
+        # Read PDB file
         OBMol = ob.OBMol()
+        obconv = ob.OBConversion()
+        obconv.SetInFormat(file_extension)
         obconv.ReadFile(OBMol, fname)
 
         m = cls(OBMol, guess_hydrogen_bonds, guess_disordered_hydrogens)
@@ -108,7 +99,7 @@ class Molecule():
         # OpenBabel do chemical perception to define the type
         # So we override the types with AutoDock atom types
         # from the PDBQT file
-        if file_extension == ".pdbqt":
+        if file_extension == "pdbqt":
             qs, ts = m._qt_from_pdbqt_file(fname)
             m.atoms['q'] = qs
             m.atoms['t'] = ts
