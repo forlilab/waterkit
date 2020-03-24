@@ -183,12 +183,11 @@ class HydrogenBonds():
                 hyb = 3
 
         if hyb == 3:
-            neighbor2_xyz = neighbors_xyz[1][1]
-
             # Position of water is just above the origin atom
             # We need the 3 direct neighboring atoms (tetrahedral)
             # Exemple: Ammonia
             if n_hbond == 1:
+                neighbor2_xyz = neighbors_xyz[1][1]
                 neighbor3_xyz = neighbors_xyz[1][2]
 
                 # We have to normalize bonds, otherwise the water molecule is not well placed
@@ -204,6 +203,7 @@ class HydrogenBonds():
             # Tetrahedral geometry, perpendicular with the neighboring atoms of the origin atom
             # Example: Oxygen of the hydroxyl group
             elif n_hbond == 2:
+                neighbor2_xyz = neighbors_xyz[1][1]
                 v1 = anchor_xyz + utils.normalize(utils.vector(anchor_xyz, neighbor1_xyz))
                 v2 = anchor_xyz + utils.normalize(utils.vector(anchor_xyz, neighbor2_xyz))
 
