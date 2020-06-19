@@ -47,9 +47,9 @@ def main():
     utils.prepare_water_map(ad_map, water_model, dieletric)
 
     s = SphericalWaterMap(water_model, temperature, n_jobs, verbose=True)
-    s.run(ad_map, "SW")
+    s.run(ad_map, "spherical_water")
 
-    ad_map.to_map("SW", "%s/" % output_dir)
+    ad_map.to_map("spherical_water", "%s/" % output_dir)
 
 
 if __name__ == "__main__":
