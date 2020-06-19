@@ -91,7 +91,12 @@ class Molecule():
         # Read PDB file
         OBMol = ob.OBMol()
         obconv = ob.OBConversion()
-        obconv.SetInFormat(file_extension)
+
+        if file_extension == "pdbqt":
+            obconv.SetInFormat("pdb")
+        else:
+            obconv.SetInFormat(file_extension)
+        
         obconv.ReadFile(OBMol, fname)
 
         m = cls(OBMol, guess_hydrogen_bonds, guess_disordered_hydrogens)
