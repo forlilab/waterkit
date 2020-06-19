@@ -14,6 +14,7 @@ You need, at a minimum (requirements):
 * AmberTools (protein preparation and gist calculations)
 * OpenMM (minimization)
 * ParmED (files conversion)
+* gridData (read dx files from GIST)
 * Sphinx (documentation)
 * Sphinx_rtd_theme (documentation)
 
@@ -24,7 +25,7 @@ I highly recommand you to install the Anaconda distribution (https://www.continu
 $ conda create -n waterkit python=3.7
 $ conda activate waterkit
 $ conda install -c conda-forge -c ambermd -c omnia mkl numpy scipy pandas openbabel=2.4.1 \
-    parmed ambertools openmm netcdf4 sphinx sphinx_rtd_theme
+    parmed ambertools openmm netcdf4 griddataformats sphinx sphinx_rtd_theme
 ```
 
 Finally, we can install the `WaterKit` package
