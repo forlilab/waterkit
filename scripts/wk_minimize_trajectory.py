@@ -54,7 +54,7 @@ def _box_information(traj_filename):
 
 
 class WaterMinimizer:
-    def __init__(self, n_steps=100, restraint=None, platform="CUDA", verbose=True):
+    def __init__(self, n_steps=100, restraint=None, platform="OpenCL", verbose=True):
         self._n_steps = n_steps
         self._restraint = restraint
         self._platform = platform
