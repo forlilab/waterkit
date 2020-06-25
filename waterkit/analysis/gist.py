@@ -65,7 +65,9 @@ def blur_map(grid, gridsize=0.5, radius=1.4, cutoff=None):
 
     energy = np.array(energy)
 
-    new_grid = Grid(np.swapaxes(energy.reshape(grid.grid.shape), 0, 1), 
+    # Swap axis 0 and 1
+    new_shape = [grid.grid.shape[1], grid.grid.shape[0], grid.grid.shape[2]]
+    new_grid = Grid(np.swapaxes(energy.reshape(new_shape), 0, 1), 
                     origin=grid.origin, delta=grid.delta)
 
     return new_grid
