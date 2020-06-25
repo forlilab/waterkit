@@ -5,5 +5,6 @@
 #
 
 from .hydration_sites import HydrationSites
+from .gist import blur_map
 
-__all__ = ["HydrationSites"]
+__all__ = ["HydrationSites", "blur_map"]

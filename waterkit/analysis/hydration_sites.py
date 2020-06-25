@@ -15,6 +15,8 @@ from gridData import Grid
 from scipy.spatial import distance
 from scipy.spatial import cKDTree
 
+from .utils import _coordinates_from_grid, _gaussian_weights
+
 
 def _hydration_sites(coordinates, values, density=2, min_cutoff=1.4, max_cutoff=2.6):
     # Keep coordinates with a certain density
@@ -60,19 +62,13 @@ def _hydration_sites(coordinates, values, density=2, min_cutoff=1.4, max_cutoff=
     return centers, isocontour, labels
 
 
-def _coordinates_from_grid(grid):
-    x, y, z = grid.edges
-    X, Y, Z = np.meshgrid(x, y, z)
-    grid_coordinates = np.stack((X.ravel(), Y.ravel(), Z.ravel()), axis=-1)
-    return grid_coordinates
-
-
 class HydrationSites():
 
-    def __init__(self, water_radius=1.4, min_water_distance=2.6, min_density=2.0):
+    def __init__(self, gridsize=0.5, water_radius=1.4, min_water_distance=2.6, min_density=2.0):
         self._water_radius = water_radius
         self._min_water_distance = min_water_distance
         self._min_density = min_density
+        self._gridsize = gridsize
 
         self._grid_coordinates = None
         self._hydration_sites = None
@@ -106,7 +102,7 @@ class HydrationSites():
 
         return self._hydration_sites
 
-    def hydration_sites_energy(self, grid, gridsize=0.5, water_radius=None, hydration_sites=None):
+    def hydration_sites_energy(self, grid, gridsize=None, water_radius=None, hydration_sites=None):
         """Get energy of all the hydration sites
 
         Args:
@@ -116,15 +112,19 @@ class HydrationSites():
             hydration_sites (list or ndarray): hydration sites 3D coordinates (default: None)
 
         Returns:
-            ndarray: energy for each hydration sites previously found
+            ndarray: energy for each hydration sites previously found (in kcal/mol if gridsize > 0)
         """
         assert isinstance(grid, Grid), "Argument passed (%s) is not a Grid object." % type(grid)
 
         if water_radius is None:
-            water_radius = self._water_radius
+            water_radius = float(self._water_radius)
+        if gridsize is None:
+            gridsize = self._gridsize
 
         energy = []
-        volume = gridsize**3
+        cutoff = water_radius + 0.5
+        # Divide the radius by 3 in order to have 3 sigma (99.7 %) at the radius value
+        sigma = water_radius / 3.
 
         if hydration_sites is None and self._hydration_sites is not None:
             hydration_sites = self._hydration_sites
@@ -133,8 +133,13 @@ class HydrationSites():
             # If we pass hydration sites coordinates, not sure if it is the same grid
             grid_coordinates = _coordinates_from_grid(grid)
 
-        # Transform kcal/mol/A**3 to kcal/mol
-        grid *= volume
+        # If the gridsize is set to 0, we keep the map as is
+        # Otherwise we transform kcal/mol/A**3 to kcal/mol
+        if gridsize == 0:
+            grid_tmp = grid
+        else:
+            volume = gridsize**3
+            grid_tmp = grid * volume
 
         # Initialize KDTree for faster search
         if water_radius > 0:
@@ -142,12 +147,17 @@ class HydrationSites():
 
         for hydration_site in hydration_sites:
             if water_radius > 0:
-                index = kdtree.query_ball_point(hydration_site, water_radius, p=2)
+                index = kdtree.query_ball_point(hydration_site, cutoff, p=2)
                 x, y, z = grid_coordinates[index][:, 0], grid_coordinates[index][:, 1], grid_coordinates[index][:, 2]
+
+                # Gaussian filtering
+                weights = _gaussian_weights(hydration_site, grid_coordinates[index], sigma)
+                values = grid_tmp.interpolated(x, y, z) * weights
             else:
                 x, y, z = hydration_site
+                values = grid_tmp.interpolated(x, y, z)
 
-            energy.append(np.sum(grid.interpolated(x, y, z)))
+            energy.append(np.sum(values))
 
         energy = np.array(energy)
 
