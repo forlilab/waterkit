@@ -107,8 +107,8 @@ class HydrationSites():
 
         Args:
             grid (Grid): multidimensional grid object (gridData) containing GIST energies (kcal/mol/A**3)
-            gridsize (float): size grid (default: 0.5 Angstrom)
-            water_radius (float): radius of a water molecule (default: None).
+            gridsize (float): size grid (default: 0.5 Angstrom). If 0 does not transform kcal/mol/A**3 to kcal/mol.
+            water_radius (float): radius of a water molecule (default: None). If 0 no gaussian filtering.
             hydration_sites (list or ndarray): hydration sites 3D coordinates (default: None)
 
         Returns:

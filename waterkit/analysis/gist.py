@@ -19,16 +19,16 @@ from .utils import _coordinates_from_grid, _gaussian_weights
 
 
 def blur_map(grid, gridsize=0.5, radius=1.4, cutoff=None):
-    """Get the aggregated map by summing all the grid points within the water radius
+    """Get the smoothed map by summing all the grid points within radius value weighted by Gaussian blurring
 
     Args:
         grid (Grid): multidimensional grid object (gridData) containing GIST energies (kcal/mol/A**3).
-        gridsize (float): size grid (default: 0.5 Angstrom).
-        sigma (float): standard deviation for Gaussian kernel (Default: 1.4, water molecule radius).
-        truncate (float): truncate the filter at this many standard deviations. (Default: 4.0).
+        gridsize (float): size grid (default: 0.5 Angstrom). If 0 does not transform kcal/mol/A**3 to kcal/mol.
+        radius (float): Gaussian blurring radius (Default: 1.4, water molecule radius).
+        cutoff (float): filetring cutoff distance. (Default: None, radius + 0.5).
 
     Returns:
-        Grid: aggregated Grid map (kcal/mol)
+        Grid: Gaussian blurred Grid map (kcal/mol, or kcal/mol/A**3 if gridsize equal to 0)
     """
     assert isinstance(grid, Grid), "Argument passed (%s) is not a Grid object." % type(grid)
 
