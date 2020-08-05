@@ -6,7 +6,7 @@ Tool to predict water molecules placement and energy in ligand binding sites
 ## Prerequisites
 
 You need, at a minimum (requirements):
-* Python (=2.7 || =3.7)
+* Python (=3.7)
 * OpenBabel
 * Numpy 
 * Scipy
@@ -24,7 +24,7 @@ I highly recommand you to install the Anaconda distribution (https://www.continu
 ```bash
 $ conda create -n waterkit python=3.7
 $ conda activate waterkit
-$ conda install -c conda-forge -c ambermd -c omnia mkl numpy scipy pandas openbabel=2.4.1 \
+$ conda install -c conda-forge -c ambermd -c omnia mkl numpy scipy pandas openbabel \
     parmed ambertools openmm netcdf4 griddataformats sphinx sphinx_rtd_theme
 ```
 
