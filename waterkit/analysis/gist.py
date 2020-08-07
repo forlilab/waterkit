@@ -21,7 +21,7 @@ from scipy.interpolate import RegularGridInterpolator
 from .utils import _coordinates_from_grid, _gaussian_weights
 
 
-def blur_map(grid, radius=1.4, gridsize=0.5, center=None, box_size=None, cutoff=None):
+def blur_map(grid, radius=1.4, gridsize=0.5, center=None, box_size=None, cutoff=None, autodock_format=False):
     """Get the smoothed map by summing all the grid points within radius value weighted by Gaussian blurring
 
     Args:
@@ -55,8 +55,15 @@ def blur_map(grid, radius=1.4, gridsize=0.5, center=None, box_size=None, cutoff=
         assert np.ravel(box_size).size == 3, "Error: grid size should contain only (a, b, c)."
         assert (box_size > 0).all(), "Error: grid size cannot contain negative numbers."
 
+        # Number of grid points is odd for AutoDock maps
+        if autodock_format:
+            nelements = np.round(box_size / gridsize).astype(np.int)
+            nelements = nelements // 2 * 2 + 1
+            sd = (nelements - 1) * gridsize / 2
+        else:
+            sd = box_size / 2.
+        
         x, y, z = center
-        sd = box_size / 2.
         x = np.arange(x - sd[0], x + sd[0] + gridsize, gridsize) 
         y = np.arange(y - sd[1], y + sd[1] + gridsize, gridsize)
         z = np.arange(z - sd[2], z + sd[2] + gridsize, gridsize)
