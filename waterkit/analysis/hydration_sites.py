@@ -14,6 +14,7 @@ import numpy as np
 from gridData import Grid
 from scipy.spatial import distance
 from scipy.spatial import cKDTree
+from scipy.optimize import minimize
 
 from .utils import _coordinates_from_grid, _gaussian_weights
 
@@ -62,6 +63,23 @@ def _hydration_sites(coordinates, values, density=2, min_cutoff=1.4, max_cutoff=
     return centers, isocontour, labels
 
 
+def _objective_function(xyzs, grid):
+    xyzs = xyzs.reshape((int(xyzs.shape[0] / 3), 3))
+    energy = np.sum(grid.interpolated(xyzs[:,0], xyzs[:,1], xyzs[:,2]))
+    return -energy
+
+
+def _optimize_hydration_site_positions(coordinates, grid, method="L-BFGS-B"):
+    results = minimize(_objective_function, coordinates.flatten(), method=method, 
+                       args=(grid), tol=1E-6, options={'maxfun': 1E12})
+    
+    if results["success"]:
+        opt_coordinates = results['x'].reshape((int(results['x'].shape[0] / 3), 3))
+        return opt_coordinates
+    else:
+        return None
+
+
 class HydrationSites():
 
     def __init__(self, gridsize=0.5, water_radius=1.4, min_water_distance=2.6, min_density=2.0):
@@ -94,9 +112,20 @@ class HydrationSites():
 
         xyz = _coordinates_from_grid(grid)
         values = grid.interpolated(xyz[:, 0], xyz[:, 1], xyz[:, 2])
-        self._hydration_sites, self._isocontour, self._cluster_ids = _hydration_sites(xyz, values, self._min_density,
-                                                                                      self._water_radius, 
-                                                                                      self._min_water_distance)
+
+        # Quick positionning of hydration sites
+        hydration_sites, self._isocontour, self._cluster_ids = _hydration_sites(xyz, values, self._min_density,
+                                                                                self._water_radius,
+                                                                                self._min_water_distance)
+        # Optimize positions for better fitting between hydration site positions and water density
+        # We correct the positions due to the roughness of the "clustering" method
+        opt_hydration_sites = None
+        #opt_hydration_sites = _optimize_hydration_site_positions(hydration_sites, grid)
+
+        if opt_hydration_sites is not None:
+            self._hydration_sites = opt_hydration_sites
+        else:
+            self._hydration_sites = hydration_sites
 
         self._grid_coordinates = xyz
 
