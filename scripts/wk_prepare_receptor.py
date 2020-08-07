@@ -127,8 +127,15 @@ def write_pdbqt_file(output_name, molecule):
 
         resname = atom.residue.name
         resid = atom.residue.idx + 1
+
+        # OpenBabel does not like atom types starting with a number
+        if atom.type[0].isdigit():
+            atom_type = atom.type[::-1]
+        else:
+            atom_type = atom.type
+
         # AutoGrid does not accept atom type name of length > 2
-        atom_type = atom.type[:2]
+        atom_type = atom_type[:2]
 
         if resname in RESSOLV:
             atype = "HETATM"
