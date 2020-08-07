@@ -128,11 +128,6 @@ def write_pdbqt_file(output_name, molecule):
         resname = atom.residue.name
         resid = atom.residue.idx + 1
 
-        if atom.type[0].isdigit():
-            atom_type = atom.type[::-1]
-        else:
-            atom_type = atom.type
-
         # AutoGrid does not accept atom type name of length > 2
         atom_type = atom_type[:2]
 

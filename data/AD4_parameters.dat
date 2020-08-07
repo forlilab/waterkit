@@ -103,8 +103,8 @@ atom_par OH   3.44  0.210 00.0000   0.00000  0.0  0.0  0  -1  -1  2 # OPLS
 atom_par OS   3.37  0.170 00.0000   0.00000  0.0  0.0  0  -1  -1  2 # OPLS ether
 atom_par OP   3.70  0.170 00.0000   0.00000  0.0  0.0  0  -1  -1  2 # Steinbrecher/Latzer for 2- phosphate
 atom_par CG   3.82  0.086 00.0000   0.00000  0.0  0.0  0  -1  -1  0 # Spellmeyer
-atom_par C2   3.82  0.109 00.0000   0.00000  0.0  0.0  0  -1  -1  0 # Spellmeyer
-atom_par C3   3.82  0.109 00.0000   0.00000  0.0  0.0  0  -1  -1  0 # Spellmeyer
+atom_par 2C   3.82  0.109 00.0000   0.00000  0.0  0.0  0  -1  -1  0 # Spellmeyer
+atom_par 3C   3.82  0.109 00.0000   0.00000  0.0  0.0  0  -1  -1  0 # Spellmeyer
 atom_par C8   3.82  0.109 00.0000   0.00000  0.0  0.0  0  -1  -1  0 # Spellmeyer
 atom_par CO   3.82  0.086 00.0000   0.00000  0.0  0.0  0  -1  -1  0 # OPLS
 atom_par CA   3.82  0.086 00.0000   0.00000  0.0  0.0  0  -1  -1  0 # Spellmeyer
@@ -127,6 +127,7 @@ atom_par C5   3.82  0.086 00.0000   0.00000  0.0  0.0  0  -1  -1  0 # Spellmeyer
 atom_par C4   3.82  0.086 00.0000   0.00000  0.0  0.0  0  -1  -1  0 # Spellmeyer
 atom_par CT   3.82  0.109 00.0000   0.00000  0.0  0.0  0  -1  -1  0 # Spellmeyer
 atom_par CX   3.82  0.109 00.0000   0.00000  0.0  0.0  0  -1  -1  0 # Spellmeyer (was CT)
+atom_par XC   3.82  0.109 00.0000   0.00000  0.0  0.0  0  -1  -1  0 # Spellmeyer (was CT)
 atom_par C    3.82  0.086 00.0000   0.00000  0.0  0.0  0  -1  -1  0 # OPLS
 atom_par C*   3.82  0.086 00.0000   0.00000  0.0  0.0  0  -1  -1  0 # Spellmeyer
 atom_par N    3.65  0.170 00.0000   0.00000  0.0  0.0  0  -1  -1  1 # OPLS
