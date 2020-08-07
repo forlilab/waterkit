@@ -6,50 +6,34 @@
 # The core of the WaterKit program
 #
 
-import copy
-from string import ascii_uppercase
+from __future__ import division
+from __future__ import print_function
+from __future__ import absolute_import
 
-import numpy as np
+import gc
+import os
+import sys
+import time
+import multiprocessing as mp
 
-from water_box import WaterBox
+from .water_box import WaterBox
+from . import utils
 
 
-class WaterKit():
-
-    def __init__(self):
-        """Initialize WaterKit."""
-        self.water_box = None
-
-    def hydrate(self, receptor, ad_map, ad_forcefield, water_model="tip3p", 
-                how="best", temperature=300., n_layer=1):
-        """Hydrate the molecule with water molecules.
-
-        The receptor is hydrated by adding successive layers
-        of water molecules until the box is complety full.
-
-        Args:
-            receptor (Molecule): Receptor of the protein
-            ad_map (Map): AutoDock map of the receptor
-            ad_forcefield (AutoDockForceField): AutoDock forcefield for pairwise interactions
-            water_model (str): Model used for the water molecule, tip3p or tip5p (default: tip3p)
-            how (str): Method for water placement: "best" or "boltzmann" (default: best)
-            temperature (float): Temperature in Kelvin, only used for Boltzmann sampling (default: 300)
-            n_layer (int): Number of hydration layer to add (default: 1)
-
-        Returns:
-            bool: True if succeeded or False otherwise
-
-        """
+def _hydrate_single(water_box, n_layer=0, start=0, stop=1, output_dir="."):
+    """Single job waterkit hydration."""
+    for frame_id in range(start, stop + 1):
         i = 1
 
-        w = WaterBox(receptor, ad_map, ad_forcefield, water_model, how, temperature)
-        #w_copy = copy.deepcopy(w)
+        # Create a copy of the waterbox,
+        # because otherwise it won't work...
+        w_copy = water_box.copy()
 
         while True:
             # build_next_shell returns True if
             # it was able to put water molecules,
             # otherwise it returns False and we break
-            if w.build_next_shell():
+            if w_copy.build_next_shell():
                 pass
             else:
                 break
@@ -63,48 +47,71 @@ class WaterKit():
 
             i += 1
 
-        self.water_box = w
+        output_filename = os.path.join(output_dir, "water_%06d.pdb" % (frame_id + 1))
+        w_copy.to_pdb(output_filename, include_receptor=False)
 
-        return True
+        # We have to force python to remove the old box
+        # otherwise we are going to have a bad time...
+        del w_copy
+        gc.collect()
 
-    def write_shells(self, prefix="water", water_model='tip3p'):
-        """Export hydration shells in a PDBQT format.
+
+class WaterKit():
+
+    def __init__(self, water_model="tip3p", water_grid_file=None, temperature=300., n_layer=1, n_frames=1, n_jobs=1):
+        """Initialize WaterKit.
 
         Args:
-            prefix (str): prefix name of the files
-            water_model (str): water model to use to write coordinates (choices: tip3p or tip5p)
-
-        Returns:
-            None
+            water_model (str): Model used for the water molecule, tip3p or tip5p (default: tip3p)
+            how (str): Method for water placement: "best" or "boltzmann" (default: best)
+            temperature (float): Temperature in Kelvin, only used for Boltzmann sampling (default: 300)
+            n_layer (int): Number of hydration layer to add (default: 1)
+            n_frames (int): Number of replicas (default: 1)
+            n_jobs (int): Number of parallel processes (default: -1)
 
         """
-        output_str = ""
-        pdbqt_str = "ATOM  %5d  %-3s HOH%2s%4d    %8.3f%8.3f%8.3f  1.00  1.00          %2s\n"
+        self._water_model = water_model
+        self._water_grid_file = water_grid_file
+        self._temperature = temperature
+        self._n_layer = n_layer
+        self._n_frames = n_frames
 
-        fname = "%s.pdb" % prefix
-        shell_id = self.water_box.number_of_shells()
-        water_shells = [self.water_box.molecules_in_shell(i) for i in range(1, shell_id + 1)]
+        if n_jobs == -1:
+            self._n_jobs = mp.cpu_count()
+        else:
+            self._n_jobs = n_jobs
 
-        i = 1
+    def hydrate(self, receptor, ad_map, output_dir="."):
+        """Hydrate the molecule with water molecules.
 
-        for water_shell, chain in zip(water_shells, ascii_uppercase):
-            j = 1
+        The receptor is hydrated by adding successive layers
+        of water molecules until the box is complety full.
 
-            for water in water_shell:
-                c = water.coordinates()
+        Args:
+            receptor (Molecule): Receptor of the protein
+            ad_map (Map): AutoDock map of the receptor
+            output_dir (str): output directory for the trajectory
 
-                output_str += pdbqt_str % (i, "O", chain, j, c[0][0], c[0][1], c[0][2], "O")
-                output_str += pdbqt_str % (i + 1, "H1", chain, j, c[1][0], c[1][1], c[1][2], "H")
-                output_str += pdbqt_str % (i + 2, "H2", chain, j, c[2][0], c[2][1], c[2][2], "H")
-                i += 2
+        """
+        try:
+            utils.is_writable(output_dir)
+        except:
+            print("Error: output directory %s not found!" % output_dir)
+            sys.exit(1)
 
-                if water_model == 'tip5p':
-                    output_str += pdbqt_str % (i + 3, "L1", chain, j, c[3][0], c[3][1], c[3][2], "L")
-                    output_str += pdbqt_str % (i + 4, "L2", chain, j, c[4][0], c[4][1], c[4][2], "L")
-                    i += 2
+        jobs = []
+        chunks = utils.split_list_in_chunks(self._n_frames, self._n_jobs)
 
-                i += 1
-                j += 1
+        # It is more cleaner if we merge all the maps before
+        utils.prepare_water_map(ad_map, self._water_model)
+        # Initialize a box, might take a couple of times...
+        w = WaterBox(receptor, ad_map, self._water_model, self._water_grid_file, self._temperature)
 
-        with open(fname, "w") as w:
-            w.write(output_str)
+        # Fire off!!
+        for chunk in chunks:
+            job = mp.Process(target=_hydrate_single, args=(w, self._n_layer, chunk[0], chunk[1], output_dir))
+            job.start()
+            jobs.append(job)
+
+        for job in jobs:
+            job.join()

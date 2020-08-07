@@ -6,6 +6,10 @@
 # AutoDock ForceField
 #
 
+from __future__ import division
+from __future__ import print_function
+from __future__ import absolute_import
+
 import argparse
 import imp
 import os
@@ -17,7 +21,7 @@ import warnings
 import pandas as pd
 import numpy as np
 
-import utils
+from . import utils
 
 
 warnings.filterwarnings("ignore")
@@ -133,9 +137,9 @@ class AutoDockForceField():
                     self.pairwise.loc[(pair[0], pair[1]), 'statut'] = "inactive"
                     self.pairwise.loc[(pair[1], pair[0]), 'statut'] = "inactive"
                 except:
-                    print "Error: pair %s - %s does not exist." % (pair[0], pair[1])
+                    print("Error: pair %s - %s does not exist." % (pair[0], pair[1]))
         else:
-            print "Error: pairs argument must be a list of list(2)."
+            print("Error: pairs argument must be a list of list(2).")
 
     def _coefficient(self, epsilon, reqm, a, b):
         """Compute coefficients."""

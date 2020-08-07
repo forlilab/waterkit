@@ -2,37 +2,50 @@
 # -*- coding: utf-8 -*-
 
 import os
+import glob
+import fnmatch
 from setuptools import setup, find_packages
 
-PROJECT_ROOT = os.path.dirname(os.path.realpath(__file__))
-REQUIREMENTS_FILE = os.path.join(PROJECT_ROOT, 'requirement.txt')
 
-with open(REQUIREMENTS_FILE) as f:
-   install_reqs = f.read().splitlines()
+def find_files(directory):
+    matches = []
 
-install_reqs.append('setuptools')
+    for root, dirnames, filenames in os.walk(directory):
+        for filename in fnmatch.filter(filenames, '*'):
+            matches.append(os.path.join(root, filename))
 
-setup(name='waterkit',
+    return matches
+
+
+setup(name="waterkit",
       version=0.3,
-      description='WaterKit',
-      author='Jerome Eberhardt',
-      author_email='jerome@scripps.edu',
-      url='https://github.com/jeeberhardt/waterkit',
+      description="WaterKit",
+      author="Jerome Eberhardt",
+      author_email="jerome@scripps.edu",
+      url="https://github.com/jeeberhardt/waterkit",
       packages=find_packages(),
-      data_files = [('', ['waterkit/data/AD4_parameters.dat',
-                          'waterkit/data/disordered_hydrogens.par',
-                          'waterkit/data/waterfield.par',
-                          'waterkit/data/water_orientations.txt'])],
-      install_requires=install_reqs,
+      scripts=["scripts/wk_prepare_receptor.py",
+               "scripts/wk_make_trajectory.py",
+               "scripts/run_waterkit.py",
+               "scripts/wk_create_grid_protein_file.py",
+               "scripts/wk_minimize_trajectory.py",
+               "scripts/wk_get_spherical_map.py"],
+      package_data={
+            "waterkit" : ["data/*",
+                          "data/water/tip3p/*",
+                          "data/water/tip3p/raw_data/*",
+                          "data/water/tip5p/*",
+                          "data/water/tip5p/raw_data/*"]
+      },
+      data_files=[("", ["README.md", "LICENSE"]),
+                  ("scripts", find_files("scripts"))],
       include_package_data=True,
       zip_safe=False,
-      license='MIT',
-      keywords=['molecular modeling', 'drug design',
-               'docking', 'autodock'],
-      classifiers=[
-            'Programming Language :: Python :: 2.7',
-            'Operating System :: Unix',
-            'Operating System :: MacOS',
-            'Topic :: Scientific/Engineering'
-      ]
+      license="MIT",
+      keywords=["molecular modeling", "drug design",
+                "docking", "autodock"],
+      classifiers=["Programming Language :: Python :: 3.7",
+                   "Operating System :: Unix",
+                   "Operating System :: MacOS",
+                   "Topic :: Scientific/Engineering"]
 )

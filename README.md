@@ -6,15 +6,15 @@ Tool to predict water molecules placement and energy in ligand binding sites
 ## Prerequisites
 
 You need, at a minimum (requirements):
-* Python (=2.7)
+* Python (=3.7)
 * OpenBabel
 * Numpy 
 * Scipy
-* AmberTools (protein preparation)
-* ParmED (conversion to PDBQT file)
-* parallel (multicore)
-* mdtraj (SSTMap dependency)
-* SSTMap (solvation calculation)
+* Pandas
+* AmberTools (protein preparation and gist calculations)
+* OpenMM (minimization)
+* ParmED (files conversion)
+* gridData (read dx files from GIST)
 * Sphinx (documentation)
 * Sphinx_rtd_theme (documentation)
 
@@ -22,27 +22,25 @@ You need, at a minimum (requirements):
 
 I highly recommand you to install the Anaconda distribution (https://www.continuum.io/downloads) if you want a clean python environnment with nearly all the prerequisites already installed. To install everything properly, you just have to do this:
 ```bash
-conda install -c conda-forge openbabel parmed parallel mdtraj
-conda install -c ambermd ambertools
-conda install -c solvationtools sstmap
+$ conda create -n waterkit python=3.7
+$ conda activate waterkit
+$ conda install -c conda-forge -c ambermd -c omnia mkl numpy scipy pandas openbabel \
+    parmed ambertools openmm netcdf4 griddataformats sphinx sphinx_rtd_theme
 ```
 
-To install the `WaterKit` package
+Finally, we can install the `WaterKit` package
 ```bash
-python setup.py install
-```
-
-For the documentation only
-```bash
-conda install sphinx sphinx_rtd_theme
+$ git clone https://github.com/jeeberhardt/waterkit
+$ cd waterkit
+$ python setup.py build install
 ```
 
 ## Documentation
 
 Build documentation with Sphinx
 ```bash
-cd docs
-make html
+$ cd docs
+$ make html
 ```
 
 Open the file ```build/html/index.html``` with your favorite browser (Google Chrome is evil).
@@ -51,64 +49,58 @@ Open the file ```build/html/index.html``` with your favorite browser (Google Chr
 
 ### Receptor preparation
 
-Conversion to PDBQT using AmberTools19 (http://ambermd.org/GetAmber.php) and `amber2pdbqt.py` script
+Conversion to PDBQT using AmberTools19 and `wk_prepare_receptor.py` script
 ```bash
-pdb4amber -i protein.pdb -o protein_clean.pdb --dry --leap-template --nohyd
-tleap -s -f leap.template.in > leap.template.out
-amber2pdbqt.py -t prmtop -c rst7 -o protein
+$ wk_prepare_receptor.py -i protein.pdb -o protein_prepared --dry --nohyd --pdb --pdbqt
 ```
 
 The following protein coordinate files will be generated: ```protein_prepared.pdbqt``` and ```protein_prepared.pdb```. The PDBQT file will be used by WaterKit and the PDB file will be used to create the trajectory file at the end.
 
-### Grid calculation with autogrid4
-
-1. Create Grid Protein File (GPF)
-```
-npts 64 64 64
-parameter_file AD4_parameters.dat
-gridfld protein_maps.fld
-spacing 0.375
-receptor_types HP HO C3 HC HA O2 C* NA NB C8 CB C CO CN CC H CA O N S CX C2 CR N2 N3 CW CT OH H1 H4 H5
-ligand_types OD OW OT
-receptor protein_prepared.pdbqt
-gridcenter 0.0 0.0 0.0
-smooth 0
-map protein_OD.map
-map protein_OW.map
-map protein_OT.map
-elecmap protein_e.map
-dsolvmap protein_d.map
-dielectric 1
-```
-
-Depending of your system, you would have at least to modify the grid parameters (```npts```, ```gridcenter```) and the receptor atom types list (```receptor_types```). An example of GPF file (```protein_grid.gpf```) as well as the AutoDock parameters (```AD4_parameters.dat```) are provided. Those files are located in the ```data``` waterkit module's directory.
-
-2. Run autogrid4
-```bash
-autogrid4 -p protein_grid.gpf -l protein_grid.glg
-```
-
 ### Sample water molecule positions with WaterKit
 
+1. Create Grid Protein File (GPF)
 ```bash
-mkdir traj
+$ wk_create_grid_protein_file.py -r protein_prepared.pdbqt -c 0 0 0 -s 24 24 24 -o protein.gpf
+```
+
+2. Pre-calculate grid maps with autogrid4
+```bash
+$ autogrid4 -p protein.gpf -l protein.glg
+```
+
+The AutoDock parameters (```AD4_parameters.dat```) are provided and located in the ```data``` directory of the waterkit module.
+
+3. Run WaterKit
+```bash
+$ mkdir traj
 # Generate 10.000 frames using 16 cpus
-seq -f "water_%05g" 1 10000 | parallel --jobs 16 python run_waterkit.py -i protein_prepared.pdbqt -m protein_maps.fld -o traj/{}
+$ run_waterkit.py -i protein_prepared.pdbqt -m protein_maps.fld -n 10000 -j 16 -o traj
+# Create ensemble trajectory
+$ wk_make_trajectory.py -r protein_prepared.pdb -w traj -o protein
+$ wk_prepare_receptor.py -i protein_system.pdb -o protein_system
+# ... and minimize each conformation
+$ wk_minimize_trajectory.py -p protein_system.prmtop -t protein.nc -s 100 --restraint 2.5
 ```
 
-### Run Grid Inhomogeneous Solvation Theory (GIST) with SSTMap
+### Run Grid Inhomogeneous Solvation Theory (GIST)
 
-1. Create Amber trajectory with `make_trajectory.py` script
+1. Create input file for cpptraj
+```
+# gist.inp
+parm protein_system.prmtop
+trajin protein.nc
+gist gridspacn 0.5 gridcntr 0.0 0.0 0.0 griddim 48 48 48
+go
+quit
+```
+
+Usually you would choose the same parameters as the AutoGrid maps (```npts``` and ```gridcenter```). Unlike AutoGrid, the default the grid spacing in GIST is 0.5 A, so you will have to choose box dimension accordingly to match the Autogrid maps dimensions. More informations on GIST are available here: https://amber-md.github.io/cpptraj/CPPTRAJ.xhtml#magicparlabel-4672
+
+3. Run GIST
+
 ```bash
-python make_trajectory.py -r protein_prepared.pdb -w traj -o protein
-tleap -s -f protein.leap.in > protein.leap.out
+$ cpptraj -i gist.inp
 ```
-
-2. Run GIST
-```bash
-run_gist -i protein_system.prmtop -t protein.nc -l ligand.pdb -g 48 48 48 -f 10000
-```
-The PDB coordinate file ```ligand.pdb``` is a simply PDB file containing a dummy atom that will define the center of the box. Usually you would choose the same parameters as the AutoGrid maps (```npts``` and ```gridcenter```). Unlike AutoGrid, the default the grid spacing in SSTMap is 0.5 A, so you will have to choose box dimension accordingly to match the Autogrid maps dimensions.
 
 ### ????
 ### PROFIT!!!

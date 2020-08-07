@@ -4,6 +4,10 @@
 # amber2pdbqt
 #
 
+from __future__ import division
+from __future__ import print_function
+from __future__ import absolute_import
+
 import argparse
 
 import parmed as pmd
@@ -17,10 +21,12 @@ def cmd_lineparser():
                         action="store", help="coordinates file")
     parser.add_argument("-o", "--output", dest="output_name", default=None,
                         action="store", help="output name")
+    parser.add_argument("--pdb", dest="make_pdb", default=False,
+                        action="store_true", help="convert to pdb also")
     return parser.parse_args()
 
 
-def write_pdb_file(output_name, molecule):
+def write_pdb_file(output_name, molecule,  overwrite=True):
     """Write PDB file
 
     Args:
@@ -28,7 +34,7 @@ def write_pdb_file(output_name, molecule):
         molecule (parmed): parmed molecule object
 
     """
-    molecule.save(output_name)
+    molecule.save(output_name, format="pdb", overwrite=overwrite)
 
 def write_pdbqt_file(output_name, molecule):
     """Write PDBQT file
@@ -54,6 +60,9 @@ def write_pdbqt_file(output_name, molecule):
         else:
             atom_type = atom.type
 
+        # AutoGrid does not accept atom type name of length > 2
+        atom_type = atom_type[:2]
+
         output_str += pdbqt_str % (atom.idx + 1, name, resname, resid, atom.xx, 
                                    atom.xy, atom.xz, atom.charge, atom_type)
 
@@ -66,6 +75,7 @@ def main():
     top_file = args.top_file
     crd_file = args.crd_file
     output_name = args.output_name
+    make_pdb = args.make_pdb
 
     if output_name is None:
         output_name = top_file.split('.')[0]
@@ -73,8 +83,9 @@ def main():
     molecule = pmd.load_file(top_file, crd_file)
 
     # The PDB file will be use for the trajectory and
+    if make_pdb:
+        write_pdb_file("%s_prepared.pdb" % output_name, molecule)
     # the PDBQT file for WaterKit
-    write_pdb_file("%s_prepared.pdb" % output_name, molecule)
     write_pdbqt_file("%s_prepared.pdbqt" % output_name, molecule)
 
 

@@ -19,29 +19,29 @@
 #ATOM H_000    0   0.000 1 1 1.8 [#1] # all hydrogens
 
 ## HC
-ATOM H_C_000  0   0.000 1 1 1.8 [#1][#6] # all CH
-ATOM H_C_001  0   0.500 1 1 1.8 [#1][#6;X2] # acetylene
-ATOM H_C_002  0   0.250 1 1 1.8 [#1][#6;X3] # ethylene / benzene
-ATOM H_C_003  0   0.120 1 1 1.8 [#1][#6;X4] # methane
+ATOM H_C_000   0   0.000 1 1 1.8 [#1][#6] # all CH
+ATOM H_C_001   0   0.500 1 1 1.8 [#1][#6;X2] # acetylene
+ATOM H_C_002   0   0.250 1 1 1.8 [#1][#6;X3] # ethylene / benzene
+ATOM H_C_003   0   0.120 1 1 1.8 [#1][#6;X4] # methane
 
 ## OH
-ATOM H_O_000  1   0.000 1 1 1.8 [#1][#8] # general hydroxyl (OH)
-ATOM H_O_001  1   1.100 1 1 1.8 [#1;X1][#8;X2;v2] # other hydroxyl
-ATOM H_O_002  1   1.500 1 1 1.8 [#1;X1][#8;X2;v2;H1][a] # Ar-OH (phenol-like)
-ATOM H_O_003  1   1.500 1 1 1.8 [#1;X1][#8;X2;v2;H1]-[#6;X3;v4]=[#8;X1;v2] # carboxylate H
+ATOM H_O_000   1   0.000 1 1 1.8 [#1][#8] # general hydroxyl (OH)
+ATOM H_O_001   1   1.100 1 1 1.8 [#1;X1][#8;X2;v2] # other hydroxyl
+ATOM H_O_002   1   1.500 1 1 1.8 [#1;X1][#8;X2;v2;H1][a] # Ar-OH (phenol-like)
+ATOM H_O_003   1   1.500 1 1 1.8 [#1;X1][#8;X2;v2;H1]-[#6;X3;v4]=[#8;X1;v2] # carboxylate H
 
 ## HN
-ATOM H_N_000  1   0.000 1 1 1.8 [#1][#7] # general NH
-ATOM H_N_001  1   0.500 1 1 1.8 [#1;X1][#7;X3;v3] # amine
-ATOM H_N_002  1   0.800 1 1 1.8 [#1;X1][#7;X2;v3] # nitrogen sp2 (guanidine, immine)
-ATOM H_N_003  1   0.800 1 1 1.8 [#1;X1][#7;X3;v3][a] # aniline (matches pyrrole, which follows)
-ATOM H_N_004  1   1.300 1 1 1.8 [#1;X1][#7;a;X3;v3;H1] # aromatic nitrogen (pyrrole)
-ATOM H_N_005  1   1.100 1 1 1.8 [#1;X1][#7;X3;v3][#6;X3;v4]=[#8;X1;v2] # amide nitrogen donor (overrides pyrrole)
+ATOM H_N_000   1   0.000 1 1 1.8 [#1][#7] # general NH
+ATOM H_N_001   1   0.500 1 1 1.8 [#1;X1][#7;X3;v3] # amine
+ATOM H_N_002   1   0.800 1 1 1.8 [#1;X1][#7;X2;v3] # nitrogen sp2 (guanidine, immine)
+ATOM H_N_003   1   0.800 1 1 1.8 [#1;X1][#7;X3;v3][a] # aniline (matches pyrrole, which follows)
+ATOM H_N_004   1   1.300 1 1 1.8 [#1;X1][#7;a;X3;v3;H1] # aromatic nitrogen (pyrrole)
+ATOM H_N_005   1   1.100 1 1 1.8 [#1;X1][#7;X3;v3][#6;X3;v4]=[#8;X1;v2] # amide nitrogen donor (overrides pyrrole)
 
 ## HS
-ATOM H_S_000  1   0.000 1 1 1.8 [#1][#16] # default SH
-ATOM H_S_001  1   0.500 1 1 1.8 [#1;X1][#16;X2;v2] # -SH (general thiol)
-ATOM H_S_002  1   0.700 1 1 1.8 [#1;X1][#16;X2;v2;H1][a] # Ar-SH (benzenethiol-like)
+ATOM H_S_000   1   0.000 1 1 1.8 [#1][#16] # default SH
+ATOM H_S_001   1   0.500 1 1 1.8 [#1;X1][#16;X2;v2] # -SH (general thiol)
+ATOM H_S_002   1   0.700 1 1 1.8 [#1;X1][#16;X2;v2;H1][a] # Ar-SH (benzenethiol-like)
 
 # Oxygen
 ## O

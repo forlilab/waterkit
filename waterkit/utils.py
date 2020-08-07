@@ -6,7 +6,20 @@
 # Utils functions
 #
 
+from __future__ import division
+from __future__ import print_function
+from __future__ import absolute_import
+
+import tempfile
+import errno
+import os
 import subprocess
+import sys
+
+if sys.version_info >= (3, ):
+    import importlib
+else:
+    import imp
 
 import numpy as np
 
@@ -239,6 +252,55 @@ def sphere_grid_points(center, spacing, radius, min_radius=0):
     return points_in_sphere
 
 
+def makeW(r1, r2, r3, r4=0):
+    """matrix involved in quaternion rotation
+    
+    source: https://github.com/charnley/rmsd
+    """
+    W = np.asarray([
+        [r4, r3, -r2, r1],
+        [-r3, r4, r1, r2],
+        [r2, -r1, r4, r3],
+        [-r1, -r2, -r3, r4]])
+    return W
+
+
+def makeQ(r1, r2, r3, r4=0):
+    """matrix involved in quaternion rotation
+    
+    source: https://github.com/charnley/rmsd
+    """
+    Q = np.asarray([
+        [r4, -r3, r2, r1],
+        [r3, r4, -r1, r2],
+        [-r2, r1, r4, r3],
+        [-r1, -r2, -r3, r4]])
+    return Q
+
+
+def quaternion_rotate(Y, X):
+    """Calculate the rotation between two set of coordinates
+
+    source: https://github.com/charnley/rmsd
+
+    Args:
+        X (ndarray): (N,D) matrix, where N is points and D is dimension.
+        Y: (ndarray): (N,D) matrix, where N is points and D is dimension.
+
+    Returns:
+        ndarray : quaternion
+    """
+    N = X.shape[0]
+    W = np.asarray([makeW(*Y[k]) for k in range(N)])
+    Q = np.asarray([makeQ(*X[k]) for k in range(N)])
+    Qt_dot_W = np.asarray([np.dot(Q[k].T, W[k]) for k in range(N)])
+    W_minus_Q = np.asarray([W[k] - Q[k] for k in range(N)])
+    A = np.sum(Qt_dot_W, axis=0)
+    eigen = np.linalg.eigh(A)
+    r = eigen[1][:, eigen[0].argmax()]
+    return r
+
+
 def rotate_vector_by_quaternion(v, q):
     """Rotate point using a quaternion."""
     # https://gamedev.stackexchange.com/questions/28395/rotating-vector3-by-a-quaternion
@@ -259,14 +321,153 @@ def shoemake(coordinates):
     return np.dstack((t1 * np.sin(s1), t1 * np.cos(s1), 
                       t2 * np.sin(s2), t2 * np.cos(s2)))[0]
 
+
 def random_quaternion(n=1):
     """Create n random quaternions."""
     u = np.random.random(size=(n, 3))
     return shoemake(u)
 
+
+def is_writable(pathname):
+    try:
+        testfile = tempfile.TemporaryFile(dir=pathname)
+        testfile.close()
+    except OSError as e:
+        if e.errno == errno.EACCES:  # 13
+            return False
+        e.filename = pathname
+        raise
+
+    return True
+
+
 def execute_command(cmd_line):
     """Simple function to execute bash command."""
     args = cmd_line.split()
-    p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
     output, errors = p.communicate()
     return output, errors
+
+
+def path_module(module_name):
+    try:
+        specs = importlib.machinery.PathFinder().find_spec(module_name)
+
+        if specs is not None:
+            return specs.submodule_search_locations[0]
+    except:
+        try:
+            _, path, _ = imp.find_module(module_name)
+            abspath = os.path.abspath(path)
+            return abspath
+        except ImportError:
+            return None
+
+    return None
+
+
+def split_list_in_chunks(size, n):
+    if size <= n:
+        return [(i, i + 1) for i in range(size)]
+    else:
+        return [(l[0], l[-1]) for l in np.array_split(range(size), n)]
+
+
+def boltzmann_probabilities(energies, temperature):
+    # Boltzmann constant (kcal/mol)
+    kb = 0.0019872041
+    energies = np.array(energies)
+
+    d = np.exp(-energies / (kb * temperature))
+    d_sum = np.sum(d)
+
+    if d_sum > 0:
+        p = d / d_sum
+    else:
+        # It means that energies are too high
+        return np.zeros(energies.shape[0])
+
+    return p
+
+
+def boltzmann_choices(energies, temperature, size=None):
+    """Choose state i based on boltzmann probability."""
+    p = boltzmann_probabilities(energies, temperature)
+
+    if np.sum(p) == 0.:
+        return np.array([])
+
+    if size is None:
+        size = 1
+
+    if size > 1:
+        # If some prob. in p are zero, ValueError: size of nonzero p is lower than size
+        non_zero = np.count_nonzero(p)
+        size = non_zero if non_zero < size else size
+
+    i = np.random.choice(len(energies), size, False, p)
+
+    return i
+
+
+def boltzmann_acceptance_rejection(energies, temperature=300, cutoff=None):
+    kb = 0.0019872041
+
+    energies = np.ravel(energies)
+    
+    if cutoff is not None:
+        decisions = energies < cutoff
+    else:
+        decisions = np.zeros(shape=energies.shape[0], dtype=np.bool)
+
+    if all(decisions):
+        return decisions
+    else:
+        unfavorable_indices = np.where(decisions == False)
+        unfavorable_energies = energies[unfavorable_indices]
+
+        delta_e = np.exp(-unfavorable_energies / (kb * temperature))
+        delta_e[delta_e >= 1] = 1.
+
+        p = np.random.rand(unfavorable_energies.shape[0])
+
+        decisions[unfavorable_indices] = p <= delta_e
+
+        return decisions
+
+
+def prepare_water_map(ad_map, water_model="tip3p", dielectric=1.):
+    e_type = "Electrostatics"
+    dielectric = np.float(dielectric)
+
+    """In TIP3P and TIP5P models, hydrogen atoms and lone-pairs does not
+    have VdW radius, so their interactions with the receptor are purely
+    based on electrostatics. So the HD and Lp maps are just the electrostatic
+    map. Each map is multiplied by the partial charge. So it is just a
+    look-up table to get the energy for each water molecule.
+    """
+    if water_model == "tip3p":
+        ow_type = "OW"
+        hw_type = "HW"
+        ow_q = -0.834
+        hw_q = 0.417
+    elif water_model == "tip5p":
+        ot_type = "OT"
+        hw_type = "HT"
+        lw_type = "LP"
+        hw_q = 0.241
+        lw_q = -0.241
+    else:
+        print("Error: water model %s unknown." % water_model)
+        return False
+
+    # For the TIP3P and TIP5P models
+    ad_map.apply_operation_on_maps(hw_type, e_type, "x * %f / %f" % (hw_q, dielectric))
+
+    if water_model == "tip3p":
+        ad_map.apply_operation_on_maps(e_type, e_type, "x * %f / %f" % (ow_q, dielectric))
+        ad_map.combine(ow_type, [ow_type, e_type], how="add")
+    elif water_model == "tip5p":
+        ad_map.apply_operation_on_maps(lw_type, e_type, "x * %f / %f" % (lw_q, dielectric))
+
+    return True

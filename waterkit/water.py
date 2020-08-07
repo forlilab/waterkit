@@ -6,6 +6,10 @@
 # Class for water
 #
 
+from __future__ import division
+from __future__ import print_function
+from __future__ import absolute_import
+
 import copy
 import os
 
@@ -13,8 +17,8 @@ import numpy as np
 import pandas as pd
 import openbabel as ob
 
-import utils
-from molecule import Molecule
+from .molecule import Molecule
+from . import utils
 
 
 class Water(Molecule):
@@ -27,7 +31,7 @@ class Water(Molecule):
             atom_type (str): atom types of the spherical water molecule (default: OW)
             partial_charge (float): partial charge of the spherical water molecule (default: -0.834)
             hb_anchor (array_like): 3d coordinates of the HB anchor (Default: [0, 0, 0])
-            hb_vector (array_like): 3d coordinates of the HB vector (Default:)
+            hb_vector (array_like): 3d coordinates of the HB vector (Default: xyz variable)
             hb_type (str): type of the HB anchor (acceptor or donor)
 
         """
@@ -93,8 +97,8 @@ class Water(Molecule):
 
     def _add_atom(self, xyz, atom_type, partial_charge):
         """Add an atom to the molecule."""
-        dtype = [("i", "i4"), ("name", "S4"), ("resname", "S3"), ("resnum", "i4"),
-                 ("xyz", "f4", (3)), ("q", "f4"), ("t", "S5")]
+        dtype = [("i", "i4"), ("name", "U4"), ("resname", "U3"), ("resnum", "i4"),
+                 ("xyz", "f4", (3)), ("q", "f4"), ("t", "U5")]
         resname = "HOH"
         resnum = 1
 
@@ -188,7 +192,7 @@ class Water(Molecule):
             atom_types = models[water_model]["atom_types"]
             partial_charges = models[water_model]["partial_charges"]
         else:
-            print "Error: water model %s unknown." % water_model
+            print("Error: water model %s unknown." % water_model)
             return False
 
         if water_model == "tip3p":
@@ -343,7 +347,7 @@ class Water(Molecule):
 
         """
         if self.is_spherical():
-            print "Error: Cannot rotate a spherical water."
+            print("Error: Cannot rotate a spherical water.")
             return False
 
         available_axes = ["o", "h1", "h2"]
@@ -362,7 +366,7 @@ class Water(Molecule):
         except ValueError:
             error_str = "Error: Axis %s not recognized. " % axis
             error_str += "Availvable axes for this water molecule: %s" % ' '.join(available_axes)
-            print error_str
+            print(error_str)
             return False
 
         # If we want to rotate around the oxygen axis, the rotation axis

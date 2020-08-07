@@ -6,6 +6,10 @@
 # Class to manage hydrogen bond typer
 #
 
+from __future__ import division
+from __future__ import print_function
+from __future__ import absolute_import
+
 import re
 from collections import namedtuple
 from collections import OrderedDict
@@ -14,7 +18,7 @@ import numpy as np
 import openbabel as ob
 import pandas as pd
 
-from waterkit import utils
+from .. import utils
 
 
 class HydrogenBonds():
@@ -41,7 +45,7 @@ class HydrogenBonds():
 
                     # Split by space and remove them in the list
                     sline = line.split(' ')
-                    sline = filter(None, sline)
+                    sline = [e for e in sline if e]
 
                     ob_smarts = ob.OBSmartsPattern()
                     success = ob_smarts.Init(sline[7])
@@ -57,7 +61,7 @@ class HydrogenBonds():
                         hb_type = self._Atom_type(hb_type, hb_strength, hyb, n_water, hb_length, ob_smarts)
                         self._atom_types[name] = hb_type
                     else:
-                        print "Warning: invalid SMARTS pattern %s for atom type %s." % (sline[7], sline[1])
+                        print("Warning: invalid SMARTS pattern %s for atom type %s." % (sline[7], sline[1]))
 
     def _push_atom_to_end(self, lst, atomic_nums):
         """
@@ -179,12 +183,11 @@ class HydrogenBonds():
                 hyb = 3
 
         if hyb == 3:
-            neighbor2_xyz = neighbors_xyz[1][1]
-
             # Position of water is just above the origin atom
             # We need the 3 direct neighboring atoms (tetrahedral)
             # Exemple: Ammonia
             if n_hbond == 1:
+                neighbor2_xyz = neighbors_xyz[1][1]
                 neighbor3_xyz = neighbors_xyz[1][2]
 
                 # We have to normalize bonds, otherwise the water molecule is not well placed
@@ -200,6 +203,7 @@ class HydrogenBonds():
             # Tetrahedral geometry, perpendicular with the neighboring atoms of the origin atom
             # Example: Oxygen of the hydroxyl group
             elif n_hbond == 2:
+                neighbor2_xyz = neighbors_xyz[1][1]
                 v1 = anchor_xyz + utils.normalize(utils.vector(anchor_xyz, neighbor1_xyz))
                 v2 = anchor_xyz + utils.normalize(utils.vector(anchor_xyz, neighbor2_xyz))
 
@@ -244,8 +248,9 @@ class HydrogenBonds():
         columns = ["atom_i", "vector_xyz", "anchor_type", "anchor_name"]
         # Keep track of all the visited atom
         visited = [False] * (OBMol.NumAtoms() + 1)
+        atom_types_available = list(self._atom_types.keys())
 
-        for name in self._atom_types.keys()[::-1]:
+        for name in atom_types_available[::-1]:
             atom_type = self._atom_types[name]
             atom_type.ob_smarts.Match(OBMol)
             matches = list(atom_type.ob_smarts.GetMapList())
@@ -272,7 +277,7 @@ class HydrogenBonds():
                         for vector_xyz in vector_xyzs:
                             data.append([idx, vector_xyz, hb_type, name])
                     except:
-                        print "Warning: Could not determine hydrogen bond vectors on atom %s of type %s." % (idx, name)
+                        print("Warning: Could not determine hydrogen bond vectors on atom %s of type %s." % (idx, name))
 
         df = pd.DataFrame(data=data, columns=columns)
         df.sort_values(by="atom_i", inplace=True)
