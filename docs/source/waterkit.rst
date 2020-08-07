@@ -49,30 +49,6 @@ waterkit.optimize
     :undoc-members:
     :show-inheritance:
 
-waterkit.autogrid
------------------
-
-.. automodule:: waterkit.autogrid
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-waterkit.forcefield
--------------------
-
-.. automodule:: waterkit.forcefield
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-waterkit.waterfield
--------------------
-
-.. automodule:: waterkit.waterfield
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
 waterkit.utils
 --------------
 
