@@ -102,5 +102,36 @@ Usually you would choose the same parameters as the AutoGrid maps (```npts``` an
 $ cpptraj -i gist.inp
 ```
 
+### Identification of hydration sites
+Hydration sites are identified based on the oxygen density map (gO) in an iterative way, by selecting the voxel with the highest density, then the second highest and so on, whil keeping a minimum distance of 2.5 A between them. Energies for each of those identified hydration sites are then computed by adding all the surrounding voxels and Gaussian weighted by their distances from the hydration site.
+
+```python
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+#
+from gridData import Grid
+from waterkit.analysis import HydrationSites
+from waterkit.analysis import blur_map
+
+gO = Grid("gist-gO.dx")
+esw = Grid('gist-Esw-dens.dx')
+eww = Grid('gist-Eww-dens.dx')
+tst = Grid('gist-dTStrans-dens.dx')
+tso = Grid('gist-dTSorient-dens.dx')
+dg = (esw + 2 * eww) - (tst + tso)
+
+# Identification of hydration site positions using gO
+hs = HydrationSites(gridsize=0.5, water_radius=1.4, min_water_distance=2.5, min_density=2.0)
+hydration_sites = hs.find(gO) # can pass "gist-gO.dx" directly also
+
+# Get Gaussian smoothed energy for hydration sites only
+dg_energy = hs.hydration_sites_energy(dg, water_radius=1.4)
+hs.export_to_pdb("hydration_sites_dG_smoothed.pdb", hydration_sites, dg_energy)
+
+# ... or get the whole Gaussian smoothed map
+map_smooth = blur_map(dg, radius=1.4)
+map_smooth.export("gist-dG-dens_smoothed.dx")
+```
+
 ### ????
 ### PROFIT!!!
