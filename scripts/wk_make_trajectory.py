@@ -10,8 +10,8 @@ from __future__ import absolute_import
 
 import argparse
 import copy
-import glob
 import os
+import re
 import sys
 
 import numpy as np
@@ -104,7 +104,7 @@ def write_tleap_input_file(fname, pdb_filename):
     """
     prefix = pdb_filename.split(".pdb")[0].split("/")[-1]
 
-    output_str = "source leaprc.protein.ff14SB\n"
+    output_str = "source leaprc.protein.ff19SB\n"
     output_str += "source leaprc.DNA.OL15\n"
     output_str += "source leaprc.RNA.OL3\n"
     output_str += "source leaprc.water.tip3p\n"
@@ -112,7 +112,6 @@ def write_tleap_input_file(fname, pdb_filename):
     output_str += "\n"
     output_str += "x = loadpdb %s\n" % pdb_filename.split("/")[-1]
     output_str += "\n"
-    output_str += "set default PBradii mbondi3\n"
     output_str += "set default nocenter on\n"
     output_str += "saveAmberParm x %s.prmtop %s.rst7\n" % (prefix, prefix)
     output_str += "quit\n"
@@ -196,7 +195,10 @@ def main():
     water_directory = args.water_directory
     output_name = args.output_name
 
-    water_filenames = sorted(glob.glob("%s/*" % water_directory))
+    water_filenames = []
+    for fname in os.listdir(water_directory):
+        if re.match(r"water_[0-9]{6}.pdb", fname):
+            water_filenames.append(os.path.join(water_directory, fname))
 
     receptor = pmd.load_file(receptor_filename)
 
