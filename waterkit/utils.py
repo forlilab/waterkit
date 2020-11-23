@@ -367,10 +367,7 @@ def path_module(module_name):
 
 
 def split_list_in_chunks(size, n):
-    if size <= n:
-        return [(i, i + 1) for i in range(size)]
-    else:
-        return [(l[0], l[-1]) for l in np.array_split(range(size), n)]
+    return [(l[0], l[-1]) for l in np.array_split(range(size), n)]
 
 
 def boltzmann_probabilities(energies, temperature):
@@ -410,28 +407,29 @@ def boltzmann_choices(energies, temperature, size=None):
     return i
 
 
-def boltzmann_acceptance_rejection(energies, temperature=300, cutoff=None):
+def boltzmann_acceptance_rejection(new_energies, old_energies, temperature=300):
     kb = 0.0019872041
 
-    energies = np.ravel(energies)
-    
-    if cutoff is not None:
-        decisions = energies < cutoff
-    else:
-        decisions = np.zeros(shape=energies.shape[0], dtype=np.bool)
+    new_energies = np.ravel(new_energies)
+    old_energies = np.ravel(old_energies)
+
+    decisions = new_energies < old_energies
 
     if all(decisions):
         return decisions
     else:
         unfavorable_indices = np.where(decisions == False)
-        unfavorable_energies = energies[unfavorable_indices]
 
-        delta_e = np.exp(-unfavorable_energies / (kb * temperature))
-        delta_e[delta_e >= 1] = 1.
+        if old_energies.size == 1:
+            unfavorable_old_energies = old_energies
+        else:
+            unfavorable_old_energies = old_energies[unfavorable_indices]
 
-        p = np.random.rand(unfavorable_energies.shape[0])
+        delta_e = new_energies[unfavorable_indices] - unfavorable_old_energies
+        p_acc = np.minimum(1., np.exp(-delta_e / (kb * temperature)))
+        r = np.random.rand(p_acc.shape[0])
 
-        decisions[unfavorable_indices] = p <= delta_e
+        decisions[unfavorable_indices] = r <= p_acc
 
         return decisions
 

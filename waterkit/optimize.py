@@ -209,7 +209,7 @@ class WaterSampler():
         order = utils.boltzmann_choices(energies, self._temperature, len(energies))
 
         if order.size > 0:
-            decisions = utils.boltzmann_acceptance_rejection(energies[order], self._temperature, self._energy_cutoff)
+            decisions = utils.boltzmann_acceptance_rejection(energies[order], self._energy_cutoff, self._temperature)
             order = order[decisions]
 
             return order
@@ -269,12 +269,15 @@ class WaterSampler():
             new_orientation = water_orientations[idx[0]]
             for i, xyz in enumerate(new_orientation):
                 water.update_coordinates(xyz, i + 2)
+
             return energies[idx[0]]
 
         """If we do not find anything, at least we return the energy
         of the current water molecule. """
-        return ad_map.energy(water.atom_informations(), ignore_electrostatic=True, 
-                             ignore_desolvation=True)
+        current_energy = ad_map.energy(water.atom_informations(), ignore_electrostatic=True,
+                                       ignore_desolvation=True)
+
+        return current_energy
 
     def _update_maps(self, water):
 
@@ -361,7 +364,7 @@ class WaterSampler():
             energy_position = self._optimize_position_grid(water, add_noise, from_edges=1.)
 
             # The first great filter
-            if utils.boltzmann_acceptance_rejection(energy_position, self._temperature, self._energy_cutoff)[0]:
+            if utils.boltzmann_acceptance_rejection(energy_position, self._energy_cutoff, self._temperature)[0]:
                 # Build the explicit water
                 water.build_explicit_water(self._water_model)
 
@@ -369,7 +372,7 @@ class WaterSampler():
                 energy_orientation = self._optimize_orientation_grid(water)
 
                 # The last great energy filter
-                if utils.boltzmann_acceptance_rejection(energy_orientation, self._temperature, self._energy_cutoff)[0]:
+                if utils.boltzmann_acceptance_rejection(energy_orientation, self._energy_cutoff, self._temperature)[0]:
                     data.append((shell_id + 1, energy_position, energy_orientation))
                     self._update_maps(water)
                 else:
