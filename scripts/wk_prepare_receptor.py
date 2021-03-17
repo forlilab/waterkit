@@ -4,10 +4,6 @@
 # prepare receptor
 #
 
-from __future__ import division
-from __future__ import print_function
-from __future__ import absolute_import
-
 import argparse
 import copy
 import logging
@@ -20,26 +16,6 @@ import parmed as pmd
 from pdb4amber import AmberPDBFixer
 from pdb4amber.utils import easy_call
 
-
-# Change ff14SB to ff19SB
-default_force_field = """
-source leaprc.protein.ff14SB
-source leaprc.DNA.OL15
-source leaprc.RNA.OL3
-source leaprc.water.tip3p
-source leaprc.gaff2
-"""
-
-leap_template = """
-{force_fields}
-{more_force_fields}
-x = loadpdb {input_pdb}
-{box_info}
-{more_leap_cmds}
-set default nocenter on
-saveAmberParm x {prmtop} {rst7}
-quit
-"""
 
 # Added CYM residue
 HEAVY_ATOM_DICT = {
@@ -96,32 +72,32 @@ RESSOLV = ('WAT', 'HOH', 'AG', 'AL', 'Ag', 'BA', 'BR', 'Be', 'CA', 'CD', 'CE',
 AMBER_SUPPORTED_RESNAMES = RESPROT + RESNA + RESSOLV
 
 
-def write_pdb_file(output_name, molecule,  overwrite=True, **kwargs):
-    """Write PDB file
+def _write_pdb_file(output_name, molecule,  overwrite=True, **kwargs):
+    '''Write PDB file
 
     Args:
         output_name (str): pdbqt output filename
         molecule (parmed): parmed molecule object
 
-    """
-    molecule.save(output_name, format="pdb", overwrite=overwrite, **kwargs)
+    '''
+    molecule.save(output_name, format='pdb', overwrite=overwrite, **kwargs)
 
 
-def write_pdbqt_file(output_name, molecule):
-    """Write PDBQT file
+def _write_pdbqt_file(output_name, molecule):
+    '''Write PDBQT file
 
     Args:
         output_name (str): pdbqt output filename
         molecule (parmed): parmed molecule object
 
-    """
-    pdbqt_str = "%-6s%5d %-4s %3s %s%4d    %8.3f%8.3f%8.3f  1.00  1.00    %6.3f %-2s\n"
-    output_str = ""
+    '''
+    pdbqt_str = '%-6s%5d %-4s %3s %s%4d    %8.3f%8.3f%8.3f  1.00  1.00    %6.3f %-2s\n'
+    output_str = ''
     chain_id = 0
 
     for atom in molecule.atoms:
         if len(atom.name) < 4:
-            name = " %s" % atom.name
+            name = ' %s' % atom.name
         else:
             name = atom.name
 
@@ -138,25 +114,25 @@ def write_pdbqt_file(output_name, molecule):
         atom_type = atom_type[:2]
 
         if resname in RESSOLV:
-            atype = "HETATM"
+            atype = 'HETATM'
         else:
-            atype = "ATOM"
+            atype = 'ATOM'
 
         output_str += pdbqt_str % (atype, atom.idx + 1, name, resname, string.ascii_uppercase[chain_id],
                                    resid, atom.xx, atom.xy, atom.xz, atom.charge, atom_type)
 
-        if name.strip() == "OXT":
+        if name.strip() == 'OXT':
             chain_id += 1
 
-    if name.strip() != "OXT":
-        output_str += "TER\n"
-    output_str += "END\n"
+    if name.strip() != 'OXT':
+        output_str += 'TER\n'
+    output_str += 'END\n'
 
-    with open(output_name, "w") as w:
+    with open(output_name, 'w') as w:
         w.write(output_str)
 
 
-def convert_amber_to_autodock_types(molecule):
+def _convert_amber_to_autodock_types(molecule):
     molecule = copy.deepcopy(molecule)
 
     amber_autodock_dict = {
@@ -211,8 +187,23 @@ def convert_amber_to_autodock_types(molecule):
     return molecule
 
 
-def _make_leap_template(parm, ns_names, gaplist, sslist, input_pdb,
-                        prmtop='prmtop', rst7='rst7'):
+def _make_leap_template(parm, ns_names, gaplist, sslist, input_pdb, prmtop='prmtop', rst7='rst7'):
+    # Change ff14SB to ff19SB
+    default_force_field = ('source leaprc.protein.ff14SB\n'
+                           'source leaprc.DNA.OL15\n'
+                           'source leaprc.RNA.OL3\n'
+                           'source leaprc.water.tip3p\n'
+                           'source leaprc.gaff2\n')
+
+    leap_template = ('{force_fields}\n'
+                     '{more_force_fields}\n'
+                     'x = loadpdb {input_pdb}\n'
+                     '{box_info}\n'
+                     '{more_leap_cmds}\n'
+                     'set default nocenter on\n'
+                     'saveAmberParm x {prmtop} {rst7}\n'
+                     'quit\n')
+
     # box
     box = parm.box
     if box is not None:
@@ -246,22 +237,11 @@ def _make_leap_template(parm, ns_names, gaplist, sslist, input_pdb,
         prmtop=prmtop,
         rst7=rst7,
         more_leap_cmds=more_leap_cmds)
+
     return leap_string
 
 
-def find_alt_residues(molecule):
-    alt_residues = set()
-        
-    for residue in molecule.residues:
-        chains.add(residue.chain)
-        for atom in residue.atoms:
-            if atom.other_locations:
-                alt_residues.add(residue)
-
-    return alt_residues
-
-
-def remove_alt_residues(molecule):
+def _remove_alt_residues(molecule):
     # remove altlocs label
     residue_collection = []
 
@@ -273,10 +253,11 @@ def remove_alt_residues(molecule):
                 residue_collection.append(residue)
 
     residue_collection = list(set(residue_collection))
+
     return residue_collection
 
 
-def find_gaps(molecule, resprot):
+def _find_gaps(molecule, resprot):
     # TODO: doc
     # report original resnum?
     CA_atoms = []
@@ -323,8 +304,9 @@ def find_gaps(molecule, resprot):
     return gaplist
 
 
-def find_non_standard_resnames(molecule, amber_supported_resname):
+def _find_non_standard_resnames(molecule, amber_supported_resname):
     ns_names = set()
+
     for residue in molecule.residues:
         if len(residue.name) > 3:
             rname = residue.name[:3]
@@ -332,164 +314,214 @@ def find_non_standard_resnames(molecule, amber_supported_resname):
             rname = residue.name
         if rname.strip() not in amber_supported_resname:
             ns_names.add(rname)
+
     return ns_names
 
 
+class PrepareReceptor:
+
+    def __init__(self, keep_hydrogen=False, keep_water=False, no_disulfide=False, keep_altloc=False, use_model=1):
+        self._keep_hydrogen = keep_hydrogen
+        self._keep_water = keep_water
+        self._no_difsulfide = no_disulfide
+        self._keep_altloc = keep_altloc
+        self._use_model = use_model
+
+        self._pdb_filename = None
+        self._molecule = None
+
+    def prepare(self, pdb_filename, prmtop_filename='protein.prmtop', rst7_filename='protein.rst7',
+                pdb_clean_filename='protein_clean.pdb', clean=True):
+        '''Prepare receptor structure
+    
+        Args:
+            pdb_filename (str): input pdb filename
+            prmtop_filename (str): Amber prmtop filename (default: protein.prmtop)
+            rst7_filename (str): Amber coordinate filename (default: protein.rst7)
+            pdb_clean_filename (str): temporary pdb filename (default: tmp_clean.pdb)
+            clean (bool): remove tleap input and output files (default: True)
+
+        '''
+        final_ns_names = []
+        tleap_input = 'leap.template.in'
+        tleap_output = 'leap.template.out'
+        tleap_log = 'leap.log'
+
+        logger = logging.getLogger('WaterKit receptor preparation')
+        logging.basicConfig(level=os.environ.get('LOGLEVEL', 'INFO'))
+
+        try:
+            receptor = pmd.load_file(pdb_filename)
+        except FileNotFoundError:
+            error_msg = 'Receptor file (%s) cannot be found.' % pdb_filename
+            logger.error(error_msg)
+            raise
+
+        pdbfixer = AmberPDBFixer(receptor)
+
+        # Remove box and symmetry
+        pdbfixer.parm.box = None
+        pdbfixer.parm.symmetry = None
+
+        # Find all the gaps
+        gaplist = _find_gaps(pdbfixer.parm, RESPROT)
+        if gaplist:
+            error_msg = 'Gap(s) found between the following residues.'
+            error_msg += ' Please fix it/them by adding the missing residues'
+            error_msg += ' or add TER records to indicate that the residues/chains are not physically connected'
+            error_msg += ' to each other: \n'
+            
+            gap_msg = ' - gap of %lf A between %s %d and %s %d\n'
+            for _, (d, resname0, resid0, resname1, resid1) in enumerate(gaplist):
+                error_msg += gap_msg % (d, resname0, resid0 + 1, resname1, resid1 + 1)
+            
+            logger.error(error_msg)
+            raise RuntimeError(error_msg)
+
+        # Find missing heavy atoms
+        missing_atoms = pdbfixer.find_missing_heavy_atoms(HEAVY_ATOM_DICT)
+        if missing_atoms:
+            logger.warning('Found residue(s) with missing heavy atoms: %s' % ', '.join([str(m) for m in missing_atoms]))
+
+        # Remove all the hydrogens
+        if not self._keep_hydrogen:
+            pdbfixer.parm.strip('@/H')
+            logger.info('Removed all hydrogen atoms')
+
+        # Remove water molecules
+        if not self._keep_water:
+            pdbfixer.remove_water()
+            logger.info('Removed all water molecules')
+
+        # Keep only standard-Amber residues
+        ns_names = _find_non_standard_resnames(pdbfixer.parm, AMBER_SUPPORTED_RESNAMES)
+        if ns_names:
+            pdbfixer.parm.strip('!:' + ','.join(AMBER_SUPPORTED_RESNAMES))
+            logger.info('Removed all non-standard Amber residues: %s' % ', '.join(ns_names))
+
+        # Assign histidine protonations
+        pdbfixer.assign_histidine()
+
+        # Find all the disulfide bonds
+        if not self._no_difsulfide:
+            sslist, cys_cys_atomidx_set = pdbfixer.find_disulfide()
+            if sslist:
+                pdbfixer.rename_cys_to_cyx(sslist)
+                resids_str = ', '.join(['%s-%s' % (ss[0], ss[1]) for ss in sslist])
+                logger.info('Found disulfide bridges between residues %s' % resids_str)
+        else:
+            sslist = None
+
+        # Remove all the aternate residue sidechains
+        if not self._keep_altloc:
+            alt_residues = _remove_alt_residues(pdbfixer.parm)
+            if alt_residues:
+                logger.info('Removed all alternatives residue sidechains')
+
+        # Write cleaned PDB file
+        final_coordinates = pdbfixer.parm.get_coordinates()[self._use_model - 1]
+        write_kwargs = dict(coordinates=final_coordinates)
+        write_kwargs['increase_tercount'] = False # so CONECT record can work properly
+        write_kwargs['altlocs'] = 'occupancy'
+
+        try:
+            _write_pdb_file(pdb_clean_filename, pdbfixer.parm, **write_kwargs)
+        except:
+            error_msg = 'Could not write pdb file %s'  % pdb_clean_filename
+            logger.error(error_msg)
+            raise
+
+        # Generate topology/coordinates files
+        with open('leap.template.in', 'w') as w:
+            content = _make_leap_template(pdbfixer.parm, final_ns_names, gaplist, sslist,
+                                          input_pdb=pdb_clean_filename,
+                                          prmtop=prmtop_filename, rst7=rst7_filename)
+            w.write(content)
+
+        try:
+            easy_call('tleap -s -f %s > %s' % (tleap_input, tleap_output), shell=True)
+        except RuntimeError:
+            error_msg = 'Could not generate topology/coordinates files with tleap'
+            logger.error(error_msg)
+            raise RuntimeError(error_msg)
+
+        self._molecule = pmd.load_file(prmtop_filename, rst7_filename)
+
+        if clean:
+            os.remove(tleap_input)
+            os.remove(tleap_output)
+            os.remove(tleap_log)
+
+    def write_pdb_file(self, pdb_filename='protein.pdb'):
+        _write_pdb_file(pdb_filename, self._molecule)
+
+    def write_pdbqt_file(self, pdbqt_filename='protein.pdbqt', amber_atom_types=False):
+        if amber_atom_types:
+            _write_pdbqt_file(pdbqt_filename, self._molecule)
+        else:
+            molecule = _convert_amber_to_autodock_types(self._molecule)
+            _write_pdbqt_file(pdbqt_filename, molecule)
+
+
 def cmd_lineparser():
-    parser = argparse.ArgumentParser(description="prepare receptor")
-    parser.add_argument("-i", "--in", required=True,
-        dest="pdbin", help="PDB input file (default: stdin)",
+    parser = argparse.ArgumentParser(description='prepare receptor')
+    parser.add_argument('-i', '--in', required=True,
+        dest='pdb_filename', help='PDB input file (default: stdin)',
         default='stdin')
-    parser.add_argument("-o", "--out", default='protein_prepared',
-        dest="out_filename", help="output filename (default: protein)")
-    parser.add_argument("-y", "--nohyd", action="store_true", default=False,
-        dest="nohyd", help="remove all hydrogen atoms (default: no)")
-    parser.add_argument("--nodisu", action="store_false", default=True,
-        dest="nodisu", help="ignore difsulfide bridges (default: no)")
-    parser.add_argument("-d", "--dry", action="store_true", default=False,
-        dest="dry", help="remove all water molecules (default: no)")
-    parser.add_argument("--most-populous", action="store_true",
-        dest="mostpop", help="keep most populous alt. conf. (default is to keep 'A')")
-    parser.add_argument("--model", type=int, default=1,
-        dest="model",
-        help="Model to use from a multi-model pdb file (integer).  (default: use 1st model). "
-        "Use a negative number to keep all models")
-    parser.add_argument("--pdb", dest="make_pdb", default=False,
-        action="store_true", help="generate pdb file")
-    parser.add_argument("--pdbqt", dest="make_pdbqt", default=False,
-        action="store_true", help="PDBQT file with AutoDock atom types")
-    parser.add_argument("--amber_pdbqt", dest="make_amber_pdbqt", default=False,
-        action="store_true", help="DBQT file with Amber atom types")
+    parser.add_argument('-o', '--out', default='protein',
+        dest='output_prefix', help='output prefix filename (default: protein)')
+    parser.add_argument('--keep_hydrogen', action='store_true', default=False,
+        dest='keep_hydrogen', help='keep all hydrogen atoms (default: no)')
+    parser.add_argument('--no_disulfide', action='store_true', default=False,
+        dest='no_disulfide', help='ignore difsulfide bridges (default: no)')
+    parser.add_argument('--keep_water', action='store_true', default=False,
+        dest='keep_water', help='keep all water molecules (default: no)')
+    parser.add_argument('--keep_altloc', action='store_true', default=False,
+        dest='keep_altloc', help='keep residue altloc (default is to keep "A")')
+    parser.add_argument('--model', type=int, default=1,
+        dest='use_model',
+        help='Model to use from a multi-model pdb file (integer).  (default: use 1st model). '
+        'Use a negative number to keep all models')
+    parser.add_argument('--pdb', dest='make_pdb', default=False,
+        action='store_true', help='generate pdb file')
+    parser.add_argument('--pdbqt', dest='make_pdbqt', default=False,
+        action='store_true', help='PDBQT file with AutoDock atom types')
+    parser.add_argument('--amber_pdbqt', dest='make_amber_pdbqt', default=False,
+        action='store_true', help='DBQT file with Amber atom types')
     return parser.parse_args()
 
 
 def main():
     args = cmd_lineparser()
-    pdbin_filename = args.pdbin
-    out_filename = args.out_filename
-    nohyd = args.nohyd
-    nodisu = args.nodisu
-    dry = args.dry
-    mostpop = args.mostpop
-    model = args.model - 1
+    pdb_filename = args.pdb_filename
+    output_prefix = args.output_prefix
+    keep_hydrogen = args.keep_hydrogen
+    no_disulfide = args.no_disulfide
+    keep_water = args.keep_water
+    keep_altloc = args.keep_altloc
+    use_model = args.use_model
     make_pdb = args.make_pdb
     make_pdbqt = args.make_pdbqt
     make_amber_pdbqt = args.make_amber_pdbqt
 
-    logger = logging.getLogger('WaterKit receptor preparation')
-    logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO"))
+    prmtop_filename = '%s.prmtop' % output_prefix
+    rst7_filename = '%s.rst7' % output_prefix
+    pdb_clean_filename = '%s_clean.pdb' % output_prefix
 
-    base_filename, extension = os.path.splitext(out_filename)
-    pdb_clean_filename = "%s_clean.pdb" % base_filename
-    pdb_prepared_filename = "%s.pdb" % base_filename
-    pdbqt_prepared_filename = "%s.pdbqt" % base_filename
-    pdbqt_amber_prepared_filename = "%s_amber.pdbqt" % base_filename
-    prmtop_filename = "%s.prmtop" % base_filename
-    rst7_filename = "%s.rst7" % base_filename
+    pr = PrepareReceptor(keep_hydrogen, keep_water, no_disulfide, keep_altloc, use_model)
+    pr.prepare(pdb_filename, prmtop_filename, rst7_filename, pdb_clean_filename)
 
-    try:
-        receptor = pmd.load_file(pdbin_filename)
-    except OSError:
-        logger.error("Receptor file (%s) cannot be found." % pdbin_filename)
-        sys.exit(0)
+    if make_pdb:
+        pdb_prepared_filename = '%s.pdb' % output_prefix
+        pr.write_pdb_file(pdb_prepared_filename)
 
-    pdbfixer = AmberPDBFixer(receptor)
+    if make_pdbqt:
+        pdbqt_prepared_filename = '%s.pdbqt' % output_prefix
+        pr.write_pdbqt_file(pdbqt_prepared_filename)
 
-    # Remove box and symmetry
-    pdbfixer.parm.box = None
-    pdbfixer.parm.symmetry = None
-
-    # Find all the gaps
-    gaplist = find_gaps(pdbfixer.parm, RESPROT)
-    if gaplist:
-        cformat = "gap of %lf A between %s %d and %s %d"
-        for _, (d, resname0, resid0, resname1, resid1) in enumerate(gaplist):
-            # convert to 1-based
-            logger.info(cformat % (d, resname0, resid0 + 1, resname1, resid1 + 1))
-
-    # Find missing heavy atoms
-    missing_atoms = pdbfixer.find_missing_heavy_atoms(HEAVY_ATOM_DICT)
-    if missing_atoms:
-        logger.warning("Found residue(s) with missing heavy atoms: %s" % ', '.join([str(m) for m in missing_atoms]))
-
-    # Remove all the hydrogens
-    if nohyd:
-        pdbfixer.parm.strip('@/H')
-        logger.info("Removed all hydrogen atoms")
-
-    # Remove water molecules
-    if dry:
-        pdbfixer.remove_water()
-        logger.info("Removed all water molecules")
-
-    # Keep only standard-Amber residues
-    ns_names = find_non_standard_resnames(pdbfixer.parm, AMBER_SUPPORTED_RESNAMES)
-    if ns_names:
-        pdbfixer.parm.strip('!:' + ','.join(AMBER_SUPPORTED_RESNAMES))
-        logger.info("Removed all non-standard Amber residues: %s" % ', '.join(ns_names))
-
-    # Assign histidine protonations
-    pdbfixer.assign_histidine()
-
-    # Find all the disulfide bonds
-    if nodisu:
-        sslist, cys_cys_atomidx_set = pdbfixer.find_disulfide()
-        if sslist:
-            pdbfixer.rename_cys_to_cyx(sslist)
-            logger.info("Found disulfide bridges between residues %s" % ', '.join(['%s-%s' % (ss[0], ss[1]) for ss in sslist]))
-    else:
-        sslist = None
-
-    # Remove all the aternate residue sidechains
-    alt_residues = remove_alt_residues(pdbfixer.parm)
-    if alt_residues:
-        logger.info("Removed all alternatives residue sidechains")
-
-    # Write cleaned PDB file
-    final_coordinates = pdbfixer.parm.get_coordinates()[model]
-    write_kwargs = dict(coordinates=final_coordinates)
-    write_kwargs["increase_tercount"] = False # so CONECT record can work properly
-    write_kwargs["altlocs"] = "occupancy"
-
-    try:
-        write_pdb_file(pdb_clean_filename, pdbfixer.parm, **write_kwargs)
-    except:
-        logger.error("Could not write pdb file %s"  % pdb_clean_filename)
-        sys.exit(0)
-
-    # Generate topology/coordinates files
-    with open('leap.template.in', 'w') as w:
-        final_ns_names = []
-        
-        content = _make_leap_template(pdbfixer.parm, final_ns_names, gaplist,
-                                      sslist, input_pdb=pdb_clean_filename, 
-                                      prmtop=prmtop_filename,
-                                      rst7=rst7_filename)
-        w.write(content)
-
-    try:
-        easy_call("tleap -s -f leap.template.in > leap.template.out", shell=True)
-    except RuntimeError:
-        logger.error("Could not generate topology/coordinates files with tleap")
-        sys.exit(0)
-
-    if any([make_pdb, make_pdbqt, make_amber_pdbqt]):
-        try:
-            molecule = pmd.load_file(prmtop_filename, rst7_filename)
-        except:
-            logger.error("Cannot load topology and coordinates Amber files")
-            sys.exit(0)
-
-        if make_pdb:
-            write_pdb_file(pdb_prepared_filename, molecule)
-
-        if make_amber_pdbqt:
-            # the PDBQT file for WaterKit
-            write_pdbqt_file(pdbqt_amber_prepared_filename, molecule)
-
-        if make_pdbqt:
-            molecule = convert_amber_to_autodock_types(molecule)
-            write_pdbqt_file(pdbqt_prepared_filename, molecule)
+    if make_amber_pdbqt:
+        pdbqt_prepared_filename = '%s_amber.pdbqt' % output_prefix
+        pr.write_pdbqt_file(pdbqt_prepared_filename, amber_atom_types=True)
 
 
 if __name__ == '__main__':
