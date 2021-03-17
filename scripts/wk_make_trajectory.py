@@ -104,7 +104,7 @@ def write_tleap_input_file(fname, pdb_filename):
     """
     prefix = pdb_filename.split(".pdb")[0].split("/")[-1]
 
-    output_str = "source leaprc.protein.ff19SB\n"
+    output_str = "source leaprc.protein.ff14SB\n"
     output_str += "source leaprc.DNA.OL15\n"
     output_str += "source leaprc.RNA.OL3\n"
     output_str += "source leaprc.water.tip3p\n"

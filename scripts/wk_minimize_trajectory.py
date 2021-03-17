@@ -27,7 +27,7 @@ def cmd_lineparser():
                         action="store", help="netcdf trajectory file")
     parser.add_argument("-s", "--steps", dest="n_steps", default=50, type=int,
                         action="store", help="number of minimization steps")
-    parser.add_argument("--restraint", dest="restraint", default=2.5, type=float,
+    parser.add_argument("-r", "--restraint", dest="restraint", default=2.5, type=float,
                         action="store", help="harmonic restraint on protein heavy atoms")
     parser.add_argument("-o", "--output", dest="output_filename", default="protein_min.nc",
                         action="store", help="netcdf output trajectory name")

@@ -23,7 +23,7 @@ from pdb4amber.utils import easy_call
 
 # Change ff14SB to ff19SB
 default_force_field = """
-source leaprc.protein.ff19SB
+source leaprc.protein.ff14SB
 source leaprc.DNA.OL15
 source leaprc.RNA.OL3
 source leaprc.water.tip3p
@@ -147,7 +147,6 @@ def write_pdbqt_file(output_name, molecule):
 
         if name.strip() == "OXT":
             chain_id += 1
-            output_str += "TER\n"
 
     if name.strip() != "OXT":
         output_str += "TER\n"
@@ -356,11 +355,11 @@ def cmd_lineparser():
         help="Model to use from a multi-model pdb file (integer).  (default: use 1st model). "
         "Use a negative number to keep all models")
     parser.add_argument("--pdb", dest="make_pdb", default=False,
-        action="store_true", help="convert to pdb also")
+        action="store_true", help="generate pdb file")
     parser.add_argument("--pdbqt", dest="make_pdbqt", default=False,
-        action="store_true", help="convert to pdbqt also")
-    parser.add_argument("--ADtype", dest="ad_type", default=False,
-        action="store_true", help="Amber types are convert to AD types in the PDBQT file")
+        action="store_true", help="PDBQT file with AutoDock atom types")
+    parser.add_argument("--amber_pdbqt", dest="make_amber_pdbqt", default=False,
+        action="store_true", help="DBQT file with Amber atom types")
     return parser.parse_args()
 
 
@@ -375,7 +374,7 @@ def main():
     model = args.model - 1
     make_pdb = args.make_pdb
     make_pdbqt = args.make_pdbqt
-    ad_type = args.ad_type
+    make_amber_pdbqt = args.make_amber_pdbqt
 
     logger = logging.getLogger('WaterKit receptor preparation')
     logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO"))
@@ -384,6 +383,7 @@ def main():
     pdb_clean_filename = "%s_clean.pdb" % base_filename
     pdb_prepared_filename = "%s.pdb" % base_filename
     pdbqt_prepared_filename = "%s.pdbqt" % base_filename
+    pdbqt_amber_prepared_filename = "%s_amber.pdbqt" % base_filename
     prmtop_filename = "%s.prmtop" % base_filename
     rst7_filename = "%s.rst7" % base_filename
 
@@ -473,8 +473,7 @@ def main():
         logger.error("Could not generate topology/coordinates files with tleap")
         sys.exit(0)
 
-    if make_pdb or make_pdbqt:
-        # Write PDBQT file
+    if any([make_pdb, make_pdbqt, make_amber_pdbqt]):
         try:
             molecule = pmd.load_file(prmtop_filename, rst7_filename)
         except:
@@ -484,11 +483,12 @@ def main():
         if make_pdb:
             write_pdb_file(pdb_prepared_filename, molecule)
 
-        if make_pdbqt:
-            if ad_type:
-                molecule = convert_amber_to_autodock_types(molecule)
-
+        if make_amber_pdbqt:
             # the PDBQT file for WaterKit
+            write_pdbqt_file(pdbqt_amber_prepared_filename, molecule)
+
+        if make_pdbqt:
+            molecule = convert_amber_to_autodock_types(molecule)
             write_pdbqt_file(pdbqt_prepared_filename, molecule)
 
 
