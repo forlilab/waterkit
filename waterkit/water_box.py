@@ -27,7 +27,7 @@ from . import utils
 
 class WaterBox():
 
-    def __init__(self, receptor, ad_map, water_model="tip3p", water_grid_file=None, temperature=300.):
+    def __init__(self, receptor, ad_map, water_model="tip3p", spherical_water_map=None, temperature=300.):
         self.df = {}
         self.molecules = {}
         self.map = None
@@ -48,7 +48,7 @@ class WaterBox():
         # Forcefields, forcefield parameters and water model
         self._temperature = temperature
         # Initialize the sampling method
-        self._wopt = WaterSampler(self, water_grid_file, temperature=self._temperature)
+        self._wopt = WaterSampler(self, spherical_water_map, temperature=self._temperature)
 
     def copy(self):
         """Return deepcopy of WaterBox."""
@@ -320,12 +320,7 @@ class WaterBox():
         # If multiple instances of WaterBox are running in parallel
         # we might have end up with the same result. So we force numpy to
         # generate different random numbers
-        try:
-            # Python 3
-            rand = int.from_bytes(os.urandom(4), sys.byteorder)
-        except:
-            # Python 2
-            rand = int(os.urandom(4).encode('hex'), 16)
+        rand = int.from_bytes(os.urandom(4), sys.byteorder)
         np.random.seed(rand)
 
         waters, connections = self._place_optimal_spherical_waters(molecules, sw_type, partial_charge)

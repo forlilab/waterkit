@@ -14,6 +14,7 @@ import collections
 import os
 import re
 import copy
+import warnings
 
 import numpy as np
 from scipy import spatial
@@ -80,13 +81,30 @@ class Map():
 
     def __str__(self):
         """Print basic information about the maps"""
-        try:
-            info = "SPACING %s\n" % self._spacing
-            info += "NELEMENTS %s\n" % " ".join(self._npts.astype(str))
-            info += "CENTER %s\n" % " ".join(self._center.astype(str))
-            info += "MAPS %s\n" % " ".join(self._maps.iterkeys())
-        except AttributeError:
-            info = "AutoDock Map object is not defined."
+        info = "Box center   : %s\n" % " ".join(self._center.astype(str))
+        info += "Box size     : %s\n" % " ".join(self._npts.astype(str))
+        info += "Box spacing  : %s\n" % self._spacing
+        info += "Affinity maps: %s\n" % " ".join(self._maps.keys())
+
+        return info
+
+    def info(self):
+        """Return information about the affinity maps.
+
+        Returns:
+            dict (str): Dictionary of information about the affinity maps
+
+            Information:
+                box_center (ndarray),
+                box_size (ndarray),
+                box_spacing (spacing),
+                maps (list)
+
+        """
+        info = {'box_center': self._center,
+                'box_size': self._npts,
+                'box_spacing': self._spacing,
+                'maps': self._maps.keys()}
 
         return info
 
@@ -258,16 +276,27 @@ class Map():
             new_map = np.array(new_map)
 
         if not np.array_equal(new_map.shape, self._npts):
-            print("Error: new grid does not have the same dimension (%s != %s)" % (new_map.shape, self._npts))
-            return False
+            raise RunTimeError("New grid does not have the same dimension (%s != %s)" % (new_map.shape, self._npts))
 
         if not name in self._maps:
             self._maps[name] = new_map
             self._maps_interpn[name] = self._generate_affinity_map_interpn(new_map)
-            return True
         else:
-            print("Error: map %s already exists." % name)
-            return False
+            raise RunTimeError("Map %s already exists." % name)
+
+    def delete_map(self, name):
+        """Delete a map
+
+        Args:
+            name (str): name of the map to delete
+
+        """
+        try:
+            del self._maps[name]
+            del self._maps_interpn[name]
+        except KeyError:
+            warnings.warn('Warning: could not delete map %s.' % name, RuntimeWarning)
+            pass
 
     def atoms_in_map(self, molecule):
         """List of index of all the atoms in the map.

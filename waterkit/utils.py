@@ -330,15 +330,10 @@ def random_quaternion(n=1):
 
 def is_writable(pathname):
     try:
-        testfile = tempfile.TemporaryFile(dir=pathname)
+        testfile = tempfile.NamedTemporaryFile(dir=pathname)
         testfile.close()
-    except OSError as e:
-        if e.errno == errno.EACCES:  # 13
-            return False
-        e.filename = pathname
-        raise
-
-    return True
+    except (PermissionError, FileNotFoundError) as e:
+        raise RuntimeError('Can write in directory %s.' % pathname) from e
 
 
 def execute_command(cmd_line):
@@ -437,6 +432,7 @@ def boltzmann_acceptance_rejection(new_energies, old_energies, temperature=300):
 def prepare_water_map(ad_map, water_model="tip3p", dielectric=1.):
     e_type = "Electrostatics"
     dielectric = np.float(dielectric)
+    map_info = ad_map.info()
 
     """In TIP3P and TIP5P models, hydrogen atoms and lone-pairs does not
     have VdW radius, so their interactions with the receptor are purely
@@ -449,15 +445,21 @@ def prepare_water_map(ad_map, water_model="tip3p", dielectric=1.):
         hw_type = "HW"
         ow_q = -0.834
         hw_q = 0.417
+
+        missing = set([ow_type, e_type]).difference(map_info['maps'])
     elif water_model == "tip5p":
         ot_type = "OT"
         hw_type = "HT"
         lw_type = "LP"
         hw_q = 0.241
         lw_q = -0.241
+
+        missing = set([ot_type, lw_type, e_type]).difference(map_info['maps'])
     else:
-        print("Error: water model %s unknown." % water_model)
-        return False
+        raise RuntimeError("Water model %s unknown." % water_model)
+
+    if missing:
+        raise RuntimeError('Atom type(s) %s is(are) missing for %s water model.' % (list(missing), water_model))
 
     # For the TIP3P and TIP5P models
     ad_map.apply_operation_on_maps(hw_type, e_type, "x * %f / %f" % (hw_q, dielectric))
@@ -468,4 +470,6 @@ def prepare_water_map(ad_map, water_model="tip3p", dielectric=1.):
     elif water_model == "tip5p":
         ad_map.apply_operation_on_maps(lw_type, e_type, "x * %f / %f" % (lw_q, dielectric))
 
-    return True
+    # Delete useless maps
+    ad_map.delete_map('Electrostatics')
+    ad_map.delete_map('Desolvation')

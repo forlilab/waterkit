@@ -32,6 +32,8 @@ setup(name="waterkit",
                "scripts/wk_get_spherical_map.py"],
       package_data={
             "waterkit" : ["data/*",
+                          "data/water/spherical/*",
+                          "data/water/spherical/raw_data/*",
                           "data/water/tip3p/*",
                           "data/water/tip3p/raw_data/*",
                           "data/water/tip5p/*",

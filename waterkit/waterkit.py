@@ -16,12 +16,18 @@ import sys
 import time
 import multiprocessing as mp
 
+from tqdm import tqdm
+
 from .water_box import WaterBox
 from . import utils
 
 
-def _hydrate_single(water_box, n_layer=0, start=0, stop=1, output_dir="."):
+def _hydrate_single(water_box, n_layer=0, start=0, stop=1, output_dir=".", position=0):
     """Single job waterkit hydration."""
+    progress = tqdm(total=stop - start, position=position,
+                    desc='job %02d' % (position + 1),
+                    bar_format='{l_bar}{bar:50}{r_bar}{bar:-10b}')
+
     for frame_id in range(start, stop + 1):
         i = 1
 
@@ -47,6 +53,8 @@ def _hydrate_single(water_box, n_layer=0, start=0, stop=1, output_dir="."):
 
             i += 1
 
+        progress.update(1)
+
         output_filename = os.path.join(output_dir, "water_%06d.pdb" % (frame_id + 1))
         w_copy.to_pdb(output_filename, include_receptor=False)
 
@@ -55,15 +63,17 @@ def _hydrate_single(water_box, n_layer=0, start=0, stop=1, output_dir="."):
         del w_copy
         gc.collect()
 
+    progress.close()
+
 
 class WaterKit():
 
-    def __init__(self, water_model="tip3p", water_grid_file=None, temperature=300., n_layer=1, n_frames=1, n_jobs=1):
+    def __init__(self, water_model="tip3p", spherical_water_map=None, temperature=300., n_layer=1, n_frames=1, n_jobs=1):
         """Initialize WaterKit.
 
         Args:
             water_model (str): Model used for the water molecule, tip3p or tip5p (default: tip3p)
-            how (str): Method for water placement: "best" or "boltzmann" (default: best)
+            spherical_water_map (str): autodock map file for the water spherical model (default: None)
             temperature (float): Temperature in Kelvin, only used for Boltzmann sampling (default: 300)
             n_layer (int): Number of hydration layer to add (default: 1)
             n_frames (int): Number of replicas (default: 1)
@@ -71,7 +81,7 @@ class WaterKit():
 
         """
         self._water_model = water_model
-        self._water_grid_file = water_grid_file
+        self._spherical_water_map = spherical_water_map
         self._temperature = temperature
         self._n_layer = n_layer
         self._n_frames = n_frames
@@ -93,11 +103,7 @@ class WaterKit():
             output_dir (str): output directory for the trajectory
 
         """
-        try:
-            utils.is_writable(output_dir)
-        except:
-            print("Error: output directory %s not found!" % output_dir)
-            sys.exit(1)
+        utils.is_writable(output_dir)
 
         jobs = []
         chunks = utils.split_list_in_chunks(self._n_frames, self._n_jobs)
@@ -105,11 +111,11 @@ class WaterKit():
         # It is more cleaner if we merge all the maps before
         utils.prepare_water_map(ad_map, self._water_model)
         # Initialize a box, might take a couple of times...
-        w = WaterBox(receptor, ad_map, self._water_model, self._water_grid_file, self._temperature)
+        w = WaterBox(receptor, ad_map, self._water_model, self._spherical_water_map, self._temperature)
 
         # Fire off!!
-        for chunk in chunks:
-            job = mp.Process(target=_hydrate_single, args=(w, self._n_layer, chunk[0], chunk[1], output_dir))
+        for i, chunk in enumerate(chunks):
+            job = mp.Process(target=_hydrate_single, args=(w, self._n_layer, chunk[0], chunk[1], output_dir, i))
             job.start()
             jobs.append(job)
 

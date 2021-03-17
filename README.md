@@ -11,6 +11,7 @@ You need, at a minimum (requirements):
 * Numpy 
 * Scipy
 * Pandas
+* tqdm
 * AmberTools (protein preparation and gist calculations)
 * OpenMM (minimization)
 * ParmED (files conversion)
@@ -51,7 +52,7 @@ Open the file ```build/html/index.html``` with your favorite browser (Google Chr
 
 Conversion to PDBQT using AmberTools19 and `wk_prepare_receptor.py` script
 ```bash
-$ wk_prepare_receptor.py -i protein.pdb -o protein_prepared --dry --nohyd --pdb --pdbqt
+$ wk_prepare_receptor.py -i protein.pdb -o protein_prepared --dry --nohyd --pdb --pdbqt --amber_pdbqt
 ```
 
 The following protein coordinate files will be generated: ```protein_prepared.pdbqt``` and ```protein_prepared.pdb```. The PDBQT file will be used by WaterKit and the PDB file will be used to create the trajectory file at the end.

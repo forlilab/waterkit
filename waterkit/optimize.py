@@ -25,7 +25,7 @@ from . import utils
 
 class WaterSampler():
 
-    def __init__(self, water_box, water_grid_file=None, min_distance=2.5, max_distance=3.6,  angle=90,
+    def __init__(self, water_box, spherical_water_map=None, min_distance=2.5, max_distance=3.6,  angle=90,
                  energy_cutoff=0, temperature=298.15):
         self._water_box = water_box
         self._water_model = water_box._water_model
@@ -60,13 +60,10 @@ class WaterSampler():
         map_list = []
 
         # Spherical water grid
-        if water_grid_file is None:
-            if self._water_model == "tip3p":
-                water_grid_file = os.path.join(d, "data/water/tip3p/water_SW.map")
-            elif self._water_model == "tip5p":
-                water_grid_file = os.path.join(d, "data/water/tip5p/water_SW.map")
+        if spherical_water_map is None:
+            spherical_water_map = os.path.join(d, "data/water/spherical/water_SW.map")
 
-        map_list.append(water_grid_file)
+        map_list.append(spherical_water_map)
 
         # Explicit water grids
         if self._water_model == "tip3p":
