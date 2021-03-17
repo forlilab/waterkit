@@ -1,7 +1,7 @@
-npts 150 150 150
+npts 40 40 40
 parameter_file AD4_parameters.dat
 gridfld water_maps.fld
-spacing 0.100
+spacing 0.375
 receptor_types OW HW
 ligand_types OW SW
 receptor water.pdbqt
