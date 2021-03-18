@@ -6,10 +6,6 @@
 # Class for water network optimizer
 #
 
-from __future__ import division
-from __future__ import print_function
-from __future__ import absolute_import
-
 import os
 import time
 
@@ -25,8 +21,8 @@ from . import utils
 
 class WaterSampler():
 
-    def __init__(self, water_box, spherical_water_map=None, min_distance=2.5, max_distance=3.6,  angle=90,
-                 energy_cutoff=0, temperature=298.15):
+    def __init__(self, water_box, temperature=300., spherical_water_map=None, 
+                 min_distance=2.5, max_distance=3.6, angle=90, energy_cutoff=0):
         self._water_box = water_box
         self._water_model = water_box._water_model
         self._ad_map = water_box.map

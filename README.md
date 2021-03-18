@@ -12,6 +12,7 @@ You need, at a minimum (requirements):
 * Scipy
 * Pandas
 * tqdm
+* AutoDock Vina and autogrid (for generating maps)
 * AmberTools (protein preparation and gist calculations)
 * OpenMM (minimization)
 * ParmED (files conversion)
@@ -27,6 +28,7 @@ $ conda create -n waterkit python=3.7
 $ conda activate waterkit
 $ conda install -c conda-forge -c ambermd -c omnia mkl numpy scipy pandas openbabel \
     parmed ambertools openmm netcdf4 griddataformats sphinx sphinx_rtd_theme
+$ conda install -c ccsb-scripps vina
 ```
 
 Finally, we can install the `WaterKit` package
@@ -52,35 +54,22 @@ Open the file ```build/html/index.html``` with your favorite browser (Google Chr
 
 Conversion to PDBQT using AmberTools19 and `wk_prepare_receptor.py` script
 ```bash
-$ wk_prepare_receptor.py -i protein.pdb -o protein_prepared --pdb --pdbqt --amber_pdbqt
+$ wk_prepare_receptor.py -i protein.pdb -o protein_prepared --pdb --amber_pdbqt
 ```
 
-The following protein coordinate files will be generated:```protein_prepared.pdb```, ```protein_prepared.pdbqt``` and ```protein_prepared_amber.pdbqt```. The PDBQT file will be used by WaterKit and the PDB file will be used to create the trajectory file at the end.
+The following protein coordinate files will be generated:```protein_prepared.pdb``` and ```protein_prepared_amber.pdbqt```. The PDBQT file will be used by WaterKit and the PDB file will be used to create the trajectory file at the end.
 
 ### Sample water molecule positions with WaterKit
 
-1. Create Grid Protein File (GPF)
-```bash
-$ wk_create_grid_protein_file.py -r protein_prepared.pdbqt -c 0 0 0 -s 24 24 24 -o protein.gpf
-```
-
-2. Pre-calculate grid maps with autogrid4
-```bash
-$ autogrid4 -p protein.gpf -l protein.glg
-```
-
-The AutoDock parameters (```AD4_parameters.dat```) are provided and located in the ```data``` directory of the waterkit module.
-
-3. Run WaterKit
+Run WaterKit
 ```bash
 $ mkdir traj
-# Generate 10.000 frames using 16 cpus
-$ run_waterkit.py -i protein_prepared.pdbqt -m protein_maps.fld -n 10000 -j 16 -o traj
+# Generate 10.000 frames using 16 cpus (tip3p, 300 K, 3 hydration layers)
+$ run_waterkit.py -i protein_prepared_amber.pdbqt -c 0 0 0 -s 24 24 24 -n 10000 -j 16 -o traj
 # Create ensemble trajectory
 $ wk_make_trajectory.py -r protein_prepared.pdb -w traj -o protein
-$ wk_prepare_receptor.py -i protein_system.pdb -o protein_system
-# ... and minimize each conformation
-$ wk_minimize_trajectory.py -p protein_system.prmtop -t protein.nc -s 100 --restraint 2.5
+# Minimize each conformation (100 steps, 2.5 kcal/mol/A**2 restraints on heavy atoms, CUDA)
+$ wk_minimize_trajectory.py -p protein_system.prmtop -t protein_system.nc -o protein_min.nc
 ```
 
 ### Run Grid Inhomogeneous Solvation Theory (GIST)
@@ -97,7 +86,7 @@ quit
 
 Usually you would choose the same parameters as the AutoGrid maps (```npts``` and ```gridcenter```). Unlike AutoGrid, the default the grid spacing in GIST is 0.5 A, so you will have to choose box dimension accordingly to match the Autogrid maps dimensions. More informations on GIST are available here: https://amber-md.github.io/cpptraj/CPPTRAJ.xhtml#magicparlabel-4672
 
-3. Run GIST
+2. Run GIST
 
 ```bash
 $ cpptraj -i gist.inp

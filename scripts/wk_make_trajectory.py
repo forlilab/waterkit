@@ -17,19 +17,8 @@ import sys
 import numpy as np
 import parmed as pmd
 from pdb4amber import pdb4amber
+from pdb4amber.utils import easy_call
 from parmed.amber import NetCDFTraj
-
-
-def cmd_lineparser():
-    parser = argparse.ArgumentParser(description="make_trajectory")
-    parser.add_argument("-r", "--receptor", dest="receptor_filename", required=True,
-                        action="store", help="receptor amber pdb file")
-    parser.add_argument("-w", "--dir", dest="water_directory", required=True,
-                        action="store", help="path of the directory containing the water \
-                        pdb files")
-    parser.add_argument("-o", "--output", dest="output_name", default="protein_water",
-                        action="store", help="output name (netcdf format)")
-    return parser.parse_args()
 
 
 def max_water(water_filenames):
@@ -67,31 +56,31 @@ def min_water(water_filenames):
     # We select only the water molecules, because we might have ions, etc...
     m = m["@O, H1, H2"]
     max_water = len(m.residues)
+
     return max_water, idx
 
 
-def write_system_pdb_file(fname, receptor, water_filenames, overwrite=True):
-    """Create topology file
-    
-    Args:
-        fname (str): output name for the topology file
-        receptor_filename (str): filename of the receptor file
-        water_filenames (list): list of filenames of the water files
-        overwrite (bool): overwrite or not the PDB file (default: True)
-
-    """
-    max_n_waters, idx = max_water(water_filenames)
-    water = pmd.load_file(water_filenames[idx])
-    # We do an in-place addition, so first we have to create a copy
-    receptor_copy = copy.deepcopy(receptor)
-    receptor_copy += water["@O, H1, H2"]
+def add_water_to_receptor(receptor, water):
+    receptor_wet = copy.deepcopy(receptor)
+    receptor_wet += water["@O, H1, H2"]
     # ParmED really want a symmetry attributes to write the PDB file
-    receptor_copy.symmetry = None
+    receptor_wet.symmetry = None
+
+    return receptor_wet
+
+
+def write_pdb_file(output_name, molecule,  overwrite=True, **kwargs):
+    '''Write PDB file
+
+    Args:
+        output_name (str): pdbqt output filename
+        molecule (parmed): parmed molecule object
+
+    '''
     try:
-        receptor_copy.save(fname, format="pdb", overwrite=overwrite)
+        molecule.save(output_name, format='pdb', overwrite=overwrite, **kwargs)
     except IOError:
-        print("Error: file %s already exists." % fname)
-        sys.exit(0)
+        raise IOError("Error: file %s already exists." % fname)
 
 
 def write_tleap_input_file(fname, pdb_filename):
@@ -125,7 +114,7 @@ def write_trajectory_file(fname, receptor, water_filenames):
 
     Args:
         fname (str): output name for the trajectory
-        receptor_filename (str): filename of the receptor pdb file
+        receptor_filename (parmed): parmed receptor object
         water_filenames (list): list of filenames of the water files
 
     """
@@ -189,22 +178,60 @@ def write_trajectory_file(fname, receptor, water_filenames):
     trj.close()
 
 
+def cmd_lineparser():
+    parser = argparse.ArgumentParser(description="make_trajectory")
+    parser.add_argument("-r", "--receptor", dest="receptor_filename", required=True,
+                        action="store", help="prepared receptor pdb file")
+    parser.add_argument("-w", "--dir", dest="water_directory", required=True,
+                        action="store", help="path of the directory containing the water \
+                        pdb files")
+    parser.add_argument('-o', '--out', default='protein',
+                        dest='output_prefix', help='output prefix filename (default: protein)')
+    return parser.parse_args()
+
+
 def main():
     args = cmd_lineparser()
     receptor_filename = args.receptor_filename
     water_directory = args.water_directory
-    output_name = args.output_name
+    output_prefix = args.output_prefix
+
+    tleap_input = 'leap.template.in'
+    tleap_output = 'leap.template.out'
+    tleap_log = 'leap.log'
+
+    receptor_dry = pmd.load_file(receptor_filename)
 
     water_filenames = []
     for fname in os.listdir(water_directory):
         if re.match(r"water_[0-9]{6}.pdb", fname):
             water_filenames.append(os.path.join(water_directory, fname))
 
-    receptor = pmd.load_file(receptor_filename)
+    """ Add water molecules to the dry receptor and write pdb wet receptor
+    We are taking the water coordinates from the frame that have the
+    max number of water molecules. Because the number of water molecules
+    need to be constant during the trajectory. This is just for creating 
+    the amber topology (and coordinate) file(s)."""
+    water = pmd.load_file(water_filenames[max_water(water_filenames)[1]])
+    receptor_wet = add_water_to_receptor(receptor_dry, water)
+    write_pdb_file("%s_system.pdb" % output_prefix, receptor_wet)
 
-    write_tleap_input_file("%s.leap.in" % output_name, "%s_system.pdb" % output_name)
-    write_system_pdb_file("%s_system.pdb" % output_name, receptor, water_filenames)
-    write_trajectory_file("%s.nc" % output_name, receptor, water_filenames)
+    # Write tleap input script
+    write_tleap_input_file(tleap_input, "%s_system.pdb" % output_prefix)
+
+    try:
+        # Generate amber prmtop and rst7 files
+        easy_call('tleap -s -f %s > %s' % (tleap_input, tleap_output), shell=True)
+    except RuntimeError:
+        error_msg = 'Could not generate topology/coordinates files with tleap.'
+        raise RuntimeError(error_msg)
+
+    # Write trajectory
+    write_trajectory_file("%s_system.nc" % output_prefix, receptor_dry, water_filenames)
+
+    os.remove(tleap_input)
+    os.remove(tleap_output)
+    os.remove(tleap_log)
 
 
 if __name__ == '__main__':

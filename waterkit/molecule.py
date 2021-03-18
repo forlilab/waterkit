@@ -6,10 +6,6 @@
 # Class for molecule
 #
 
-from __future__ import division
-from __future__ import print_function
-from __future__ import absolute_import
-
 import imp
 import os
 import re
@@ -36,7 +32,7 @@ class Molecule():
         i = 0
         j = 0
         dtype = [("i", "i4"), ("name", "U4"), ("resname", "U3"), ("resnum", "i4"),
-                 ("xyz", "f4", (3)), ("q", "f4"), ("t", "U5")]
+                 ('chain', 'U1'), ("xyz", "f4", (3)), ("q", "f4"), ("t", "U5")]
         self.atoms = np.zeros(OBMol.NumAtoms(), dtype)
         self.hydrogen_bonds = None
         self.rotatable_bonds = None
@@ -50,9 +46,9 @@ class Molecule():
 
         for r in ob.OBResidueIter(OBMol):
             for a in ob.OBResidueAtomIter(r):
-                atom_type = a.GetType()
                 xyz = (a.GetX(), a.GetY(), a.GetZ())
-                atom = (i+1, atom_type[0], r.GetName(), j+1, xyz, a.GetPartialCharge(), atom_type)
+                atom = (i+1, r.GetAtomID(a).strip(), r.GetName(), r.GetNum(), r.GetChain(), 
+                        xyz, a.GetPartialCharge(), a.GetType())
                 self.atoms[i] = atom
                 
                 i += 1
@@ -273,24 +269,14 @@ class Molecule():
         else:
             return False
 
-    def to_file(self, fname, fformat, options=None, append=False):
-        """Write PDBQT file of the water molecule.
-    
-        OpenBabel is used to write in format other than PDBQT file because
-        it is using the default AutoDock atom types (OA, HD, ...). And so
-        it is not working for our special water atom types.
+    def to_pdbqt_file(self, fname):
+        """Write molecule to PDBQT file
 
         Args:
-            fname (str): name of the PDBQT file
-            fformat (str): molecule file format
-            options (str): OpenBabel wrting options
-            append (bool): append to existing PDBQT file (default: False)
-
-        Returns:
-            None
+            fname (str): output PDBQT filename
 
         """
-        pdbqt_str = "ATOM  %5d %-4s %-3s  %4d    %8.3f%8.3f%8.3f  0.00 0.00     %6.3f %-2s\n"
+        pdbqt_str = "ATOM  %5d %-4s %-3s %1s%4d    %8.3f%8.3f%8.3f  1.00  1.00    %6.3f %-2s\n"
         output_str = ""
 
         if self.atoms.size == 1:
@@ -300,7 +286,38 @@ class Molecule():
 
         for atom in atoms:
             x, y, z = atom["xyz"]
-            output_str += pdbqt_str % (atom["i"], atom["name"], atom["resname"], atom["resnum"],
+            output_str += pdbqt_str % (atom["i"], atom["name"], atom["resname"], atom['chain'], atom["resnum"], 
+                                       x, y, z, atom["q"], atom["t"])
+
+        with open(fname, 'w') as w:
+            w.write(output_str)
+
+
+    def to_file(self, fname, fformat, options=None, append=False):
+        """Write molecule to file using OpenBabel.
+    
+        OpenBabel is used to write in format other than PDBQT file because
+        it is using the default AutoDock atom types (OA, HD, ...). And so
+        it is not working for our special water atom types.
+
+        Args:
+            fname (str): output PDBQT filename
+            fformat (str): molecule file format
+            options (str): OpenBabel wrting options
+            append (bool): append to existing PDBQT file (default: False)
+
+        """
+        pdbqt_str = "ATOM  %5d %-4s %-3s %1s%4d    %8.3f%8.3f%8.3f  1.00  1.00    %6.3f %-2s\n"
+        output_str = ""
+
+        if self.atoms.size == 1:
+            atoms = [self.atoms]
+        else:
+            atoms = self.atoms
+
+        for atom in atoms:
+            x, y, z = atom["xyz"]
+            output_str += pdbqt_str % (atom["i"], atom["name"], atom["resname"], atom['chain'], atom["resnum"],
                                        x, y, z, atom["q"], atom["t"])
 
         if fformat != "pdbqt":

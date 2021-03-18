@@ -6,67 +6,95 @@
 # Launch waterkit
 #
 
-from __future__ import division
-from __future__ import print_function
-from __future__ import absolute_import
-
 import os
 import argparse
 
+from waterkit import AutoGrid
 from waterkit import Map
 from waterkit import Molecule
 from waterkit import WaterKit
 from waterkit import utils
+from vina import Vina
 
 
 def cmd_lineparser():
-    parser = argparse.ArgumentParser(description="waterkit")
-    parser.add_argument("-i", "--mol", dest="mol_file", required=True,
-                        action="store", help="receptor file")
-    parser.add_argument("-m", "--fld", dest="fld_file", required=True,
-                        action="store", help="autodock fld file")
-    parser.add_argument("-l", "--layer", dest="n_layer", default=3, type=int,
-                        action="store", help="number of solvation layer to add")
-    parser.add_argument("-t", "--temperature", dest="temperature", default=300., type=float,
-                        action="store", help="temperature")
-    parser.add_argument("-n", "--n_frames", dest="n_frames", default=1, type=int,
-                        action="store", help="number of frames to generate")
-    parser.add_argument("-j", "--n_jobs", dest="n_jobs", default=1., type=int,
-                        action="store", help="number of jobs to run in parallel")
-    parser.add_argument("-wm", "--water_model", dest="water_model", default="tip3p",
-                        choices=["tip3p", "tip5p"], action="store",
-                        help="water model used (tip3p or tip5p)")
-    parser.add_argument("-sw", "--spherical_water_map", dest="spherical_water_map", default=None,
-                        action="store", help="external water spherical map file")
-    parser.add_argument("-o", "--output", dest="output_dir", default=".",
-                        action="store", help="output directory")
+    parser = argparse.ArgumentParser(description='waterkit')
+    parser.add_argument('-i', '--mol', dest='receptor_pdbqtfilename', required=True,
+                        action='store', help='receptor file')
+    parser.add_argument('-c', '--center', dest='box_center', nargs=3, type=float,
+                        action='store', help='center of the box')
+    parser.add_argument('-s', '--size', dest='box_size', nargs=3, type=int, required=True,
+                        action='store', help='size of the box in Angstrom')
+    parser.add_argument('-l', '--layer', dest='n_layer', default=3, type=int,
+                        action='store', help='number of solvation layer to add')
+    parser.add_argument('-t', '--temperature', dest='temperature', default=300., type=float,
+                        action='store', help='temperature')
+    parser.add_argument('-n', '--n_frames', dest='n_frames', default=1, type=int,
+                        action='store', help='number of frames to generate')
+    parser.add_argument('-j', '--n_jobs', dest='n_jobs', default=1., type=int,
+                        action='store', help='number of jobs to run in parallel')
+    parser.add_argument('-sw', '--spherical_water_maps', dest='spherical_water_maps', nargs=2, default=[None, None],
+                        action='store', 
+                        help='spherical water map files for receptor and single water (used for updating maps)')
+    parser.add_argument('-o', '--output', dest='output_dir', default='.',
+                        action='store', help='output directory')
+    parser.add_argument('--autogrid_exec_path', dest='autogrid_exec_path', default='autogrid4',
+                        action='store', help='path to the autogrid4 executable (default: autogrid4')
     return parser.parse_args()
 
 
 def main():
     args = cmd_lineparser()
-    mol_file = args.mol_file
-    fld_file = args.fld_file
-    water_model = args.water_model
-    spherical_water_map = args.spherical_water_map
+    receptor_pdbqtfilename = args.receptor_pdbqtfilename
+    box_center = args.box_center
+    box_size = args.box_size
     n_layer = args.n_layer
     n_frames = args.n_frames
     n_jobs = args.n_jobs
     temperature = args.temperature
     output_dir = args.output_dir
+    spherical_water_maps = args.spherical_water_maps
+    autogrid_exec_path = args.autogrid_exec_path
+    water_model = 'tip3p'
 
     # Force to use only one thread per job
-    os.environ["MKL_NUM_THREADS"] = "1"
-    os.environ["NUMEXPR_NUM_THREADS"] = "1"
-    os.environ["OMP_NUM_THREADS"] = "1"
+    os.environ['MKL_NUM_THREADS'] = '1'
+    os.environ['NUMEXPR_NUM_THREADS'] = '1'
+    os.environ['OMP_NUM_THREADS'] = '1'
 
     # Read PDBQT/MOL2 file, Waterfield file and AutoDock grid map
-    receptor = Molecule.from_file(mol_file)
-    ad_map = Map.from_fld(fld_file)
+    receptor = Molecule.from_file(receptor_pdbqtfilename)
+
+    with utils.temporary_directory(prefix='wk_', dir='.', clean=False) as tmp_dir:
+        # Generate AutoDock maps using the Amber ff14SB forcefield
+        ff14sb_param_file = os.path.join(utils.path_module('waterkit'), 'data/ff14SB_parameters.dat')
+        ag = AutoGrid(autogrid_exec_path, ff14sb_param_file)
+        ad_map = ag.run(receptor_pdbqtfilename, ['OW'], box_center, box_size, smooth=0, dielectric=1)
+
+        if spherical_water_maps[0] is None:
+            # Convert amber atom types to AutoDock atom types
+            ad_receptor = utils.convert_amber_to_autodock_types(molecule)
+            ad_receptor.to_pdbqt_file('receptor_ad.pdbqt')
+
+            # Generate Vina maps for the spherical maps
+            v = Vina(verbose=0)
+            v.set_receptor('receptor_ad.pdbqt')
+            v.compute_vina_maps(box_center, box_size, force_even_voxels=True)
+            v.write_maps('vina')
+            sw_map = Map('vina.O_DA.map', 'SW')
+        else:
+            # The first spherical map is for the receptor
+            sw_map = Map(spherical_water_maps[0], 'SW')
+
+        ad_map.add_map('SW', sw_map)
+
+    # It is more cleaner if we prepare the maps (OW, HW for tip3p, OT, HT, LP for tip5p) before
+    utils.prepare_water_map(ad_map, water_model)
 
     # Go waterkit!!
-    k = WaterKit(water_model, spherical_water_map, temperature, n_layer, n_frames, n_jobs)
+    # The second spherical map is for the single water (used for updating maps)
+    k = WaterKit(temperature, water_model, spherical_water_maps[1], n_layer, n_frames, n_jobs)
     k.hydrate(receptor, ad_map, output_dir)
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

@@ -6,10 +6,6 @@
 # The core of the WaterKit program
 #
 
-from __future__ import division
-from __future__ import print_function
-from __future__ import absolute_import
-
 import gc
 import os
 import sys
@@ -68,7 +64,7 @@ def _hydrate_single(water_box, n_layer=0, start=0, stop=1, output_dir=".", posit
 
 class WaterKit():
 
-    def __init__(self, water_model="tip3p", spherical_water_map=None, temperature=300., n_layer=1, n_frames=1, n_jobs=1):
+    def __init__(self, temperature=300., water_model="tip3p", spherical_water_map=None, n_layer=1, n_frames=1, n_jobs=1):
         """Initialize WaterKit.
 
         Args:
@@ -108,10 +104,8 @@ class WaterKit():
         jobs = []
         chunks = utils.split_list_in_chunks(self._n_frames, self._n_jobs)
 
-        # It is more cleaner if we merge all the maps before
-        utils.prepare_water_map(ad_map, self._water_model)
-        # Initialize a box, might take a couple of times...
-        w = WaterBox(receptor, ad_map, self._water_model, self._spherical_water_map, self._temperature)
+        # Initialize a box, might take some times...
+        w = WaterBox(receptor, ad_map, self._temperature, self._water_model, self._spherical_water_map)
 
         # Fire off!!
         for i, chunk in enumerate(chunks):

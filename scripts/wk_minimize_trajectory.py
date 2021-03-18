@@ -25,7 +25,7 @@ def cmd_lineparser():
                         action="store", help="amber topology file")
     parser.add_argument("-t", "--trj", dest="traj_filename", required=True,
                         action="store", help="netcdf trajectory file")
-    parser.add_argument("-s", "--steps", dest="n_steps", default=50, type=int,
+    parser.add_argument("-s", "--steps", dest="n_steps", default=100, type=int,
                         action="store", help="number of minimization steps")
     parser.add_argument("-r", "--restraint", dest="restraint", default=2.5, type=float,
                         action="store", help="harmonic restraint on protein heavy atoms")

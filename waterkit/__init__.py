@@ -9,7 +9,7 @@ from .autogrid import AutoGrid
 from .forcefield import AutoDockForceField
 from .molecule import Molecule
 from .spherical_model_map import SphericalWaterMap
-from .optimize import WaterSampler
+from .sampling import WaterSampler
 from .water import Water
 from .water_box import WaterBox
 from .waterkit import WaterKit

@@ -6,11 +6,10 @@
 # Utils functions
 #
 
-from __future__ import division
-from __future__ import print_function
-from __future__ import absolute_import
-
 import tempfile
+import contextlib
+import shutil
+import copy
 import errno
 import os
 import subprocess
@@ -328,6 +327,20 @@ def random_quaternion(n=1):
     return shoemake(u)
 
 
+@contextlib.contextmanager
+def temporary_directory(suffix=None, prefix=None, dir=None, clean=True):
+    """Create and enter a temporary directory; used as context manager."""
+    temp_dir = tempfile.mkdtemp(suffix, prefix, dir)
+    cwd = os.getcwd()
+    os.chdir(temp_dir)
+    try:
+        yield temp_dir
+    finally:
+        os.chdir(cwd)
+        if clean:
+            shutil.rmtree(temp_dir)
+
+
 def is_writable(pathname):
     try:
         testfile = tempfile.NamedTemporaryFile(dir=pathname)
@@ -427,6 +440,70 @@ def boltzmann_acceptance_rejection(new_energies, old_energies, temperature=300):
         decisions[unfavorable_indices] = r <= p_acc
 
         return decisions
+
+
+def convert_amber_to_autodock_types(molecule):
+    """Convert amber atom types to AutoDock atom types
+    
+    Args:
+        molecule (Molecule): input molecule
+
+    Returns
+        Molecule: copy of the original molecule with AutoDock atom types
+
+    """
+    molecule = copy.deepcopy(molecule)
+
+    amber_autodock_dict = {
+        'N3': 'N',
+        'H': 'HD',
+        'CX': 'C',
+        'HP': 'H',
+        'CT': 'C',
+        'HC': 'H',
+        'C': 'C',
+        'O': 'OA',
+        'N': 'N',
+        'H1': 'H',
+        'C3': 'C',
+        '3C': 'C',
+        'C2': 'C',
+        '2C': 'C',
+        'CO': 'C',
+        'O2': 'OA',
+        'OH': 'OA',
+        'HO': 'HD',
+        'SH': 'SA',
+        'HS': 'HD',
+        'CA': 'A',
+        'HA': 'H',
+        'S': 'SA',
+        'C8': 'C',
+        'N2': 'N',
+        'CC': 'A',
+        'NB': 'NA',
+        'CR': 'A',
+        'CV': 'A',
+        'H5': 'H',
+        'NA': 'N',
+        'CW': 'A',
+        'H4': 'H',
+        'C*': 'A',
+        'CN': 'A',
+        'CB': 'A',
+        'Zn2+': 'Zn',
+        'XC': 'C'
+    }
+
+    for atom in molecule.atoms:
+        if atom['resname'] == 'TYR' and atom['name'] == 'CZ' and atom['t'] == 'C':
+            atom['t'] = 'A'
+        elif atom['resname'] == 'ARG' and atom['name'] == 'CZ' and atom['t'] == 'CA':
+            atom['t'] = 'C'
+        else:
+            atom['t'] = amber_autodock_dict[atom['t']]
+
+    return molecule
 
 
 def prepare_water_map(ad_map, water_model="tip3p", dielectric=1.):

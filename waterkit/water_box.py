@@ -6,10 +6,6 @@
 # Class to manage water box
 #
 
-from __future__ import division
-from __future__ import print_function
-from __future__ import absolute_import
-
 import os
 import copy
 import sys
@@ -21,13 +17,13 @@ import pandas as pd
 from scipy import spatial
 
 from .water import Water
-from .optimize import WaterSampler
+from .sampling import WaterSampler
 from . import utils
 
 
 class WaterBox():
 
-    def __init__(self, receptor, ad_map, water_model="tip3p", spherical_water_map=None, temperature=300.):
+    def __init__(self, receptor, ad_map, temperature=300., water_model="tip3p", spherical_water_map=None):
         self.df = {}
         self.molecules = {}
         self.map = None
@@ -48,7 +44,7 @@ class WaterBox():
         # Forcefields, forcefield parameters and water model
         self._temperature = temperature
         # Initialize the sampling method
-        self._wopt = WaterSampler(self, spherical_water_map, temperature=self._temperature)
+        self._wopt = WaterSampler(self, temperature=self._temperature, spherical_water_map=spherical_water_map)
 
     def copy(self):
         """Return deepcopy of WaterBox."""

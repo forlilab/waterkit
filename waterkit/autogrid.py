@@ -6,10 +6,6 @@
 # Class to manage autogrid (wrapper)
 #
 
-from __future__ import division
-from __future__ import print_function
-from __future__ import absolute_import
-
 import os
 import re
 from glob import glob
@@ -62,16 +58,15 @@ class AutoGrid():
 
         return nbp_r_eps
 
-    def run(self, receptor_file, atom_types, center=(0., 0., 0.),
-            npts=(32, 32, 32), spacing=0.375, smooth=0.5, dielectric=-0.1465,
-            clean=False):
+    def run(self, receptor_file, atom_types, box_center, box_size, spacing=0.375, 
+            smooth=0.5, dielectric=-0.1465, clean=False):
         """Execute AutoGrid on receptor file.
 
         Args:
             receptor_file (str): pathname of the PDBQT receptor file
             atom_types (list): list of the ligand atom types
-            center (array_like): center of the grid (default: (0, 0, 0))
-            npts (array_like): size of the grid box (default: (32, 32, 32))
+            box_center (array_like): center of the grid in Angstrom
+            box_size (array_like): size of the grid box in Angstrom
             spacing (float): space between grid points (default: 0.375)
             smooth (float): AutoDock energy smoothing (default: 0.5)
             clean (bool): Remove all the map, fld, gpf and glg files, except the PDBQT receptor file (default: False)
@@ -80,6 +75,9 @@ class AutoGrid():
             Map: Return a Map instance
 
         """
+        assert len(box_center) == 3, 'The center of the box must be defined by 3d coordinate (x, y, z)'
+        assert len(box_size) == 3, 'The size of the box must be defined by 3d coordinates (x, y, z)'
+
         if not isinstance(atom_types, (list, tuple)):
             atom_types = [atom_types]
 
@@ -88,6 +86,10 @@ class AutoGrid():
 
         receptor_dir, receptor_filename = os.path.split(receptor_file)
         receptor_name = receptor_filename.split(".")[0]
+
+        npts = np.ceil(np.array(box_size) / spacing)
+        # The number of voxels must be even
+        npts[npts % 2 == 1] += 1
 
         gpf_file = os.path.join(receptor_dir, "%s.gpf" % receptor_name)
         glg_file = os.path.join(receptor_dir, "%s.glg" % receptor_name)
