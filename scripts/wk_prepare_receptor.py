@@ -257,7 +257,7 @@ def _remove_alt_residues(molecule):
     return residue_collection
 
 
-def _find_gaps(molecule, resprot):
+def _find_gaps(molecule, resprot, fill_gaps=False):
     gaplist = []
     max_distance = 2.0
 
@@ -277,6 +277,9 @@ def _find_gaps(molecule, resprot):
             gaprecord = (gap, c_atom.residue.name, residue.number, 
                          n_atom.residue.name, molecule.residues[i + 1].number)
             gaplist.append(gaprecord)
+
+            if fill_gaps:
+                residue.ter = True
 
     return gaplist
 
@@ -337,12 +340,15 @@ def _find_non_standard_resnames(molecule, amber_supported_resname):
 
 class PrepareReceptor:
 
-    def __init__(self, keep_hydrogen=False, keep_water=False, no_disulfide=False, keep_altloc=False, use_model=1):
+    def __init__(self, keep_hydrogen=False, keep_water=False, no_disulfide=False, keep_altloc=False, ignore_gaps=False, use_model=1):
         self._keep_hydrogen = keep_hydrogen
         self._keep_water = keep_water
         self._no_difsulfide = no_disulfide
         self._keep_altloc = keep_altloc
         self._use_model = use_model
+        # If we ignore gaps (True), we fill the gaps (True)
+        # If we don't ignore the gaps (False, we don't fille them (False)
+        self._fill_gaps = ignore_gaps
 
         self._pdb_filename = None
         self._molecule = None
@@ -380,21 +386,6 @@ class PrepareReceptor:
         pdbfixer.parm.box = None
         pdbfixer.parm.symmetry = None
 
-        # Find all the gaps
-        gaplist = _find_gaps(pdbfixer.parm, RESPROT)
-        if gaplist:
-            error_msg = 'Gap(s) found between the following residues.'
-            error_msg += ' Please fix it/them by adding the missing residues'
-            error_msg += ' or add TER records to indicate that the residues/chains are not physically connected'
-            error_msg += ' to each other: \n'
-            
-            gap_msg = ' - gap of %lf A between %s %d and %s %d\n'
-            for _, (d, resname0, resid0, resname1, resid1) in enumerate(gaplist):
-                error_msg += gap_msg % (d, resname0, resid0 + 1, resname1, resid1 + 1)
-            
-            logger.error(error_msg)
-            raise RuntimeError(error_msg)
-
         # Find missing heavy atoms
         missing_atoms = pdbfixer.find_missing_heavy_atoms(HEAVY_ATOM_DICT)
         if missing_atoms:
@@ -425,6 +416,29 @@ class PrepareReceptor:
         if ns_names:
             pdbfixer.parm.strip('!:' + ','.join(AMBER_SUPPORTED_RESNAMES))
             logger.info('Removed all non-standard Amber residues: %s' % ', '.join(ns_names))
+
+        # Find all the gaps
+        gaplist = _find_gaps(pdbfixer.parm, RESPROT, self._fill_gaps)
+        if gaplist:
+            gap_msg = ''
+            gap_str = ' - gap of %lf A between %s %d and %s %d\n'
+            for _, (d, resname0, resid0, resname1, resid1) in enumerate(gaplist):
+                gap_msg += gap_str % (d, resname0, resid0 + 1, resname1, resid1 + 1)
+            
+            if self._fill_gaps:
+                warning_msg = 'Gaps were ignore between residues (automatically added TER records): \n'
+                warning_msg += gap_msg
+                logger.warning(warning_msg)
+            else:
+                error_msg = ' Gap(s) were found between some residues. You can fix that issue by adding the missing residues'
+                error_msg += ' or manually add TER records to indicate that the residues/chains are not physically connected'
+                error_msg += ' to each other. If you know what you are doing, you can use the --ignore_gaps option to'
+                error_msg += ' ignore them (automatically add TER records).\n'
+                error_msg += 'Gap(s) found between the following residues: \n'
+                error_msg += gap_msg
+
+                logger.error(error_msg)
+                raise RuntimeError(error_msg)
 
         his_found = _find_histidine(pdbfixer.parm)
         if his_found:
@@ -519,7 +533,9 @@ def cmd_lineparser():
     parser.add_argument('--pdbqt', dest='make_pdbqt', default=False,
         action='store_true', help='PDBQT file with AutoDock atom types')
     parser.add_argument('--amber_pdbqt', dest='make_amber_pdbqt', default=False,
-        action='store_true', help='DBQT file with Amber atom types')
+        action='store_true', help='PDBQT file with Amber atom types')
+    parser.add_argument('--ignore_gaps', dest='ignore_gaps', default=False,
+        action='store_true', help='ignore gaps between residues (automatically add TER records')
     return parser.parse_args()
 
 
@@ -535,12 +551,13 @@ def main():
     make_pdb = args.make_pdb
     make_pdbqt = args.make_pdbqt
     make_amber_pdbqt = args.make_amber_pdbqt
+    ignore_gaps = args.ignore_gaps
 
     prmtop_filename = '%s.prmtop' % output_prefix
     rst7_filename = '%s.rst7' % output_prefix
     pdb_clean_filename = '%s_clean.pdb' % output_prefix
 
-    pr = PrepareReceptor(keep_hydrogen, keep_water, no_disulfide, keep_altloc, use_model)
+    pr = PrepareReceptor(keep_hydrogen, keep_water, no_disulfide, keep_altloc, ignore_gaps, use_model)
     pr.prepare(pdb_filename, prmtop_filename, rst7_filename, pdb_clean_filename)
 
     if make_pdb:
