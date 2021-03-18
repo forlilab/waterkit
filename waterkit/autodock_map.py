@@ -272,13 +272,13 @@ class Map():
             new_map = np.array(new_map)
 
         if not np.array_equal(new_map.shape, self._npts):
-            raise RunTimeError("New grid does not have the same dimension (%s != %s)" % (new_map.shape, self._npts))
+            raise RuntimeError("New grid does not have the same dimension (%s != %s)" % (new_map.shape, self._npts))
 
         if not name in self._maps:
             self._maps[name] = new_map
             self._maps_interpn[name] = self._generate_affinity_map_interpn(new_map)
         else:
-            raise RunTimeError("Map %s already exists." % name)
+            raise RuntimeError("Map %s already exists." % name)
 
     def delete_map(self, name):
         """Delete a map
