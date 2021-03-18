@@ -258,50 +258,67 @@ def _remove_alt_residues(molecule):
 
 
 def _find_gaps(molecule, resprot):
-    # TODO: doc
-    # report original resnum?
-    CA_atoms = []
-    C_atoms = []
-    N_atoms = []
     gaplist = []
+    max_distance = 2.0
 
-    # N.B.: following only finds gaps in protein chains!
-    # H.N: Assume that residue has all 3 atoms: CA, C, and N
-    respro_nocap = set(resprot) - {'ACE', 'NME'}
-    for i, atom in enumerate(molecule.atoms):
-        # TODO: if using 'CH3', this will be failed with
-        # ACE ALA ALA ALA NME system
-        # if atom.name in ['CA', 'CH3'] and atom.residue.name in RESPROT:
-        if atom.name in [
-                'CA',
-        ] and atom.residue.name in respro_nocap:
-            CA_atoms.append(i)
-        if atom.name == 'C' and atom.residue.name in respro_nocap:
-            C_atoms.append(i)
-        if atom.name == 'N' and atom.residue.name in respro_nocap:
-            N_atoms.append(i)
-
-    nca = len(CA_atoms)
-
-    for i in range(nca - 1):
-        is_ter = molecule.atoms[CA_atoms[i]].residue.ter
-        if is_ter:
+    for i, residue in enumerate(molecule.residues):
+        if residue.ter:
             continue
-        # Changed here to look at the C-N peptide bond distance:
-        C_atom = molecule.atoms[C_atoms[i]]
-        N_atom = molecule.atoms[N_atoms[i + 1]]
 
-        dx = float(C_atom.xx) - float(N_atom.xx)
-        dy = float(C_atom.xy) - float(N_atom.xy)
-        dz = float(C_atom.xz) - float(N_atom.xz)
+        c_atom = [atom for atom in residue.atoms if atom.name == 'C'][0]
+        n_atom = [atom for atom in molecule.residues[i + 1].atoms if atom.name == 'N'][0]
+
+        dx = float(c_atom.xx) - float(n_atom.xx)
+        dy = float(c_atom.xy) - float(n_atom.xy)
+        dz = float(c_atom.xz) - float(n_atom.xz)
         gap = math.sqrt(dx * dx + dy * dy + dz * dz)
 
-        if gap > 2.0:
-            gaprecord = (gap, C_atom.residue.name, C_atom.residue.idx,
-                         N_atom.residue.name, N_atom.residue.idx)
+        if gap > max_distance:
+            gaprecord = (gap, c_atom.residue.name, residue.number, 
+                         n_atom.residue.name, molecule.residues[i + 1].number)
             gaplist.append(gaprecord)
 
     return gaplist
+
+
+def _fix_isoleucine_cd_atom_name(molecule):
+    ile_fixed = []
+
+    for residue in molecule.residues:
+        if residue.name == 'ILE':
+            for atom in residue:
+                if atom.name == 'CD':
+                    atom.name = 'CD1'
+                    ile_fixed.append(('ILE', residue.number))
+
+    return ile_fixed
+
+
+def _find_histidine(molecule):
+    his_found = []
+
+    for residue in molecule.residues:
+        if residue.name == 'HIS':
+            his_found.append(('HIS', residue.number))
+
+    return his_found
+
+
+def _fix_charmm_histidine_to_amber(molecule):
+    his_fixed = []
+
+    for residue in molecule.residues:
+        if residue.name == 'HSE':
+            residue.name = 'HIE'
+            his_fixed.append(('HIE', residue.number))
+        elif residue.name == 'HSD':
+            residue.name = 'HID'
+            his_fixed.append(('HID', residue.number))
+        elif residue.name == 'HSP':
+            residue.name = 'HIP'
+            his_fixed.append(('HIP', residue.number))
+
+    return his_fixed
 
 
 def _find_non_standard_resnames(molecule, amber_supported_resname):
@@ -393,11 +410,26 @@ class PrepareReceptor:
             pdbfixer.remove_water()
             logger.info('Removed all water molecules')
 
+        # Fix isoleucine CD aton name, supposed to be CD1 for Amber
+        ile_fixed = _fix_isoleucine_cd_atom_name(pdbfixer.parm)
+        if ile_fixed:
+            logger.info('Atom names were fixed for: %s' % ', '.join('%s - %d' % (r[0], r[1]) for r in ile_fixed))
+
+        his_fixed = _fix_charmm_histidine_to_amber(pdbfixer.parm)
+        if his_fixed:
+            warning_msg = 'CHARMM histidine protonation were converted to Amber: %s'
+            logger.warning(warning_msg % ', '.join('%s - %d' % (r[0], r[1]) for r in his_fixed))
+
         # Keep only standard-Amber residues
         ns_names = _find_non_standard_resnames(pdbfixer.parm, AMBER_SUPPORTED_RESNAMES)
         if ns_names:
             pdbfixer.parm.strip('!:' + ','.join(AMBER_SUPPORTED_RESNAMES))
             logger.info('Removed all non-standard Amber residues: %s' % ', '.join(ns_names))
+
+        his_found = _find_histidine(pdbfixer.parm)
+        if his_found:
+            warning_msg = 'Histidine protonation will be automatically assigned to HIE: %s'
+            logger.warning(warning_msg % ', '.join('%s - %d' % (r[0], r[1]) for r in his_found))
 
         # Assign histidine protonations
         pdbfixer.assign_histidine()
