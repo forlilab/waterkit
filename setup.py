@@ -18,7 +18,7 @@ def find_files(directory):
 
 
 setup(name="waterkit",
-      version=0.5,
+      version=0.5.1,
       description="WaterKit",
       author="Jerome Eberhardt",
       author_email="jerome@scripps.edu",
