@@ -11,7 +11,7 @@ You need, at a minimum (requirements):
 * Numpy 
 * Scipy
 * Pandas
-* tqdm
+* tqdm (progress bar)
 * AutoDock Vina and autogrid (for generating maps)
 * AmberTools (protein preparation and gist calculations)
 * OpenMM (minimization)
@@ -24,8 +24,8 @@ You need, at a minimum (requirements):
 
 I highly recommand you to install the Anaconda distribution (https://www.continuum.io/downloads) if you want a clean python environnment with nearly all the prerequisites already installed. To install everything properly, you just have to do this:
 ```bash
-$ conda create -n waterkit -c conda-forge -c ccsb-scripps python=3 mkl numpy scipy pandas openbabel \
-    parmed ambertools openmm netcdf4 griddataformats sphinx sphinx_rtd_theme
+$ conda create -n waterkit -c conda-forge -c ccsb-scripps python=3 mkl numpy scipy pandas \
+    openbabel parmed ambertools openmm netcdf4 griddataformats sphinx sphinx_rtd_theme tqdm
 $ conda activate waterkit
 ```
 
