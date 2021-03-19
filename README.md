@@ -1,4 +1,4 @@
-[![made-with-python](https://img.shields.io/badge/Made%20with-Python-1f425f.svg)](https://www.python.org/) [![GitHub license](https://img.shields.io/github/license/Naereen/StrapDown.js.svg)](https://github.com/Naereen/StrapDown.js/blob/master/LICENSE) [![PyPI version fury.io](https://img.shields.io/badge/version-0.4-green.svg)](https://pypi.python.org/pypi/ansicolortags/) 
+[![made-with-python](https://img.shields.io/badge/Made%20with-Python-1f425f.svg)](https://www.python.org/) [![GitHub license](https://img.shields.io/github/license/Naereen/StrapDown.js.svg)](https://github.com/Naereen/StrapDown.js/blob/master/LICENSE) [![PyPI version fury.io](https://img.shields.io/badge/version-0.5.1-green.svg)](https://pypi.python.org/pypi/ansicolortags/) 
 
 # Waterkit
 Tool to predict water molecules placement and energy in ligand binding sites
@@ -6,7 +6,7 @@ Tool to predict water molecules placement and energy in ligand binding sites
 ## Prerequisites
 
 You need, at a minimum (requirements):
-* Python (=3.7)
+* Python (>=3.7)
 * OpenBabel
 * Numpy 
 * Scipy
@@ -24,11 +24,9 @@ You need, at a minimum (requirements):
 
 I highly recommand you to install the Anaconda distribution (https://www.continuum.io/downloads) if you want a clean python environnment with nearly all the prerequisites already installed. To install everything properly, you just have to do this:
 ```bash
-$ conda create -n waterkit python=3.7
-$ conda activate waterkit
-$ conda install -c conda-forge -c ambermd -c omnia mkl numpy scipy pandas openbabel \
+$ conda create -n waterkit -c conda-forge -c ccsb-scripps python=3 mkl numpy scipy pandas openbabel \
     parmed ambertools openmm netcdf4 griddataformats sphinx sphinx_rtd_theme
-$ conda install -c ccsb-scripps vina
+$ conda activate waterkit
 ```
 
 Finally, we can install the `WaterKit` package
