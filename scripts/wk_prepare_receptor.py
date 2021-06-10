@@ -265,8 +265,30 @@ def _find_gaps(molecule, resprot, fill_gaps=False):
         if residue.ter:
             continue
 
-        c_atom = [atom for atom in residue.atoms if atom.name == 'C'][0]
-        n_atom = [atom for atom in molecule.residues[i + 1].atoms if atom.name == 'N'][0]
+        try:
+            # If this fails, it means we reached the last residue 
+            # and the TER keyword is not present in the PDB file
+            next_residue = molecule.residues[i + 1]
+        except:
+            # So we automatically flag it as TER residue
+            residue.ter = True
+
+            continue
+
+        try:
+            # If the C-backbone of the current residue or N-backbone of residue + 1
+            # is not present, we flag it as a gap in the sequence
+            c_atom = [atom for atom in residue.atoms if atom.name == 'C'][0]
+            n_atom = [atom for atom in next_residue.atoms if atom.name == 'N'][0]
+        except:
+            gaprecord = (9999.999, c_atom.residue.name, residue.number, 
+                         n_atom.residue.name, molecule.residues[i + 1].number)
+            gaplist.append(gaprecord)
+
+            if fill_gaps:
+                residue.ter = True
+
+            continue
 
         dx = float(c_atom.xx) - float(n_atom.xx)
         dy = float(c_atom.xy) - float(n_atom.xy)
@@ -421,7 +443,7 @@ class PrepareReceptor:
         gaplist = _find_gaps(pdbfixer.parm, RESPROT, self._fill_gaps)
         if gaplist:
             gap_msg = ''
-            gap_str = ' - gap of %lf A between %s %d and %s %d\n'
+            gap_str = ' - gap of %8.3f A between %s %d and %s %d\n'
             for _, (d, resname0, resid0, resname1, resid1) in enumerate(gaplist):
                 gap_msg += gap_str % (d, resname0, resid0 + 1, resname1, resid1 + 1)
             
