@@ -119,7 +119,7 @@ class WaterMinimizer:
                 system.removeForce(force_idx)
 
             if (i % 100 == 0) and self._verbose:
-                sys.stdout.write("\rConformations minimized:  %5.2f / 100 %%" % (np.float(i) / n_frame * 100.))
+                sys.stdout.write("\rConformations minimized:  %5.2f / 100 %%" % (float(i) / n_frame * 100.))
                 sys.stdout.flush()
 
         new_trj.close()
