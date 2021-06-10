@@ -25,7 +25,8 @@ You need, at a minimum (requirements):
 I highly recommand you to install the Anaconda distribution (https://www.continuum.io/downloads) if you want a clean python environnment with nearly all the prerequisites already installed. To install everything properly, you just have to do this:
 ```bash
 $ conda create -n waterkit -c conda-forge -c ccsb-scripps python=3 mkl numpy scipy pandas \
-    openbabel parmed ambertools openmm netcdf4 griddataformats sphinx sphinx_rtd_theme tqdm
+    openbabel parmed ambertools openmm netcdf4 griddataformats tqdm vina \
+    sphinx sphinx_rtd_theme
 $ conda activate waterkit
 ```
 
@@ -63,7 +64,8 @@ Run WaterKit
 ```bash
 $ mkdir traj
 # Generate 10.000 frames using 16 cpus (tip3p, 300 K, 3 hydration layers)
-$ run_waterkit.py -i protein_prepared_amber.pdbqt -c 0 0 0 -s 24 24 24 -n 10000 -j 16 -o traj
+# X Y Z define the center and SX SY SZ the size (in Angstrom) of the box
+$ run_waterkit.py -i protein_prepared_amber.pdbqt -c X Y Z -s SX SY SZ -n 10000 -j 16 -o traj
 # Create ensemble trajectory
 $ wk_make_trajectory.py -r protein_prepared.pdb -w traj -o protein
 # Minimize each conformation (100 steps, 2.5 kcal/mol/A**2 restraints on heavy atoms, CUDA)
@@ -77,7 +79,9 @@ $ wk_minimize_trajectory.py -p protein_system.prmtop -t protein_system.nc -o pro
 # gist.inp
 parm protein_system.prmtop
 trajin protein.nc
-gist gridspacn 0.5 gridcntr 0.0 0.0 0.0 griddim 48 48 48
+# X Y Z define the center and GX GY GZ the size (in gridpoints) of the box
+# Example: if SX = SY = SZ = 24 Angstrom and gridspacn = 0.5, then GX = GY = GZ = 48
+gist gridspacn 0.5 gridcntr X Y Z griddim GX GY GZ
 go
 quit
 ```
