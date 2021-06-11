@@ -72,7 +72,7 @@ RESSOLV = ('WAT', 'HOH', 'AG', 'AL', 'Ag', 'BA', 'BR', 'Be', 'CA', 'CD', 'CE',
 AMBER_SUPPORTED_RESNAMES = RESPROT + RESNA + RESSOLV
 
 
-def _write_pdb_file(output_name, molecule,  overwrite=True, **kwargs):
+def _write_pdb_file(output_name, molecule, overwrite=True, **kwargs):
     '''Write PDB file
 
     Args:
@@ -80,7 +80,42 @@ def _write_pdb_file(output_name, molecule,  overwrite=True, **kwargs):
         molecule (parmed): parmed molecule object
 
     '''
-    molecule.save(output_name, format='pdb', overwrite=overwrite, **kwargs)
+    i = 0
+    pdb_str = '%-6s%5d %-4s %3s %s%4d    %8.3f%8.3f%8.3f  1.00  1.00           %-2s\n'
+    ter_str = '%-6s%5d %-4s %3s %s%4d\n'
+    output_str = ''
+
+    for residue in molecule.residues:
+        resname = residue.name
+        resid = residue.number
+        chain_id = residue.chain
+
+        for atom in residue.atoms:
+            if len(atom.name) < 4:
+                name = ' %s' % atom.name
+            else:
+                name = atom.name
+
+            atom_type = atom.name[0]
+
+            if resname in RESSOLV:
+                atype = 'HETATM'
+            else:
+                atype = 'ATOM'
+
+            output_str += pdb_str % (atype, i + 1, name, resname, chain_id, resid,
+                                     atom.xx, atom.xy, atom.xz, atom_type)
+
+            i += 1
+
+        if residue.ter:
+            output_str += ter_str % ('TER', i + 1, name, resname, chain_id, resid)
+            i += 1
+
+    output_str += 'END\n'
+
+    with open(output_name, 'w') as w:
+        w.write(output_str)
 
 
 def _write_pdbqt_file(output_name, molecule):
@@ -91,41 +126,45 @@ def _write_pdbqt_file(output_name, molecule):
         molecule (parmed): parmed molecule object
 
     '''
+    i = 0
     pdbqt_str = '%-6s%5d %-4s %3s %s%4d    %8.3f%8.3f%8.3f  1.00  1.00    %6.3f %-2s\n'
+    ter_str = '%-6s%5d %-4s %3s %s%4d\n'
     output_str = ''
-    chain_id = 0
 
-    for atom in molecule.atoms:
-        if len(atom.name) < 4:
-            name = ' %s' % atom.name
-        else:
-            name = atom.name
+    for residue in molecule.residues:
+        resname = residue.name
+        resid = residue.number
+        chain_id = residue.chain
 
-        resname = atom.residue.name
-        resid = atom.residue.idx + 1
+        for atom in residue.atoms:
+            if len(atom.name) < 4:
+                name = ' %s' % atom.name
+            else:
+                name = atom.name
 
-        # OpenBabel does not like atom types starting with a number
-        if atom.type[0].isdigit():
-            atom_type = atom.type[::-1]
-        else:
-            atom_type = atom.type
+            # OpenBabel does not like atom types starting with a number
+            if atom.type[0].isdigit():
+                atom_type = atom.type[::-1]
+            else:
+                atom_type = atom.type
 
-        # AutoGrid does not accept atom type name of length > 2
-        atom_type = atom_type[:2]
+            # AutoGrid does not accept atom type name of length > 2
+            atom_type = atom_type[:2]
 
-        if resname in RESSOLV:
-            atype = 'HETATM'
-        else:
-            atype = 'ATOM'
+            if resname in RESSOLV:
+                atype = 'HETATM'
+            else:
+                atype = 'ATOM'
 
-        output_str += pdbqt_str % (atype, atom.idx + 1, name, resname, string.ascii_uppercase[chain_id],
-                                   resid, atom.xx, atom.xy, atom.xz, atom.charge, atom_type)
+            output_str += pdbqt_str % (atype, i + 1, name, resname, chain_id, resid,
+                                       atom.xx, atom.xy, atom.xz, atom.charge, atom_type)
 
-        if name.strip() == 'OXT':
-            chain_id += 1
+            i += 1
 
-    if name.strip() != 'OXT':
-        output_str += 'TER\n'
+        if residue.ter:
+            output_str += ter_str % ('TER', i + 1, name, resname, chain_id, resid)
+            i += 1
+
     output_str += 'END\n'
 
     with open(output_name, 'w') as w:
@@ -239,6 +278,59 @@ def _make_leap_template(parm, ns_names, gaplist, sslist, input_pdb, prmtop='prmt
         more_leap_cmds=more_leap_cmds)
 
     return leap_string
+
+
+def _generate_resids_and_chainids(molecule):
+    resid = 1
+    chainid = 0
+    resids = []
+    chainids = []
+
+    # This way, we are good for 52 chains in total
+    ascii_letters = string.ascii_uppercase + string.ascii_lowercase
+
+    for residue in molecule.residues:
+        try:
+            resids.append(resid)
+            chainids.append(ascii_letters[chainid])
+        except:
+            raise IndexError('This structure contains more than 52 chains.')
+
+        resid += 1
+
+        if residue.ter:
+            chainid += 1
+            resid = 1
+
+    return resids, chainids
+
+def _ter_flags(molecule):
+    return [True if residue.ter else False for residue in molecule.residues]
+
+
+def _replace_resids_and_chainids(molecule, new_resids, new_chainids):
+    n_resids = len(molecule.residues)
+    n_new_resids = len(new_resids)
+
+    error_msg = 'Cannot replace resids and chainids.'
+    error_msg += ' Number of residues is different (%d != %d).' % (n_resids, n_new_resids)
+    assert n_resids == n_new_resids, error_msg
+
+    for i in range(n_resids):
+        molecule.residues[i].number = new_resids[i]
+        molecule.residues[i].chain = new_chainids[i]
+
+
+def _add_ter_flags(molecule, ter_flags):
+    n_resids = len(molecule.residues)
+    n_ter_flags = len(ter_flags)
+
+    error_msg = 'Cannot add TER flags.'
+    error_msg += ' Number of TER flags and resids are different (%d != %d).' % (n_resids, n_ter_flags)
+    assert n_resids == n_ter_flags, error_msg
+
+    for i in range(n_resids):
+        molecule.residues[i].ter = ter_flags[i]
 
 
 def _remove_alt_residues(molecule):
@@ -362,7 +454,8 @@ def _find_non_standard_resnames(molecule, amber_supported_resname):
 
 class PrepareReceptor:
 
-    def __init__(self, keep_hydrogen=False, keep_water=False, no_disulfide=False, keep_altloc=False, ignore_gaps=False, use_model=1):
+    def __init__(self, keep_hydrogen=False, keep_water=False, no_disulfide=False, 
+                 keep_altloc=False, ignore_gaps=False, renumbering=True, use_model=1):
         self._keep_hydrogen = keep_hydrogen
         self._keep_water = keep_water
         self._no_difsulfide = no_disulfide
@@ -371,6 +464,7 @@ class PrepareReceptor:
         # If we ignore gaps (True), we fill the gaps (True)
         # If we don't ignore the gaps (False, we don't fille them (False)
         self._fill_gaps = ignore_gaps
+        self._renumbering = renumbering
 
         self._pdb_filename = None
         self._molecule = None
@@ -441,6 +535,7 @@ class PrepareReceptor:
 
         # Find all the gaps
         gaplist = _find_gaps(pdbfixer.parm, RESPROT, self._fill_gaps)
+        ter_flags = _ter_flags(pdbfixer.parm)
         if gaplist:
             gap_msg = ''
             gap_str = ' - gap of %8.3f A between %s %d and %s %d\n'
@@ -492,6 +587,13 @@ class PrepareReceptor:
         write_kwargs['increase_tercount'] = False # so CONECT record can work properly
         write_kwargs['altlocs'] = 'occupancy'
 
+        if self._renumbering:
+            new_resids, new_chainids = _generate_resids_and_chainids(pdbfixer.parm)
+            _replace_resids_and_chainids(pdbfixer.parm, new_resids, new_chainids)
+        else:
+            new_resids = [residue.number for residue in pdbfixer.parm.residues]
+            new_chainids = [residue.chain for residue in pdbfixer.parm.residues]
+
         try:
             _write_pdb_file(pdb_clean_filename, pdbfixer.parm, **write_kwargs)
         except:
@@ -514,6 +616,10 @@ class PrepareReceptor:
             raise RuntimeError(error_msg)
 
         self._molecule = pmd.load_file(prmtop_filename, rst7_filename)
+
+        # Add back resids, chainids and TER flags to molecule
+        _replace_resids_and_chainids(self._molecule, new_resids, new_chainids)
+        _add_ter_flags(self._molecule, ter_flags)
 
         if clean:
             os.remove(tleap_input)
@@ -557,7 +663,9 @@ def cmd_lineparser():
     parser.add_argument('--amber_pdbqt', dest='make_amber_pdbqt', default=False,
         action='store_true', help='PDBQT file with Amber atom types')
     parser.add_argument('--ignore_gaps', dest='ignore_gaps', default=False,
-        action='store_true', help='ignore gaps between residues (automatically add TER records')
+        action='store_true', help='ignore gaps between residues (automatically add TER records)')
+    parser.add_argument('--renumber', dest='renumbering', default=False,
+        action='store_true', help='Residue index will be renumbered (starting from 1).')
     return parser.parse_args()
 
 
@@ -574,12 +682,14 @@ def main():
     make_pdbqt = args.make_pdbqt
     make_amber_pdbqt = args.make_amber_pdbqt
     ignore_gaps = args.ignore_gaps
+    renumbering = args.renumbering
 
     prmtop_filename = '%s.prmtop' % output_prefix
     rst7_filename = '%s.rst7' % output_prefix
     pdb_clean_filename = '%s_clean.pdb' % output_prefix
 
-    pr = PrepareReceptor(keep_hydrogen, keep_water, no_disulfide, keep_altloc, ignore_gaps, use_model)
+    pr = PrepareReceptor(keep_hydrogen, keep_water, no_disulfide, 
+                         keep_altloc, ignore_gaps, renumbering, use_model)
     pr.prepare(pdb_filename, prmtop_filename, rst7_filename, pdb_clean_filename)
 
     if make_pdb:
