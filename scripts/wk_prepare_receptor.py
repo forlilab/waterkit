@@ -212,6 +212,7 @@ def _convert_amber_to_autodock_types(molecule):
         'CN': 'A',
         'CB': 'A',
         'Zn2+': 'Zn',
+        'Mn2+': 'Mn',
         'XC': 'C'
     }
 
