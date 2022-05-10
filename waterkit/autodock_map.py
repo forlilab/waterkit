@@ -235,8 +235,8 @@ class Map():
         """
         return self._npts.prod()
 
-    def create_empty_map(self, name, fill_value=None):
-        """Initialize an empty map
+    def create_map(self, name, fill_value=None):
+        """Create a new map
 
         Args:
             name (str): name of the new map
@@ -293,6 +293,21 @@ class Map():
         except KeyError:
             warnings.warn('Warning: could not delete map %s.' % name, RuntimeWarning)
             pass
+
+    def copy_map(self, new_name, name):
+        """Copy existing map
+        
+        Args:
+            new_name (str): name of the new map
+            name (str): name of the map that will be copied
+
+        """
+        if name in self._maps:
+            map_copy = self._maps[name].copy()
+            self._maps[new_name] = map_copy
+            self._maps_interpn[new_name] = self._generate_affinity_map_interpn(map_copy)
+        else:
+            raise RuntimeError("Map %s does not exist. Cannot copy." % name)
 
     def atoms_in_map(self, molecule):
         """List of index of all the atoms in the map.
@@ -485,10 +500,10 @@ class Map():
         """Add energy bias to map using Juan method.
 
         Args:
-            name (str): name of the new or existing map
+            name (str): name of the map to modify
             coordinates (array_like): 2d array of 3d coordinates
             bias_value (float): energy bias value to add (in kcal/mol)
-            radius (float): radius of the bias (in Angtrom)
+            radius (float): radius of the bias (in Angstrom)
 
         Returns:
             None
@@ -496,10 +511,10 @@ class Map():
         """
         coordinates = np.atleast_2d(coordinates)
 
-        if name in self._maps:
+        try:
             new_map = self._maps[name]
-        else:
-            new_map = np.zeros(self._npts)
+        except KeyError:
+            RuntimeError("Map %s does not exist. Cannot add energy bias." % name)
 
         # We add all the bias one by one in the new map
         for coordinate in coordinates:
@@ -510,6 +525,39 @@ class Map():
             bias_energy = bias_value * np.exp(-1. * (distances ** 2) / (radius ** 2))
 
             new_map[indexes[:,0], indexes[:,1], indexes[:,2]] += bias_energy
+
+        # And we replace the original one only at the end, it is faster
+        self._maps[name] = new_map
+        self._maps_interpn[name] = self._generate_affinity_map_interpn(new_map)
+
+    def add_mask(self, name, coordinates, radius, mask_value=999.):
+        """Add energy mask using Diogo's method.
+
+        Args:
+            name (str): name of the map to modify
+            coordinates (array_like): 2d array of 3d coordinates
+            radius (float): radius of the non-masked sphere (in Angstrom)
+            mask_value (float): energy mask value (in kcal/mol)
+
+        Returns:
+            None
+
+        """
+        coordinates = np.atleast_2d(coordinates)
+
+        new_map = np.zeros(self._npts) + mask_value
+
+        try:
+            current_map = self._maps[name]
+        except KeyError:
+            RuntimeError("Map %s does not exist. Cannot add energy mask." % name)
+
+        # We add all the bias one by one in the new map
+        for coordinate in coordinates:
+            sphere_xyz = self.neighbor_points(coordinate, radius)
+            indexes = self._cartesian_to_index(sphere_xyz)
+
+            new_map[indexes[:,0], indexes[:,1], indexes[:,2]] = current_map[indexes[:,0], indexes[:,1], indexes[:,2]]
 
         # And we replace the original one only at the end, it is faster
         self._maps[name] = new_map
@@ -671,7 +719,7 @@ class Map():
             if map_type in self._maps:
                 filename = "%s.map" % map_type
                 if prefix is not None:
-                    filename = "%s_%s" % (prefix, filename)
+                    filename = "%s.%s" % (prefix, filename)
 
                 with open(filename, "w") as w:
                     npts = np.array([n if not n % 2 else n - 1 for n in self._npts])
