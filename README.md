@@ -1,4 +1,4 @@
-[![made-with-python](https://img.shields.io/badge/Made%20with-Python-1f425f.svg)](https://www.python.org/) [![GitHub license](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0) [![PyPI version fury.io](https://img.shields.io/badge/version-0.5.1-green.svg)](https://pypi.python.org/pypi/ansicolortags/) 
+[![made-with-python](https://img.shields.io/badge/Made%20with-Python-1f425f.svg)](https://www.python.org/) [![GitHub license](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0) [![PyPI version fury.io](https://img.shields.io/badge/version-0.5.1-green.svg)](https://pypi.python.org/pypi/ansicolortags/) 
 
 # Waterkit
 Tool to predict water molecules placement and energy in ligand binding sites
