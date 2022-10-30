@@ -49,16 +49,6 @@ $ make
 $ make install (optional)
 ```
 
-## Documentation
-
-Build documentation with Sphinx
-```bash
-$ cd docs
-$ make html
-```
-
-Open the file ```build/html/index.html``` with your favorite browser (Google Chrome is evil).
-
 ## Quick tutorial
 
 ### Receptor preparation
