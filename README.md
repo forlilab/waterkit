@@ -30,11 +30,22 @@ $ conda create -n waterkit -c conda-forge -c ccsb-scripps python=3 mkl numpy sci
 $ conda activate waterkit
 ```
 
-Finally, we can install the `WaterKit` package
+We can now install the `WaterKit` package
 ```bash
 $ git clone https://github.com/jeeberhardt/waterkit
 $ cd waterkit
 $ python setup.py build install
+```
+
+Finally we will need to compile a version of `autogrid`
+```bash
+$ cd autogrid
+$ autoreconf -i
+$ mkdir x86_64Linux2 # for x86_64architecture
+$ cd x86_64Linux2
+$ ../configure
+$ make
+$ make install (optional)
 ```
 
 ## Documentation
@@ -65,6 +76,7 @@ Run WaterKit
 $ mkdir traj
 # Generate 10.000 frames using 16 cpus (tip3p, 300 K, 3 hydration layers)
 # X Y Z define the center and SX SY SZ the size (in Angstrom) of the box
+# If it has issue locating autogrid, specify the path with the argument --autogrid_exec_path
 $ run_waterkit.py -i protein_prepared_amber.pdbqt -c X Y Z -s SX SY SZ -n 10000 -j 16 -o traj
 # Create ensemble trajectory
 $ wk_make_trajectory.py -r protein_prepared.pdb -w traj -o protein
