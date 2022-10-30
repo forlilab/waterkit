@@ -28,6 +28,7 @@ $ conda create -n waterkit -c conda-forge python=3 mkl numpy scipy pandas \
     openbabel parmed ambertools openmm netcdf4 griddataformats tqdm \
     sphinx sphinx_rtd_theme
 $ conda activate waterkit
+$ pip install vina
 ```
 
 We can now install the `WaterKit` package
