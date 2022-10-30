@@ -53,7 +53,7 @@ $ make install (optional)
 
 ### Receptor preparation
 
-Conversion to PDBQT using AmberTools19 and `wk_prepare_receptor.py` script
+Conversion to PDBQT using AmberTools and `wk_prepare_receptor.py` script
 ```bash
 $ wk_prepare_receptor.py -i protein.pdb -o protein_prepared --pdb --amber_pdbqt
 ```
