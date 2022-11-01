@@ -24,17 +24,18 @@ You need, at a minimum (requirements):
 
 I highly recommand you to install the Anaconda distribution (https://www.continuum.io/downloads) if you want a clean python environnment with nearly all the prerequisites already installed. To install everything properly, you just have to do this:
 ```bash
-$ conda create -n waterkit -c conda-forge -c ccsb-scripps python=3 mkl numpy scipy pandas \
-    openbabel parmed ambertools openmm netcdf4 griddataformats tqdm vina \
+$ conda create -n waterkit -c conda-forge python=3 mkl numpy scipy pandas \
+    openbabel parmed ambertools openmm netcdf4 griddataformats tqdm \
     sphinx sphinx_rtd_theme
 $ conda activate waterkit
+$ pip install vina
 ```
 
 Finally, we can install the `WaterKit` package
 ```bash
 $ git clone https://github.com/jeeberhardt/waterkit
 $ cd waterkit
-$ python setup.py build install
+$ pip install -e .
 ```
 
 ## Documentation
