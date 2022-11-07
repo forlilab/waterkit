@@ -42,7 +42,7 @@ $ python setup.py build install
 
 Finally we will need to compile a version of `autogrid`
 ```bash
-$ cd autogrid
+$ cd autodocksuite-4.2.6-src/autogrid
 $ autoreconf -i
 $ mkdir x86_64Linux2 # for x86_64architecture
 $ cd x86_64Linux2
