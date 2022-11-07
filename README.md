@@ -40,7 +40,7 @@ $ cd waterkit
 $ python setup.py build install
 ```
 
-Finally we will need to compile a version of `autogrid`
+Finally we will need to compile a special version of `autogrid`. This version supports up to 56 different atom types. You will need it to run WaterKit.
 ```bash
 $ cd autodocksuite-4.2.6-src/autogrid
 $ autoreconf -i
