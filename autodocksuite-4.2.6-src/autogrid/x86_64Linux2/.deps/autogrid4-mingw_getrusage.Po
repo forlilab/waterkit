@@ -1,1 +1,0 @@
-autogrid4-mingw_getrusage.o: mingw_getrusage.cpp
