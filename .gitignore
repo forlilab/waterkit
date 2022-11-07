@@ -99,3 +99,7 @@ ENV/
 
 # mypy
 .mypy_cache/
+
+# Autodock/Autogrid
+autodocksuite-4.2.6-src/autogrid/autom4te.cache/
+autodocksuite-4.2.6-src/autogrid/configure~
