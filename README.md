@@ -35,7 +35,7 @@ $ pip install vina
 
 We can now install the `WaterKit` package
 ```bash
-$ git clone https://github.com/jeeberhardt/waterkit
+$ git clone https://github.com/forlilab/waterkit
 $ cd waterkit
 $ python setup.py build install
 ```
