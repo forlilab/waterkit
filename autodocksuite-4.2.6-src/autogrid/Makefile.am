@@ -160,7 +160,7 @@ main.o : $(srcdir)/../autodock/autocomm.h
 
 default_parameters.h : $(srcdir)/../autodock/paramdat2h.csh  $(srcdir)/../autodock/AD4_parameters.dat $(srcdir)/../autodock/AD4.1_bound.dat
 	rm -f $@
-	csh $(srcdir)/../autodock/paramdat2h.csh $(srcdir)/../autodock/AD4_parameters.dat  $(srcdir)/../autodock/AD4.1_bound.dat > $@
+	sh $(srcdir)/../autodock/paramdat2h.csh $(srcdir)/../autodock/AD4_parameters.dat  $(srcdir)/../autodock/AD4.1_bound.dat > $@
 	sh $(srcdir)/copyfilesfromAD
 
 # 2007-04-30 MP & GMM: this line is necessary to be able to compile read_parameter_library.o

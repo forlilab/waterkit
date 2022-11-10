@@ -1,4 +1,4 @@
-#!/bin/csh -f
+#!/bin/sh
 #
 # $Id: paramdat2h.csh,v 1.10 2011/03/08 04:18:37 mp Exp $
 # 
