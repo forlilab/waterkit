@@ -1,4 +1,6 @@
-[![made-with-python](https://img.shields.io/badge/Made%20with-Python-1f425f.svg)](https://www.python.org/) [![GitHub license](https://img.shields.io/github/license/Naereen/StrapDown.js.svg)](https://github.com/Naereen/StrapDown.js/blob/master/LICENSE) [![PyPI version fury.io](https://img.shields.io/badge/version-0.5.1-green.svg)](https://pypi.python.org/pypi/ansicolortags/) 
+[![made-with-python](https://img.shields.io/badge/Made%20with-Python-1f425f.svg)](https://www.python.org/) [![GitHub license](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0) [![PyPI version fury.io](https://img.shields.io/badge/version-0.5.1-green.svg)](https://pypi.python.org/pypi/ansicolortags/) 
+
+<img src="data/waterkit_logo_composite_TOC.jpg" width="1000">
 
 # Waterkit
 Tool to predict water molecules placement and energy in ligand binding sites
@@ -31,28 +33,29 @@ $ conda activate waterkit
 $ pip install vina
 ```
 
-Finally, we can install the `WaterKit` package
+We can now install the `WaterKit` package
 ```bash
-$ git clone https://github.com/jeeberhardt/waterkit
+$ git clone https://github.com/forlilab/waterkit
 $ cd waterkit
 $ pip install -e .
 ```
 
-## Documentation
-
-Build documentation with Sphinx
+Finally we will need to compile a special version of `autogrid`. This version supports up to 56 different atom types. You will need it to run WaterKit.
 ```bash
-$ cd docs
-$ make html
+$ cd autodocksuite-4.2.6-src/autogrid
+$ autoreconf -i
+$ mkdir x86_64Linux2 # for x86_64architecture
+$ cd x86_64Linux2
+$ ../configure
+$ make
+$ make install (optional)
 ```
-
-Open the file ```build/html/index.html``` with your favorite browser (Google Chrome is evil).
 
 ## Quick tutorial
 
 ### Receptor preparation
 
-Conversion to PDBQT using AmberTools19 and `wk_prepare_receptor.py` script
+Conversion to PDBQT using AmberTools and `wk_prepare_receptor.py` script
 ```bash
 $ wk_prepare_receptor.py -i protein.pdb -o protein_prepared --pdb --amber_pdbqt
 ```
@@ -66,6 +69,7 @@ Run WaterKit
 $ mkdir traj
 # Generate 10.000 frames using 16 cpus (tip3p, 300 K, 3 hydration layers)
 # X Y Z define the center and SX SY SZ the size (in Angstrom) of the box
+# If it has issue locating autogrid, specify the path with the argument --autogrid_exec_path
 $ run_waterkit.py -i protein_prepared_amber.pdbqt -c X Y Z -s SX SY SZ -n 10000 -j 16 -o traj
 # Create ensemble trajectory
 $ wk_make_trajectory.py -r protein_prepared.pdb -w traj -o protein

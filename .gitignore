@@ -99,3 +99,12 @@ ENV/
 
 # mypy
 .mypy_cache/
+
+# Autodock/Autogrid
+autodocksuite-4.2.6-src/autogrid/autom4te.cache/
+autodocksuite-4.2.6-src/autogrid/configure~
+autodocksuite-4.2.6-src/autogrid/x86_Linux2/
+autodocksuite-4.2.6-src/autogrid/aclocal.m4
+autodocksuite-4.2.6-src/autogrid/configure
+autodocksuite-4.2.6-src/autogrid/Makefile.in
+autodocksuite-4.2.6-src/autogrid/x86_Linux2/
