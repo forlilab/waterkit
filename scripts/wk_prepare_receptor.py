@@ -11,10 +11,13 @@ import math
 import os
 import string
 import sys
+import shutil
 
 import parmed as pmd
 from pdb4amber import AmberPDBFixer
 from pdb4amber.utils import easy_call
+
+from waterkit import utils
 
 
 # Added CYM residue
@@ -212,8 +215,108 @@ def _convert_amber_to_autodock_types(molecule):
         'CN': 'A',
         'CB': 'A',
         'Zn2+': 'Zn',
+        'Zn': 'Zn',
         'Mn2+': 'Mn',
-        'XC': 'C'
+        'Mn': 'Mn',
+        'XC': 'C',
+        'br': 'Br',
+        'br': 'BR',
+        'c' : 'C',
+        'c1': 'C',
+        'c2': 'C',
+        'c3': 'C',
+        'ca': 'A',
+        'cc': 'A',
+        'cd': 'A',
+        'ce': 'C',
+        'cf': 'C',
+        'cl': 'Cl',
+        'cl': 'CL',
+        'cp': 'A',
+        'cq': 'A',
+        'cu': 'C',
+        'cv': 'C',
+        'cx': 'C',
+        'cy': 'C',
+        'cz': 'C',
+        'cs': 'C',
+        'cg': 'C',
+        'ch': 'C',
+        'f' : 'F',
+        'h1': 'H',
+        'h2': 'H',
+        'h3': 'H',
+        'h4': 'H',
+        'h5': 'H',
+        'ha': 'H',
+        'hc': 'H',
+        'hn': 'HD',
+        'ho': 'HD',
+        'hp': 'HD',
+        'hs': 'HD',
+        'hx': 'H',
+        'i' : 'I',
+        'n' : 'N',
+        'n1': 'NA',
+        'n2': 'N',
+        'n3': 'N',
+        'n4': 'N',
+        'n5': 'N',
+        'n6': 'N',
+        'n7': 'N',
+        'n8': 'N',
+        'n9': 'N',
+        'na': 'N',
+        'nb': 'N',
+        'nc': 'N',
+        'nd': 'N',
+        'nh': 'N',
+        'ne': 'N',
+        'nf': 'N',
+        'no': 'N',
+        'n+': 'N',
+        'nx': 'N',
+        'ny': 'N',
+        'nz': 'N',
+        'ns': 'N',
+        'nt': 'N',
+        'nu': 'N',
+        'nv': 'N',
+        'ni': 'N',
+        'nj': 'N',
+        'nk': 'N',
+        'nl': 'N',
+        'nm': 'N',
+        'nn': 'N',
+        'np': 'N',
+        'nq': 'N',
+        'o' : 'OA',
+        'oh': 'OA',
+        'os': 'OA',
+        'op': 'OA',
+        'oq': 'OA',
+        'p2': 'P',
+        'p3': 'P',
+        'p4': 'P',
+        'p5': 'P',
+        'pb': 'P',
+        'pc': 'P',
+        'pd': 'P',
+        'pe': 'P',
+        'pf': 'P',
+        'px': 'P',
+        'py': 'P',
+        's' : 'S',
+        's2': 'SA',
+        's4': 'S',
+        's6': 'S',
+        'sh': 'SA',
+        'ss': 'SA',
+        'sx': 'S',
+        'sy': 'S',
+        'sp': 'S',
+        'sq': 'S'
+        #'Cu': 
     }
 
     for atom in molecule.atoms:
@@ -227,13 +330,20 @@ def _convert_amber_to_autodock_types(molecule):
     return molecule
 
 
-def _make_leap_template(parm, ns_names, gaplist, sslist, input_pdb, prmtop='prmtop', rst7='rst7'):
+def _make_leap_template(parm, ns_names, gaplist, sslist, input_pdb, 
+                        prmtop='prmtop', rst7='rst7', lib_files=None, frcmod_files=None):
     # Change ff14SB to ff19SB
     default_force_field = ('source leaprc.protein.ff14SB\n'
                            'source leaprc.DNA.OL15\n'
                            'source leaprc.RNA.OL3\n'
                            'source leaprc.water.tip3p\n'
                            'source leaprc.gaff2\n')
+
+    if frcmod_files is not None:
+        default_force_field += ''.join(['loadamberparams %s\n' % fl for fl in frcmod_files])
+
+    if lib_files is not None:
+        default_force_field += ''.join(['loadoff %s\n' % ll for ll in lib_files])
 
     leap_template = ('{force_fields}\n'
                      '{more_force_fields}\n'
@@ -453,6 +563,12 @@ def _find_non_standard_resnames(molecule, amber_supported_resname):
     return ns_names
 
 
+def _read_resname_from_lib_file(lib_file):
+    with open(lib_file) as f:
+        lines = f.readlines()
+        return lines[1].strip()[1:-1]
+
+
 class PrepareReceptor:
 
     def __init__(self, keep_hydrogen=False, keep_water=False, no_disulfide=False, 
@@ -470,15 +586,13 @@ class PrepareReceptor:
         self._pdb_filename = None
         self._molecule = None
 
-    def prepare(self, pdb_filename, prmtop_filename='protein.prmtop', rst7_filename='protein.rst7',
-                pdb_clean_filename='protein_clean.pdb', clean=True):
+    def prepare(self, pdb_filename, lib_files=None, frcmod_files=None, clean=True):
         '''Prepare receptor structure
     
         Args:
             pdb_filename (str): input pdb filename
-            prmtop_filename (str): Amber prmtop filename (default: protein.prmtop)
-            rst7_filename (str): Amber coordinate filename (default: protein.rst7)
-            pdb_clean_filename (str): temporary pdb filename (default: tmp_clean.pdb)
+            lib_files (list): Amber lib parameter files for non-standard residues
+            frcmod_files (list): Amber frcmod parameter files for non-standard residues
             clean (bool): remove tleap input and output files (default: True)
 
         '''
@@ -486,6 +600,12 @@ class PrepareReceptor:
         tleap_input = 'leap.template.in'
         tleap_output = 'leap.template.out'
         tleap_log = 'leap.log'
+        pdb_clean_filename = 'tmp.pdb'
+        prmtop_filename = 'tmp.prmtop'
+        rst7_filename = 'tmp.rst7'
+        nonstandard_resnames = tuple()
+        local_lib_files = None
+        local_frcmod_files = None
 
         logger = logging.getLogger('WaterKit receptor preparation')
         logging.basicConfig(level=os.environ.get('LOGLEVEL', 'INFO'))
@@ -498,6 +618,11 @@ class PrepareReceptor:
             raise
 
         pdbfixer = AmberPDBFixer(receptor)
+
+        # Get resnames from lib files
+        if lib_files is not None:
+            nonstandard_resnames = tuple([_read_resname_from_lib_file(lib_file) for lib_file in lib_files])
+            logger.info('Amber lib parameter files for residue(s): %s' % nonstandard_resnames)
 
         # Remove box and symmetry
         pdbfixer.parm.box = None
@@ -529,9 +654,9 @@ class PrepareReceptor:
             logger.warning(warning_msg % ', '.join('%s - %d' % (r[0], r[1]) for r in his_fixed))
 
         # Keep only standard-Amber residues
-        ns_names = _find_non_standard_resnames(pdbfixer.parm, AMBER_SUPPORTED_RESNAMES)
+        ns_names = _find_non_standard_resnames(pdbfixer.parm, AMBER_SUPPORTED_RESNAMES + nonstandard_resnames)
         if ns_names:
-            pdbfixer.parm.strip('!:' + ','.join(AMBER_SUPPORTED_RESNAMES))
+            pdbfixer.parm.strip('!:' + ','.join(AMBER_SUPPORTED_RESNAMES + nonstandard_resnames))
             logger.info('Removed all non-standard Amber residues: %s' % ', '.join(ns_names))
 
         # Find all the gaps
@@ -595,37 +720,49 @@ class PrepareReceptor:
             new_resids = [residue.number for residue in pdbfixer.parm.residues]
             new_chainids = [residue.chain for residue in pdbfixer.parm.residues]
 
-        try:
-            _write_pdb_file(pdb_clean_filename, pdbfixer.parm, **write_kwargs)
-        except:
-            error_msg = 'Could not write pdb file %s'  % pdb_clean_filename
-            logger.error(error_msg)
-            raise
+        if lib_files is not None:
+            original_lib_files = [os.path.abspath(lib_file) for lib_file in lib_files]
+            local_lib_files = [os.path.basename(lib_file) for lib_file in lib_files]
 
-        # Generate topology/coordinates files
-        with open('leap.template.in', 'w') as w:
-            content = _make_leap_template(pdbfixer.parm, final_ns_names, gaplist, sslist,
-                                          input_pdb=pdb_clean_filename,
-                                          prmtop=prmtop_filename, rst7=rst7_filename)
-            w.write(content)
+        if frcmod_files is not None:
+            original_frcmod_files = [os.path.abspath(frcmod_file) for frcmod_file in frcmod_files]
+            local_frcmod_files = [os.path.basename(frcmod_file) for frcmod_file in frcmod_files]
 
-        try:
-            easy_call('tleap -s -f %s > %s' % (tleap_input, tleap_output), shell=True)
-        except RuntimeError:
-            error_msg = 'Could not generate topology/coordinates files with tleap'
-            logger.error(error_msg)
-            raise RuntimeError(error_msg)
+        # Create Amber topology and coordinates files
+        with utils.temporary_directory(prefix='wk_preparation_', dir='.', clean=clean) as tmp_dir:
+            if lib_files is not None:
+                [shutil.copy2(olib_file, llib_file) for olib_file, llib_file in zip(original_lib_files, local_lib_files)]
 
-        self._molecule = pmd.load_file(prmtop_filename, rst7_filename)
+            if frcmod_files is not None:
+                [shutil.copy2(ofrc_file, lfrc_file) for ofrc_file, lfrc_file in zip(original_frcmod_files, local_frcmod_files)]
 
-        # Add back resids, chainids and TER flags to molecule
-        _replace_resids_and_chainids(self._molecule, new_resids, new_chainids)
-        _add_ter_flags(self._molecule, ter_flags)
+            try:
+                _write_pdb_file(pdb_clean_filename, pdbfixer.parm, **write_kwargs)
+            except:
+                error_msg = 'Could not write pdb file %s'  % pdb_clean_filename
+                logger.error(error_msg)
+                raise
 
-        if clean:
-            os.remove(tleap_input)
-            os.remove(tleap_output)
-            os.remove(tleap_log)
+            # Generate topology/coordinates files
+            with open(tleap_input, 'w') as w:
+                content = _make_leap_template(pdbfixer.parm, final_ns_names, gaplist, sslist,
+                                              input_pdb=pdb_clean_filename,
+                                              prmtop=prmtop_filename, rst7=rst7_filename,
+                                              lib_files=local_lib_files, frcmod_files=local_frcmod_files)
+                w.write(content)
+
+            try:
+                easy_call('tleap -s -f %s > %s' % (tleap_input, tleap_output), shell=True)
+            except RuntimeError:
+                error_msg = 'Could not generate topology/coordinates files with tleap'
+                logger.error(error_msg)
+                raise RuntimeError(error_msg)
+
+            self._molecule = pmd.load_file(prmtop_filename, rst7_filename)
+
+            # Add back resids, chainids and TER flags to molecule
+            _replace_resids_and_chainids(self._molecule, new_resids, new_chainids)
+            _add_ter_flags(self._molecule, ter_flags)
 
     def write_pdb_file(self, pdb_filename='protein.pdb'):
         _write_pdb_file(pdb_filename, self._molecule)
@@ -667,6 +804,12 @@ def cmd_lineparser():
         action='store_true', help='ignore gaps between residues (automatically add TER records)')
     parser.add_argument('--renumber', dest='renumbering', default=False,
         action='store_true', help='Residue index will be renumbered (starting from 1).')
+    parser.add_argument('--lib', dest='lib_files', default=None, nargs='+',
+        action='store', help='Amber lib parameter files.')
+    parser.add_argument('--frcmod', dest='frcmod_files', default=None, nargs='+',
+        action='store', help='Amber frcmod parameter files.')
+    parser.add_argument('--no-clean', dest='no_clean', default=True,
+        action='store_false', help='Does not clean Amber temporay files.')
     return parser.parse_args()
 
 
@@ -684,6 +827,9 @@ def main():
     make_amber_pdbqt = args.make_amber_pdbqt
     ignore_gaps = args.ignore_gaps
     renumbering = args.renumbering
+    lib_files = args.lib_files
+    frcmod_files = args.frcmod_files
+    clean = -args.no_clean
 
     prmtop_filename = '%s.prmtop' % output_prefix
     rst7_filename = '%s.rst7' % output_prefix
@@ -691,7 +837,7 @@ def main():
 
     pr = PrepareReceptor(keep_hydrogen, keep_water, no_disulfide, 
                          keep_altloc, ignore_gaps, renumbering, use_model)
-    pr.prepare(pdb_filename, prmtop_filename, rst7_filename, pdb_clean_filename)
+    pr.prepare(pdb_filename, lib_files, frcmod_files, clean)
 
     if make_pdb:
         pdb_prepared_filename = '%s.pdb' % output_prefix
