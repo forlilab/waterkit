@@ -37,7 +37,7 @@ We can now install the `WaterKit` package
 ```bash
 $ git clone https://github.com/forlilab/waterkit
 $ cd waterkit
-$ python setup.py build install
+$ pip install -e .
 ```
 
 Finally we will need to compile a special version of `autogrid`. This version supports up to 56 different atom types. You will need it to run WaterKit.

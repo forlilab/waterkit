@@ -83,12 +83,14 @@ def write_pdb_file(output_name, molecule,  overwrite=True, **kwargs):
         raise IOError("Error: file %s already exists." % fname)
 
 
-def write_tleap_input_file(fname, pdb_filename):
+def write_tleap_input_file(fname, pdb_filename, lib_files=None, frcmod_files=None):
     """Create tleap input script
 
     Args:
         fname (str): tleap input filename
         pdb_filename (str): pdb filename
+        lib_files (list): Amber lib parameter files for non-standard residues
+        frcmod_files (list): Amber frcmod parameter files for non-standard residues
 
     """
     prefix = pdb_filename.split(".pdb")[0].split("/")[-1]
@@ -98,6 +100,10 @@ def write_tleap_input_file(fname, pdb_filename):
     output_str += "source leaprc.RNA.OL3\n"
     output_str += "source leaprc.water.tip3p\n"
     output_str += "source leaprc.gaff2\n"
+    if frcmod_files is not None:
+        output_str += ''.join(['loadamberparams %s\n' % fl for fl in frcmod_files])
+    if lib_files is not None:
+        output_str += ''.join(['loadoff %s\n' % ll for ll in lib_files])
     output_str += "\n"
     output_str += "x = loadpdb %s\n" % pdb_filename.split("/")[-1]
     output_str += "\n"
@@ -187,6 +193,10 @@ def cmd_lineparser():
                         pdb files")
     parser.add_argument('-o', '--out', default='protein',
                         dest='output_prefix', help='output prefix filename (default: protein)')
+    parser.add_argument('--lib', dest='lib_files', default=None, nargs='+',
+        action='store', help='Amber lib parameter files.')
+    parser.add_argument('--frcmod', dest='frcmod_files', default=None, nargs='+',
+        action='store', help='Amber frcmod parameter files.')
     return parser.parse_args()
 
 
@@ -195,6 +205,8 @@ def main():
     receptor_filename = args.receptor_filename
     water_directory = args.water_directory
     output_prefix = args.output_prefix
+    lib_files = args.lib_files
+    frcmod_files = args.frcmod_files
 
     tleap_input = 'leap.template.in'
     tleap_output = 'leap.template.out'
@@ -217,7 +229,7 @@ def main():
     write_pdb_file("%s_system.pdb" % output_prefix, receptor_wet)
 
     # Write tleap input script
-    write_tleap_input_file(tleap_input, "%s_system.pdb" % output_prefix)
+    write_tleap_input_file(tleap_input, "%s_system.pdb" % output_prefix, lib_files, frcmod_files)
 
     try:
         # Generate amber prmtop and rst7 files
