@@ -48,7 +48,7 @@ $ mkdir x86_64Linux2 # for x86_64architecture
 $ cd x86_64Linux2
 $ ../configure
 $ make
-$ make install (optional)
+$ make install # optional
 ```
 
 ## Quick tutorial
