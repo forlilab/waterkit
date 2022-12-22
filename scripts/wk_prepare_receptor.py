@@ -14,7 +14,6 @@ import sys
 import shutil
 
 import parmed as pmd
-import numpy as np
 from pdb4amber import AmberPDBFixer
 from pdb4amber.utils import easy_call
 
