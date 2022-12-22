@@ -14,6 +14,7 @@ import sys
 import shutil
 
 import parmed as pmd
+import numpy as np
 from pdb4amber import AmberPDBFixer
 from pdb4amber.utils import easy_call
 
@@ -84,8 +85,8 @@ def _write_pdb_file(output_name, molecule, overwrite=True, **kwargs):
 
     '''
     i = 0
-    pdb_str = '%-6s%5d %-4s %3s %s%4d    %8.3f%8.3f%8.3f  1.00  1.00           %-2s\n'
-    ter_str = '%-6s%5d %-4s %3s %s%4d\n'
+    pdb_template = "{:6s}{:5d} {:^4s}{:1s}{:3s} {:1s}{:4d}{:1s}   {:8.3f}{:8.3f}{:8.3f}{:6.2f}{:6.2f}      {:>4s}{:>2s}{:2s}\n"
+    ter_template = "{:6s}{:5d} {:^4s}{:1s}{:3s} {:1s}{:4d}\n"
     output_str = ''
 
     for residue in molecule.residues:
@@ -106,13 +107,14 @@ def _write_pdb_file(output_name, molecule, overwrite=True, **kwargs):
             else:
                 atype = 'ATOM'
 
-            output_str += pdb_str % (atype, i + 1, name, resname, chain_id, resid,
-                                     atom.xx, atom.xy, atom.xz, atom_type)
+            output_str += pdb_template.format(atype, i + 1, name, " ", resname, chain_id, resid,
+                                              " ",  atom.xx, atom.xy, atom.xz, 1.0, 1.0, " ", 
+                                              atom_type, " ")
 
             i += 1
 
         if residue.ter:
-            output_str += ter_str % ('TER', i + 1, name, resname, chain_id, resid)
+            output_str += ter_template.format('TER', i + 1, name, " ", resname, chain_id, resid)
             i += 1
 
     output_str += 'END\n'
@@ -130,8 +132,8 @@ def _write_pdbqt_file(output_name, molecule):
 
     '''
     i = 0
-    pdbqt_str = '%-6s%5d %-4s %3s %s%4d    %8.3f%8.3f%8.3f  1.00  1.00    %6.3f %-2s\n'
-    ter_str = '%-6s%5d %-4s %3s %s%4d\n'
+    pdb_template = "{:6s}{:5d} {:^4s}{:1s}{:3s} {:1s}{:4d}{:1s}   {:8.3f}{:8.3f}{:8.3f}{:6.2f}{:6.2f}{:4s}{:6.3f} {:2s} \n"
+    ter_template = "{:6s}{:5d} {:^4s}{:1s}{:3s} {:1s}{:4d}\n"
     output_str = ''
 
     for residue in molecule.residues:
@@ -159,13 +161,14 @@ def _write_pdbqt_file(output_name, molecule):
             else:
                 atype = 'ATOM'
 
-            output_str += pdbqt_str % (atype, i + 1, name, resname, chain_id, resid,
-                                       atom.xx, atom.xy, atom.xz, atom.charge, atom_type)
+            output_str += pdb_template.format(atype, i + 1, name, " ", resname, chain_id, resid,
+                                              " ",  atom.xx, atom.xy, atom.xz, 1.0, 1.0, " ",
+                                              atom.charge, atom_type)
 
             i += 1
 
         if residue.ter:
-            output_str += ter_str % ('TER', i + 1, name, resname, chain_id, resid)
+            output_str += ter_template.format('TER', i + 1, name, " ", resname, chain_id, resid)
             i += 1
 
     output_str += 'END\n'
@@ -377,7 +380,7 @@ def _make_leap_template(parm, ns_names, gaplist, sslist, input_pdb,
     #  process sslist
     if sslist:
         for resid1, resid2 in sslist:
-            more_leap_cmds += 'bond x.%d.SG x.%d.SG\n' % (resid1+1, resid2+1)
+            more_leap_cmds += 'bond x.%d.SG x.%d.SG\n' % (resid1 + 1, resid2 + 1)
 
     leap_string = leap_template.format(
         force_fields=default_force_field,
@@ -414,6 +417,13 @@ def _generate_resids_and_chainids(molecule):
             resid = 1
 
     return resids, chainids
+
+
+def _generate_resids_chainids_for_tleap(molecule):
+    resids = list(range(1, len(molecule.residues) + 1))
+    chainids = [" "] * len(resids)
+    return resids, chainids
+
 
 def _ter_flags(molecule):
     return [True if residue.ter else False for residue in molecule.residues]
@@ -707,18 +717,19 @@ class PrepareReceptor:
             if alt_residues:
                 logger.info('Removed all alternatives residue sidechains')
 
-        # Write cleaned PDB file
-        final_coordinates = pdbfixer.parm.get_coordinates()[self._use_model - 1]
-        write_kwargs = dict(coordinates=final_coordinates)
-        write_kwargs['increase_tercount'] = False # so CONECT record can work properly
-        write_kwargs['altlocs'] = 'occupancy'
-
+        # Renumbers resids (starting from 1) and renames chainids (starting from A)
         if self._renumbering:
             new_resids, new_chainids = _generate_resids_and_chainids(pdbfixer.parm)
             _replace_resids_and_chainids(pdbfixer.parm, new_resids, new_chainids)
         else:
             new_resids = [residue.number for residue in pdbfixer.parm.residues]
             new_chainids = [residue.chain for residue in pdbfixer.parm.residues]
+
+        # Take the first model only
+        final_coordinates = pdbfixer.parm.get_coordinates()[self._use_model - 1]
+        write_kwargs = dict(coordinates=final_coordinates)
+        write_kwargs['increase_tercount'] = False # so CONECT record can work properly
+        write_kwargs['altlocs'] = 'occupancy'
 
         if lib_files is not None:
             original_lib_files = [os.path.abspath(lib_file) for lib_file in lib_files]
@@ -735,6 +746,9 @@ class PrepareReceptor:
 
             if frcmod_files is not None:
                 [shutil.copy2(ofrc_file, lfrc_file) for ofrc_file, lfrc_file in zip(original_frcmod_files, local_frcmod_files)]
+
+            tleap_resids, tleap_chainids = _generate_resids_chainids_for_tleap(pdbfixer.parm)
+            _replace_resids_and_chainids(pdbfixer.parm, tleap_resids, tleap_chainids)
 
             try:
                 _write_pdb_file(pdb_clean_filename, pdbfixer.parm, **write_kwargs)
