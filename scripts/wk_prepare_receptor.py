@@ -493,8 +493,7 @@ def _find_gaps(molecule, resprot, fill_gaps=False):
             c_atom = [atom for atom in residue.atoms if atom.name == 'C'][0]
             n_atom = [atom for atom in next_residue.atoms if atom.name == 'N'][0]
         except:
-            gaprecord = (9999.999, c_atom.residue.name, residue.number, 
-                         n_atom.residue.name, molecule.residues[i + 1].number)
+            gaprecord = (9999.999, c_atom.residue.name, i + 1, n_atom.residue.name, i + 2)
             gaplist.append(gaprecord)
 
             if fill_gaps:
@@ -508,8 +507,7 @@ def _find_gaps(molecule, resprot, fill_gaps=False):
         gap = math.sqrt(dx * dx + dy * dy + dz * dz)
 
         if gap > max_distance:
-            gaprecord = (gap, c_atom.residue.name, residue.number, 
-                         n_atom.residue.name, molecule.residues[i + 1].number)
+            gaprecord = (gap, c_atom.residue.name, i + 1, n_atom.residue.name, i + 2)
             gaplist.append(gaprecord)
 
             if fill_gaps:
@@ -675,7 +673,7 @@ class PrepareReceptor:
             gap_msg = ''
             gap_str = ' - gap of %8.3f A between %s %d and %s %d\n'
             for _, (d, resname0, resid0, resname1, resid1) in enumerate(gaplist):
-                gap_msg += gap_str % (d, resname0, resid0 + 1, resname1, resid1 + 1)
+                gap_msg += gap_str % (d, resname0, resid0, resname1, resid1)
             
             if self._fill_gaps:
                 warning_msg = 'Gaps were ignore between residues (automatically added TER records): \n'
@@ -705,7 +703,7 @@ class PrepareReceptor:
             sslist, cys_cys_atomidx_set = pdbfixer.find_disulfide()
             if sslist:
                 pdbfixer.rename_cys_to_cyx(sslist)
-                resids_str = ', '.join(['%s-%s' % (ss[0], ss[1]) for ss in sslist])
+                resids_str = ', '.join(['%s-%s' % (ss[0] + 1, ss[1] + 1) for ss in sslist])
                 logger.info('Found disulfide bridges between residues %s' % resids_str)
         else:
             sslist = None
