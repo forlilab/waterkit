@@ -530,9 +530,22 @@ def _fix_isoleucine_cd_atom_name(molecule):
 def _find_histidine(molecule):
     his_found = []
 
+    amber_his_names = set(['HID', 'HIE' 'HIP'])
+    charmm_his_names = set(['HSD', 'HSE', 'HSP'])
+    possible_names = set(['HIS', ]) | amber_his_names | charmm_his_names
+
     for residue in molecule.residues:
-        if residue.name == 'HIS':
-            his_found.append(('HIS', residue.number))
+        if residue.name in possible_names:
+            atom_name_set = sorted(set(atom.name for atom in residue.atoms if atom.atomic_number == 1))
+
+            if set(['HD1', 'HE1', 'HE2']).issubset(atom_name_set):
+                residue.name = 'HIP'
+            elif 'HD1' in atom_name_set:
+                residue.name = 'HID'
+            else:
+                residue.name = 'HIE'
+
+            his_found.append((residue.name, residue.number))
 
     return his_found
 
