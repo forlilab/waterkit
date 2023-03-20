@@ -640,7 +640,7 @@ class PrepareReceptor:
         # Get resnames from lib files
         if lib_files is not None:
             nonstandard_resnames = tuple([_read_resname_from_lib_file(lib_file) for lib_file in lib_files])
-            logger.info('Amber lib parameter files for residue(s): %s' % nonstandard_resnames)
+            logger.info('Amber lib parameter files for residue(s): %s' % ', '.join(nonstandard_resnames))
 
         # Remove box and symmetry
         pdbfixer.parm.box = None
