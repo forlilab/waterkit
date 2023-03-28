@@ -528,26 +528,24 @@ def _fix_isoleucine_cd_atom_name(molecule):
 
 
 def _find_histidine(molecule):
-    his_found = []
+    defaulted_to_hie = []
 
     amber_his_names = set(['HID', 'HIE' 'HIP'])
     charmm_his_names = set(['HSD', 'HSE', 'HSP'])
-    possible_names = set(['HIS', ]) | amber_his_names | charmm_his_names
+    defined_state_his_names = amber_his_names | charmm_his_names
+    any_state_his_names = set(['HIS'])
 
     for residue in molecule.residues:
-        if residue.name in possible_names:
-            atom_name_set = sorted(set(atom.name for atom in residue.atoms if atom.atomic_number == 1))
-
-            if set(['HD1', 'HE1', 'HE2']).issubset(atom_name_set):
+        if residue.name in any_state_his_names:
+            residue.name = 'HIE'
+            defaulted_to_hie.append((residue.name, residue.number))
+        elif residue.name in defined_state_his_names:
+            hydrogen_name_set = sorted(set(atom.name for atom in residue.atoms if atom.atomic_number == 1))
+            if set(['HD1', 'HE1', 'HE2']).issubset(hydrogen_name_set):
                 residue.name = 'HIP'
-            elif 'HD1' in atom_name_set:
+            elif 'HD1' in hydrogen_name_set:
                 residue.name = 'HID'
-            else:
-                residue.name = 'HIE'
-
-            his_found.append((residue.name, residue.number))
-
-    return his_found
+    return defaulted_to_hie
 
 
 def _fix_charmm_histidine_to_amber(molecule):
@@ -701,10 +699,10 @@ class PrepareReceptor:
                 logger.error(error_msg)
                 raise RuntimeError(error_msg)
 
-        his_found = _find_histidine(pdbfixer.parm)
-        if his_found:
+        defaulted_to_hie = _find_histidine(pdbfixer.parm)
+        if defaulted_to_hie:
             warning_msg = 'Histidine protonation will be automatically assigned to HIE: %s'
-            logger.warning(warning_msg % ', '.join('%s - %d' % (r[0], r[1]) for r in his_found))
+            logger.warning(warning_msg % ', '.join('%s - %d' % (r[0], r[1]) for r in defaulted_to_hie))
 
         # Assign histidine protonations
         pdbfixer.assign_histidine()
