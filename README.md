@@ -55,7 +55,7 @@ $ make install # optional
 
 ### Receptor preparation
 
-Conversion to PDBQT using AmberTools and `wk_prepare_receptor.py` script
+Conversion to PDBQT using AmberTools and `wk_prepare_receptor.py` script. If you added hydrogen atoms with `REDUCE`, you can keep them by using the `--keep_hydrogen` argument. The protonation states for histidine residues (`HIE`, `HID`, `HIP`) will then be automatically assigned based the presence of hydrogen atoms on `NE2` or `ND1`. Histidine residues already set `HIE`, `HID` or `HIP` will remain unchanged. Per default, the protonation state of histidine residues is set to `HIE`.
 ```bash
 $ wk_prepare_receptor.py -i protein.pdb -o protein_prepared --pdb --amber_pdbqt
 ```
