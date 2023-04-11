@@ -1,6 +1,6 @@
 [![made-with-python](https://img.shields.io/badge/Made%20with-Python-1f425f.svg)](https://www.python.org/) [![GitHub license](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0) [![PyPI version fury.io](https://img.shields.io/badge/version-0.5.1-green.svg)](https://pypi.python.org/pypi/ansicolortags/) 
 
-<img src="data/waterkit_logo_composite_TOC.jpg" width="1000">
+<!-- <img src="data/waterkit_logo_composite_TOC.jpg" width="1000"> -->
 
 # Waterkit
 Tool to predict water molecules placement and energy in ligand binding sites
@@ -14,7 +14,7 @@ You need, at a minimum (requirements):
 * Scipy
 * Pandas
 * tqdm (progress bar)
-* AutoDock Vina and autogrid (for generating maps)
+* AutoDock Vina and AutoGrid (for generating maps)
 * AmberTools (protein preparation and gist calculations)
 * OpenMM (minimization)
 * ParmED (files conversion)
