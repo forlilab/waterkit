@@ -5,6 +5,10 @@
 # Waterkit
 Tool to predict water molecules placement and energy in ligand binding sites
 
+[Eberhardt, J., Forli, S. *WaterKit: Thermodynamic Profiling of Protein Hydration Sites*, **2023**, *Journal of Chemical Theory and Computation*](https://pubs.acs.org/doi/10.1021/acs.jctc.2c01087)
+
+
+
 ## Prerequisites
 
 You need, at a minimum (requirements):
