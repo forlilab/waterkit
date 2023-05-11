@@ -51,7 +51,7 @@ def _water_grid_calculation(xyzs, ad_map, atom_types, temperature, water_orienta
             energy[i] = np.mean(tmp_energy)
 
         if (n % 100 == 0) and verbose:
-            sys.stdout.write("\rGrid points calculated:  %5.2f / 100 %%" % (np.float(n) / n_total * 100.))
+            sys.stdout.write("\rGrid points calculated:  %5.2f / 100 %%" % (float(n) / n_total * 100.))
             sys.stdout.flush()
 
         n += 1

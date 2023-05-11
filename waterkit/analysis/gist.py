@@ -57,7 +57,7 @@ def blur_map(grid, radius=1.4, gridsize=0.5, center=None, box_size=None, cutoff=
 
         # Number of grid points is odd for AutoDock maps
         if autodock_format:
-            nelements = np.round(box_size / gridsize).astype(np.int)
+            nelements = np.round(box_size / gridsize).astype(int)
             nelements = nelements // 2 * 2 + 1
             sd = (nelements - 1) * gridsize / 2
         else:

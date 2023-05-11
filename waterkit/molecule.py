@@ -93,7 +93,13 @@ class Molecule():
         else:
             obconv.SetInFormat(file_extension)
         
+         # set error level to avoid warnings about non-standard input
+        errlev = ob.obErrorLog.GetOutputLevel()
+        ob.obErrorLog.SetOutputLevel(0)
+
         obconv.ReadFile(OBMol, fname)
+
+        ob.obErrorLog.SetOutputLevel(errlev)
 
         m = cls(OBMol, guess_hydrogen_bonds, guess_disordered_hydrogens)
 
@@ -126,7 +132,7 @@ class Molecule():
             for line in lines:
                 if re.search("^ATOM", line) or re.search("^HETATM", line):
                     atom_types.append(line[77:79].strip())
-                    partial_charges.append(np.float(line[70:77].strip()))
+                    partial_charges.append(float(line[70:77].strip()))
 
         return partial_charges, atom_types
 
@@ -159,7 +165,7 @@ class Molecule():
         """
         if atom_ids is not None and self.atoms.size > 1:
             if not isinstance(atom_ids, np.ndarray):
-                atom_ids = np.array(atom_ids, dtype=np.int)
+                atom_ids = np.array(atom_ids, dtype=int)
             # -1 because numpy array is 0-based
             atoms = self.atoms[atom_ids - 1]["xyz"]
         else:
@@ -179,7 +185,7 @@ class Molecule():
         """
         if atom_ids is not None and self.atoms.size > 1:
             if not isinstance(atom_ids, np.ndarray):
-                atom_ids = np.array(atom_ids, dtype=np.int)
+                atom_ids = np.array(atom_ids, dtype=int)
             # -1 because numpy array is 0-based
             t = self.atoms[atom_ids - 1]['t']
         else:
@@ -199,7 +205,7 @@ class Molecule():
         """
         if atom_ids is not None and self.atoms.size > 1:
             if not isinstance(atom_ids, np.ndarray):
-                atom_ids = np.array(atom_ids, dtype=np.int)
+                atom_ids = np.array(atom_ids, dtype=int)
             # -1 because numpy array is 0-based
             q = self.atoms[atom_ids - 1]['q']
         else:
@@ -219,7 +225,7 @@ class Molecule():
         """
         if atom_ids is not None:
             if not isinstance(atom_ids, np.ndarray):
-                atom_ids = np.array(atom_ids, dtype=np.int)
+                atom_ids = np.array(atom_ids, dtype=int)
             # -1 because numpy array is 0-based
             atoms = self.atoms[atom_ids - 1][['i', 'xyz', 'q', 't']]
         else:

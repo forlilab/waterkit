@@ -207,7 +207,7 @@ def generate_sphere(center, radius=1, size=100):
     a = 4 * np.pi * radius**2 / size
     d = np.sqrt(a)
 
-    M_v = np.int(np.round(np.pi / d))
+    M_v = int(np.round(np.pi / d))
     d_v = np.pi / M_v
     d_p = a / d_v
 
@@ -215,7 +215,7 @@ def generate_sphere(center, radius=1, size=100):
 
     for m in range(0, M_v):
         v = np.pi * (m + 0.5) / M_v
-        M_p = np.int(np.round(2 * np.pi * np.sin(v) / d_p))
+        M_p = int(np.round(2 * np.pi * np.sin(v) / d_p))
 
         for n in range(0, M_p):
             p = 2 * np.pi * n / M_p
@@ -235,7 +235,7 @@ def generate_sphere(center, radius=1, size=100):
 def sphere_grid_points(center, spacing, radius, min_radius=0):
     """Generate grid sphere."""
     # Number of grid points based on the grid spacing
-    n = np.int(np.rint(radius / spacing)) * 2
+    n = int(np.rint(radius / spacing)) * 2
     # Transform even numbers to the nearest odd integer
     n = n // 2 * 2 + 1
 
@@ -607,7 +607,7 @@ def convert_amber_to_autodock_types(molecule):
 
 def prepare_water_map(ad_map, water_model="tip3p", dielectric=1.):
     e_type = "Electrostatics"
-    dielectric = np.float(dielectric)
+    dielectric = float(dielectric)
     map_info = ad_map.info()
 
     """In TIP3P and TIP5P models, hydrogen atoms and lone-pairs does not

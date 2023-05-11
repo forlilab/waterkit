@@ -52,11 +52,11 @@ class HydrogenBonds():
 
                     if success:
                         name = sline[1]
-                        hb_type = np.int(sline[2])
-                        hb_strength = np.float(sline[3])
-                        hyb = np.int(sline[4])
-                        n_water = np.int(sline[5])
-                        hb_length = np.float(sline[6])
+                        hb_type = int(sline[2])
+                        hb_strength = float(sline[3])
+                        hyb = int(sline[4])
+                        n_water = int(sline[5])
+                        hb_length = float(sline[6])
 
                         hb_type = self._Atom_type(hb_type, hb_strength, hyb, n_water, hb_length, ob_smarts)
                         self._atom_types[name] = hb_type
@@ -97,7 +97,7 @@ class HydrogenBonds():
         while queue:
             i, d = queue.pop(0)
 
-            ob_atom = OBMol.GetAtom(np.int(i))
+            ob_atom = OBMol.GetAtom(int(i))
 
             # If we construct the data structure before [[n], [n1, n2, ...], ...]
             # and because the depth is too large compared to the molecule
@@ -140,7 +140,7 @@ class HydrogenBonds():
         vectors = []
 
         # Get origin atom
-        ob_atom = OBMol.GetAtom(np.int(idx))
+        ob_atom = OBMol.GetAtom(int(idx))
         anchor_xyz = np.array([ob_atom.GetX(), ob_atom.GetY(), ob_atom.GetZ()])
         # Get coordinates of all the neihbor atoms
         neighbors_xyz = self._neighbor_atom_coordinates(OBMol, idx, depth=2)

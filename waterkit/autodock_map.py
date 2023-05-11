@@ -154,14 +154,14 @@ class Map():
         with open(map_file) as f:
             for line in f:
                 if re.search("^SPACING", line):
-                    grid_information["spacing"] = np.float(line.split(" ")[1])
+                    grid_information["spacing"] = float(line.split(" ")[1])
                 elif re.search("^NELEMENTS", line):
-                    nelements = np.array(line.split(" ")[1:4], dtype=np.int)
+                    nelements = np.array(line.split(" ")[1:4], dtype=int)
                     # Transform even numbers to the nearest odd integer
                     nelements = nelements // 2 * 2 + 1
                     grid_information["nelements"] = nelements
                 elif re.search("CENTER", line):
-                    grid_information["center"] = np.array(line.split(" ")[1:4], dtype=np.float)
+                    grid_information["center"] = np.array(line.split(" ")[1:4], dtype=float)
                 elif re.search("^[0-9]", line):
                     # If the line starts with a number, we stop
                     break
@@ -176,10 +176,10 @@ class Map():
             # Read all the lines directly
             lines = f.readlines()
 
-            npts = np.array(lines[4].split(" ")[1:4], dtype=np.int) + 1
+            npts = np.array(lines[4].split(" ")[1:4], dtype=int) + 1
 
             # Get the energy for each grid element
-            affinity = [np.float(line) for line in lines[6:]]
+            affinity = [float(line) for line in lines[6:]]
             # Some sorceries happen here --> swap x and z axes
             affinity = np.swapaxes(np.reshape(affinity, npts[::-1]), 0, 2)
 
@@ -220,7 +220,7 @@ class Map():
         """
         Return the closest grid index of the cartesian grid coordinates
         """
-        idx = np.rint((xyz - self._kdtree.mins) / self._spacing).astype(np.int)
+        idx = np.rint((xyz - self._kdtree.mins) / self._spacing).astype(int)
         # All the index values outside the grid are clipped (limited) to the nearest index
         np.clip(idx, [0, 0, 0], self._npts, idx)
 

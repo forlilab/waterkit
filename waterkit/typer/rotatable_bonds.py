@@ -44,12 +44,12 @@ class RotatableBonds():
 
                     if success:
                         name = sline[0]
-                        reference_atoms = np.array(sline[2:6]).astype(np.int)
+                        reference_atoms = np.array(sline[2:6]).astype(int)
 
                         if "Delta" == sline[7]:
                             rotamers = np.arange(0, 360, int(sline[-1])) + int(sline[6])
                         else:
-                            rotamers = np.array(sline[6:]).astype(np.int)
+                            rotamers = np.array(sline[6:]).astype(int)
 
                         rotatable_bond = self._Rotatable_bond(name, reference_atoms, rotamers, ob_smarts)
                         self._rotatable_bonds[name] = rotatable_bond 

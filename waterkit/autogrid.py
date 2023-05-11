@@ -47,10 +47,10 @@ class AutoGrid():
             for line in lines:
                 if re.search("^nbp_r_eps", line):
                     sline = line.split()
-                    req = np.float(sline[1])
-                    eps = np.float(sline[2])
-                    n = np.int(sline[3])
-                    m = np.int(sline[4])
+                    req = float(sline[1])
+                    eps = float(sline[2])
+                    n = int(sline[3])
+                    m = int(sline[4])
                     i = sline[5]
                     j = sline[6]
 

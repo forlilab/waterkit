@@ -87,7 +87,7 @@ class WaterSampler():
         self._rotation = 10
 
         # Number of rotation necessary to do a full spin
-        n_rotation = np.int(np.floor((360 / self._rotation))) - 1
+        n_rotation = int(np.floor((360 / self._rotation))) - 1
         rotation = np.radians(self._rotation)
 
         # Iterate through every disordered bonds
@@ -286,7 +286,7 @@ class WaterSampler():
         spacing = self._ad_map._spacing
         ad_map = self._ad_map
         boxsize = np.array([8, 8, 8])
-        npts = np.round(boxsize / spacing).astype(np.int) // 2 * 2 + 1
+        npts = np.round(boxsize / spacing).astype(int) // 2 * 2 + 1
         water_xyz = water.coordinates()
 
         # The center is the closest grid point from the water molecule

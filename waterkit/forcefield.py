@@ -60,7 +60,7 @@ class AutoDockForceField():
                     weight_name = line[0].split('_')[2]
 
                     if weighted:
-                        weight_value = np.float(line[-1])
+                        weight_value = float(line[-1])
                     else:
                         weight_value = 1.
 
@@ -78,10 +78,10 @@ class AutoDockForceField():
             for line in f.readlines():
                 if re.search('^atom_par', line):
                     line = line.split()
-                    data.append((line[1], np.float(line[2]), np.float(line[3]), 
-                                 np.float(line[4]), np.float(line[5]), np.float(line[6]), 
-                                 np.float(line[7]), np.int(line[8]), np.int(line[9]), 
-                                 np.int(line[10]), np.int(line[11])))
+                    data.append((line[1], float(line[2]), float(line[3]), 
+                                 float(line[4]), float(line[5]), float(line[6]), 
+                                 float(line[7]), int(line[8]), int(line[9]), 
+                                 int(line[10]), int(line[11])))
         
         atom_par = pd.DataFrame(data=data, columns=columns)
         atom_par.set_index('type', inplace=True)
@@ -99,10 +99,10 @@ class AutoDockForceField():
             for line in lines:
                 if re.search("^nbp_r_eps", line):
                     sline = line.split()
-                    req = np.float(sline[1])
-                    eps = np.float(sline[2])
-                    n = np.int(sline[3])
-                    m = np.int(sline[4])
+                    req = float(sline[1])
+                    eps = float(sline[2])
+                    n = int(sline[3])
+                    m = int(sline[4])
                     i = sline[5]
                     j = sline[6]
 
