@@ -238,6 +238,8 @@ def _convert_amber_to_autodock_types(molecule):
         'cv': 'C',
         'cx': 'C',
         'cy': 'C',
+        'c5': 'C',
+        'c6': 'C',
         'cz': 'C',
         'cs': 'C',
         'cg': 'C',
