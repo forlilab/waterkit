@@ -529,7 +529,7 @@ def _fix_isoleucine_cd_atom_name(molecule):
     return ile_fixed
 
 
-def _assign_histidine(molecule, default_protonation='HIE'):
+def _assign_histidine(molecule, default_protonation='HIE', force_default_protonation=False):
     assigned_states = []
     undefined_state = set(['HIS'])
 
@@ -542,7 +542,9 @@ def _assign_histidine(molecule, default_protonation='HIE'):
             # ND1 (or both) to assign the protonation states
             # Those hydrogen atoms will be present if the user
             # used REDUCE to add hydrogen atoms before.
-            if set(['HD1', 'HE2']).issubset(hydrogen_name_set):
+            if force_default_protonation:
+                residue.name = default_protonation
+            elif set(['HD1', 'HE2']).issubset(hydrogen_name_set):
                 residue.name = 'HIP'
             elif 'HD1' in hydrogen_name_set:
                 residue.name = 'HID'
@@ -556,7 +558,7 @@ def _assign_histidine(molecule, default_protonation='HIE'):
     return assigned_states
 
 
-def _assign_glutamine(molecule, default_protonation='GLU'):
+def _assign_glutamine(molecule, default_protonation='GLU', force_default_protonation=False):
     assigned_states = []
     undefined_state = set(['GLU'])
 
@@ -569,7 +571,9 @@ def _assign_glutamine(molecule, default_protonation='GLU'):
             # to assign the protonation states. This hydrogen 
             # atom will be present if the user used REDUCE or 
             # another tool to add hydrogen atoms before.
-            if set(['HE2']).issubset(hydrogen_name_set):
+            if force_default_protonation:
+                residue.name = default_protonation
+            elif set(['HE2']).issubset(hydrogen_name_set):
                 residue.name = 'GLH'
                 assigned_states.append((residue.name, residue.number))
             else:
@@ -578,7 +582,7 @@ def _assign_glutamine(molecule, default_protonation='GLU'):
     return assigned_states
 
 
-def _assign_asparagine(molecule, default_protonation='ASP'):
+def _assign_asparagine(molecule, default_protonation='ASP', force_default_protonation=False):
     assigned_states = []
     undefined_state = set(['ASP'])
 
@@ -591,7 +595,9 @@ def _assign_asparagine(molecule, default_protonation='ASP'):
             # to assign the protonation states. This hydrogen 
             # atom will be present if the user used REDUCE or 
             # another tool to add hydrogen atoms before.
-            if set(['HD2']).issubset(hydrogen_name_set):
+            if force_default_protonation:
+                residue.name = default_protonation
+            elif set(['HD2']).issubset(hydrogen_name_set):
                 residue.name = 'ASH'
                 assigned_states.append((residue.name, residue.number))
             else:
@@ -600,7 +606,7 @@ def _assign_asparagine(molecule, default_protonation='ASP'):
     return assigned_states
 
 
-def _assign_lysine(molecule, default_protonation='LYS'):
+def _assign_lysine(molecule, default_protonation='LYS', force_default_protonation=False):
     assigned_states = []
     undefined_state = set(['LYS'])
 
@@ -613,7 +619,9 @@ def _assign_lysine(molecule, default_protonation='LYS'):
             # to assign the protonation states. This hydrogen 
             # atom will be absent if the user used REDUCE or 
             # another tool to add hydrogen atoms before.
-            if not set(['HZ1', 'HZ2', 'HZ3']).issubset(hydrogen_name_set):
+            if force_default_protonation:
+                residue.name = default_protonation
+            elif not set(['HZ1', 'HZ2', 'HZ3']).issubset(hydrogen_name_set):
                 residue.name = 'LYN'
                 assigned_states.append((residue.name, residue.number))
             else:
@@ -622,7 +630,7 @@ def _assign_lysine(molecule, default_protonation='LYS'):
     return assigned_states
 
 
-def _assign_cysteine(molecule, default_protonation='CYS'):
+def _assign_cysteine(molecule, default_protonation='CYS', force_default_protonation=False):
     assigned_states = []
     undefined_state = set(['CYS'])
 
@@ -635,7 +643,9 @@ def _assign_cysteine(molecule, default_protonation='CYS'):
             # to assign the protonation states. This hydrogen 
             # atom will be absent if the user used REDUCE or 
             # another tool to add hydrogen atoms before.
-            if not set(['HG']).issubset(hydrogen_name_set):
+            if force_default_protonation:
+                residue.name = default_protonation
+            elif not set(['HG']).issubset(hydrogen_name_set):
                 residue.name = 'CYM'
                 assigned_states.append((residue.name, residue.number))
             else:
@@ -696,6 +706,7 @@ class PrepareReceptor:
         self._fill_gaps = ignore_gaps
         self._renumbering = renumbering
         self._default_his_protonation = default_his_protonation
+        self._force_default_protonation = not self._keep_hydrogen
 
         self._pdb_filename = None
         self._molecule = None
@@ -797,22 +808,22 @@ class PrepareReceptor:
                 logger.error(error_msg)
                 raise RuntimeError(error_msg)
 
-        assigned_his_states = _assign_histidine(pdbfixer.parm, self._default_his_protonation)
+        assigned_his_states = _assign_histidine(pdbfixer.parm, self._default_his_protonation, self._force_default_protonation)
         if assigned_his_states:
             warning_msg = 'Histidine protonation states were automatically set to: %s'
             logger.info(warning_msg % ', '.join('%s - %d' % (r[0], r[1]) for r in assigned_his_states))
 
-        assigned_glu_states = _assign_glutamine(pdbfixer.parm)
+        assigned_glu_states = _assign_glutamine(pdbfixer.parm, force_default_protonation=self._force_default_protonation)
         if assigned_glu_states:
             warning_msg = 'Glutamine protonation states were automatically set to: %s'
             logger.info(warning_msg % ', '.join('%s - %d' % (r[0], r[1]) for r in assigned_glu_states))
 
-        assigned_asp_states = _assign_asparagine(pdbfixer.parm)
+        assigned_asp_states = _assign_asparagine(pdbfixer.parm, force_default_protonation=self._force_default_protonation)
         if assigned_asp_states:
             warning_msg = 'Asparagine protonation states were automatically set to: %s'
             logger.info(warning_msg % ', '.join('%s - %d' % (r[0], r[1]) for r in assigned_asp_states))
 
-        assigned_lys_states = _assign_lysine(pdbfixer.parm)
+        assigned_lys_states = _assign_lysine(pdbfixer.parm, force_default_protonation=self._force_default_protonation)
         if assigned_lys_states:
             warning_msg = 'Lysine protonation states were automatically set to: %s'
             logger.info(warning_msg % ', '.join('%s - %d' % (r[0], r[1]) for r in assigned_lys_states))
@@ -829,7 +840,7 @@ class PrepareReceptor:
 
         # We assign cysteine only after finding all the disulfide bridges,
         # Here we are looking potential CYM residues
-        assigned_cys_states = _assign_cysteine(pdbfixer.parm)
+        assigned_cys_states = _assign_cysteine(pdbfixer.parm, force_default_protonation=self._force_default_protonation)
         if assigned_cys_states:
             warning_msg = 'Cysteine protonation states were automatically set to: %s'
             logger.info(warning_msg % ', '.join('%s - %d' % (r[0], r[1]) for r in assigned_cys_states))
