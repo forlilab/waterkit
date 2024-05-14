@@ -4,19 +4,16 @@
 # minimize trajectory
 #
 
-from __future__ import division
-from __future__ import print_function
-from __future__ import absolute_import
-
 import argparse
 import sys
+from packaging.version import Version
 
 import numpy as np
 import parmed as pmd
 from parmed.amber import NetCDFTraj
-from simtk.unit import Quantity, picoseconds, kilocalories_per_mole, angstroms, kelvin
-from simtk.openmm import CustomExternalForce, LangevinIntegrator, Platform
-from simtk.openmm.app import AmberPrmtopFile, HBonds, CutoffNonPeriodic, Simulation 
+from openmm.unit import Quantity, picoseconds, kilocalories_per_mole, angstroms, nanometer, kelvin, kilocalories, mole
+from openmm import CustomExternalForce, LangevinIntegrator, Platform
+from openmm.app import AmberPrmtopFile, HBonds, CutoffNonPeriodic, Simulation
 
 
 def cmd_lineparser():
@@ -68,8 +65,13 @@ class WaterMinimizer:
         dt = 0.002 * picoseconds
         temperature = 300 * kelvin
         friction = 1.0 / picoseconds
-        tolerance = 1 * kilocalories_per_mole
         K = self._restraint * kilocalories_per_mole / angstroms**2
+
+        # If someone still uses an old version of OpenMM
+        if Version(Platform.getOpenMMVersion()) > Version("7.5.0"):
+            tolerance = 1.0 * kilocalories / (nanometer * mole)
+        else:
+            tolerance = 1.0 * kilocalories_per_mole
 
         box = _box_information(traj_filename)
 

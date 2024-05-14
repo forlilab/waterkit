@@ -7,7 +7,6 @@
 #
 
 import argparse
-import imp
 import os
 import multiprocessing
 import re

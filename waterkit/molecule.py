@@ -6,7 +6,6 @@
 # Class for molecule
 #
 
-import imp
 import os
 import re
 
@@ -55,7 +54,7 @@ class Molecule():
             j += 1
 
         # Do the typing for hydrogen bonds and disordered hydrogen atoms
-        d = imp.find_module("waterkit")[1]
+        d = utils.path_module("waterkit")
         
         if guess_disordered_hydrogens:
             dh_file = os.path.join(d, "data/disordered_hydrogens.par")

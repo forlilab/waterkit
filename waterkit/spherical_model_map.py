@@ -8,7 +8,6 @@
 
 import os
 import sys
-import imp
 import multiprocessing as mp
 
 import numpy as np
@@ -91,7 +90,7 @@ class SphericalWaterMap:
             usecols += [6, 7, 8, 9, 10, 11]
             n_atoms += 2
         
-        d = imp.find_module("waterkit")[1]
+        d = utils.path_module("waterkit")
         w_orientation_file = os.path.join(d, "data/water_orientations.txt")
         water_orientations = np.loadtxt(w_orientation_file, usecols=usecols)
         shape = (water_orientations.shape[0], n_atoms, 3)

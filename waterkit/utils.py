@@ -8,17 +8,13 @@
 
 import tempfile
 import contextlib
+import importlib
 import shutil
 import copy
 import errno
 import os
 import subprocess
 import sys
-
-if sys.version_info >= (3, ):
-    import importlib
-else:
-    import imp
 
 import numpy as np
 
@@ -358,18 +354,9 @@ def execute_command(cmd_line):
 
 
 def path_module(module_name):
-    try:
-        specs = importlib.machinery.PathFinder().find_spec(module_name)
-
-        if specs is not None:
-            return specs.submodule_search_locations[0]
-    except:
-        try:
-            _, path, _ = imp.find_module(module_name)
-            abspath = os.path.abspath(path)
-            return abspath
-        except ImportError:
-            return None
+    specs = importlib.machinery.PathFinder().find_spec(module_name)
+    if specs is not None:
+        return specs.submodule_search_locations[0]
 
     return None
 
