@@ -23,7 +23,7 @@ def _hydration_sites(coordinates, values, density=2, min_cutoff=1.4, max_cutoff=
     # Keep coordinates with a certain density
     tmp_coordinates = coordinates[values >= density]
     tmp_values = values[values >= density]
-    mask = np.ones(tmp_values.shape, dtype=np.bool)
+    mask = np.ones(tmp_values.shape, dtype=bool)
 
     centers = []
     isocontour = []
