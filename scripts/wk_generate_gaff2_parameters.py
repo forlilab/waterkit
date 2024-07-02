@@ -82,7 +82,7 @@ def _transfer_coordinates_from_pdb_to_mol2(pdb_filename, mol2_filename, new_mol2
             w.write(output_mol2)
 
 
-def run_antechamber(mol_filename, molecule_name, resname, charge=0, charge_method="bcc", gaff_version="gaff2", output_directory='.'):
+def run_antechamber(mol_filename, molecule_name, resname, charge=0, charge_method="bcc", gaff_version="gaff2", output_directory='.', cleanup=True):
     """Run antechamber.
     """
     original_mol_filename = os.path.abspath(mol_filename)
@@ -92,7 +92,7 @@ def run_antechamber(mol_filename, molecule_name, resname, charge=0, charge_metho
     output_frcmod_filename = cwd_dir + os.path.sep + '%s.frcmod' % molecule_name
     output_lib_filename = cwd_dir + os.path.sep + '%s.lib' % molecule_name
 
-    with utils.temporary_directory(prefix=molecule_name, dir='.') as tmp_dir:
+    with utils.temporary_directory(prefix=molecule_name, dir='.', clean=cleanup) as tmp_dir:
         shutil.copy2(original_mol_filename, local_mol_filename)
 
         # Run Antechamber
@@ -101,10 +101,23 @@ def run_antechamber(mol_filename, molecule_name, resname, charge=0, charge_metho
         cmd = cmd % (local_mol_filename, gaff_version, charge_method, charge, resname)
         ante_outputs, ante_errors = utils.execute_command(cmd)
 
+        if ante_errors:
+            # Antechamber is the primary source of error due to weird atomic valence (mol2 BONDS or charge)
+            print("ERROR: Could not run antechamber for %s: Check atomic valence, bonds and charge." % molecule_name)
+            print("ANTECHAMBER ERROR LOG: ")
+            print(ante_errors)
+            sys.exit(1)
+
         # Run parmchk2 for the additional force field file
         cmd = 'parmchk2 -i out.mol2 -f mol2 -o out.frcmod -s %s' 
         cmd = cmd % (gaff_version)
         parm_outputs, parm_errors = utils.execute_command(cmd)
+
+        if parm_errors:
+            print("ERROR: Could not run parmchk2 for %s: Check atomic valence, bonds and charge." % molecule_name)
+            print("PARMCHK2 ERROR LOG: ")
+            print(parm_errors)
+            sys.exit(1)
 
         # Run tleap for the library file
         with open('tleap.cmd', 'w') as w:
@@ -115,20 +128,20 @@ def run_antechamber(mol_filename, molecule_name, resname, charge=0, charge_metho
         cmd = 'tleap -s -f tleap.cmd'
         tleap_outputs, tleap_errors = utils.execute_command(cmd)
 
+        if tleap_errors:
+            print("ERROR: Could not run tleap for %s: Check atomic valence, bonds and charge." % molecule_name)
+            print("TLEAP ERROR LOG: ")
+            print(tleap_errors)
+            sys.exit(1)
+
         try:
             # The final mol2 file from antechamber does not contain
             # the optimized geometry from sqm. Why?!
             _transfer_coordinates_from_pdb_to_mol2('sqm.pdb', 'out.mol2')
         except FileNotFoundError:
-            # Antechamber is the primary source of error due to weird atomic valence (mol2 BONDS or charge)
-            print("ERROR: Parametrization of %s failed. Check atomic valence, bonds and charge." % molecule_name)
-            print("ANTECHAMBER ERROR LOG: ")
-            print(ante_errors)
-            print("PARMCHK2 ERROR LOG: ")
-            print(parm_errors)
-            print("TLEAP ERROR LOG: ")
-            print(tleap_errors)
-            sys.exit(1)
+            # If there is not sqm.pdb, it means that geometry was not optimized. 
+            # Probably used another charge method like gasteiger.
+            pass
 
         # Copy back all we need
         shutil.copy('out.mol2', output_mol2_filename)
@@ -144,15 +157,21 @@ def cmd_lineparser():
         dest='mol_filename', help='MOL/SDF input file with explicit hydrogen atoms and desired protonation state.')
     parser.add_argument('-n', '--resname', default=True,
         dest='resname', help='resname of the molecule (3-letters code) as seen in the input PDB file (receptor + ligand).')
+    parser.add_argument('-c', '--charge-method', default='bcc',
+        dest='charge_method', help='Charge method (see Amber documentation for all the option).')
     parser.add_argument('-o', '--out', default='.',
         dest='output_directory', help='output directory (default: \'.\')')
+    parser.add_argument('--no-clean', default=True,
+        action='store_false', dest='cleanup', help='Do not clean up antechamber temporary files (default: True)')
     return parser.parse_args()
 
 
 def main():
     args = cmd_lineparser()
     mol_filename = args.mol_filename
+    charge_method = args.charge_method
     output_directory = args.output_directory
+    cleanup = args.cleanup
     resname = args.resname
 
     assert len(resname) == 3, "Resname of the molecule must be a 3-letters code."
@@ -162,7 +181,7 @@ def main():
     mol = Chem.MolFromMolFile(mol_filename)
     charge = Chem.rdmolops.GetFormalCharge(mol)
 
-    run_antechamber(mol_filename, molecule_name, resname, charge, output_directory=output_directory)
+    run_antechamber(mol_filename, molecule_name, resname, charge, charge_method, output_directory=output_directory, cleanup=cleanup)
 
 
 if __name__ == '__main__':
