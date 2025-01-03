@@ -55,7 +55,7 @@ def main():
     temperature = args.temperature
     output_dir = args.output_dir
     spherical_water_maps = args.spherical_water_maps
-    autogrid_exec_path = args.autogrid_exec_path
+    autogrid_exec_path = os.path.abspath(args.autogrid_exec_path)
     water_model = 'tip3p'
 
     # Force to use only one thread per job
