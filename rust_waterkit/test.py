@@ -5,7 +5,7 @@ def to_xyz(traj):
         fo.write(f"{len(traj)}\n")
         fo.write("\n")
         for t in traj:
-            t_v = t.as_vec()
+            t_v = t
             fo.write(f"He {t_v[0]} {t_v[1]} {t_v[2]}\n")
     return 
 
@@ -61,7 +61,7 @@ if __name__ == "__main__":
     surface_points = []
     for line in lines:
         line = line.strip().split(",")
-        point = rust_waterkit.Point3D(float(line[3]), float(line[4]), float(line[5]))
+        point = [float(line[3]), float(line[4]), float(line[5])]
         surface_points.append(point)
 
     start = time.time()

@@ -1,5 +1,5 @@
 use pyo3::prelude::*;
-use crate::{atom::Atom, spheric_probe::Sphere, geometry::Point3D};
+use crate::{atom::Atom, geometry::euclidean_distance, spheric_probe::Sphere};
 
 
 /// Calculate the Lennard-Jones interaction energy
@@ -38,12 +38,11 @@ pub fn energy(atoms_1: Vec<Atom>, atoms_2: Vec<Atom>) -> f64 {
     let mut total_energy = 0.0;
     for atom_1 in atoms_1.iter() {
         for atom_2 in atoms_2.iter() {
-            let atom_1_coords: Point3D = atom_1.coords();
-            let atom_2_coords: Point3D = atom_2.coords();
+            let atom_1_coords = atom_1.coords();
+            let atom_2_coords = atom_2.coords();
             
             // Calculate distance
-            let r = (atom_1_coords.distance(&atom_2_coords))
-                          .sqrt();
+            let r = euclidean_distance(&atom_1_coords, &atom_2_coords);
             
             // Combine parameters using Lorentz-Berthelot rules
             let epsilon = (atom_1.epsilon() * atom_2.epsilon()).sqrt();
@@ -62,11 +61,11 @@ pub fn energy(atoms_1: Vec<Atom>, atoms_2: Vec<Atom>) -> f64 {
 pub fn spheric_energy(atoms_1: Vec<Atom>, sphere: Sphere) -> f64 {
     let mut total_energy = 0.0;
     for atom_1 in atoms_1.iter() {
-        let atom_1_coords: Point3D = atom_1.coords();
-        let sphere_coords: Point3D = sphere.coords();
+        let atom_1_coords = atom_1.coords();
+        let sphere_coords = sphere.coords();
 
         // Calculate distance
-        let r = (atom_1_coords.distance(&sphere_coords)).sqrt();
+        let r = euclidean_distance(&atom_1_coords, &sphere_coords);
         
         if r < (atom_1.sigma() + sphere.radius()) {
             let epsilon = (atom_1.epsilon() * sphere.epsilon()).sqrt();

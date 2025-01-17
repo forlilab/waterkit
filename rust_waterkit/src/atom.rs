@@ -1,5 +1,4 @@
 use pyo3::prelude::*;
-use crate::geometry::Point3D;
 
 #[derive(Clone, Debug)]
 #[pyclass]
@@ -11,7 +10,7 @@ pub struct Atom {
     atom_id: String,
 
     // 3D coordinates of the atom
-    coords: Point3D,
+    coords: [f64; 3],
 
     // sigma value of the VdW
     sigma: f64,
@@ -26,12 +25,11 @@ pub struct Atom {
 #[pymethods]
 impl Atom {
     #[new]
-    pub fn new(atom_type: String, atom_id: String, coords_point: Vec<f64>, sigma: f64, epsilon: f64, charge: f64) -> Atom {
-        let point: Point3D = Point3D::new(coords_point[0], coords_point[1], coords_point[2]);
+    pub fn new(atom_type: String, atom_id: String, coords_point: [f64; 3], sigma: f64, epsilon: f64, charge: f64) -> Atom {
         let atom = Self {
             atom_type: atom_type,
             atom_id: atom_id,
-            coords: point,
+            coords: coords_point,
             sigma: sigma,
             epsilon: epsilon,
             charge: charge
@@ -48,7 +46,7 @@ impl Atom {
         &self.atom_id
     }
 
-    pub fn coords(&self) -> Point3D {
+    pub fn coords(&self) -> [f64; 3] {
         self.coords
     }
 
