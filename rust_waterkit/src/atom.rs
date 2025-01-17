@@ -1,0 +1,66 @@
+use pyo3::prelude::*;
+use crate::geometry::Point3D;
+
+#[derive(Clone, Debug)]
+#[pyclass]
+pub struct Atom {
+    // Atom type for the forcefield
+    atom_type: String,
+
+    // Atom id with chain:residue:atom
+    atom_id: String,
+
+    // 3D coordinates of the atom
+    coords: Point3D,
+
+    // sigma value of the VdW
+    sigma: f64,
+
+    // epsilon value of the VdW
+    epsilon: f64,
+
+    // partial charge for coulomb
+    charge: f64,
+}
+
+#[pymethods]
+impl Atom {
+    #[new]
+    pub fn new(atom_type: String, atom_id: String, coords_point: Vec<f64>, sigma: f64, epsilon: f64, charge: f64) -> Atom {
+        let point: Point3D = Point3D::new(coords_point[0], coords_point[1], coords_point[2]);
+        let atom = Self {
+            atom_type: atom_type,
+            atom_id: atom_id,
+            coords: point,
+            sigma: sigma,
+            epsilon: epsilon,
+            charge: charge
+        };
+
+        atom
+    }
+
+    pub fn atom_type(&self) -> &String {
+        &self.atom_type
+    }
+
+    pub fn atom_id(&self) -> &String {
+        &self.atom_id
+    }
+
+    pub fn coords(&self) -> Point3D {
+        self.coords
+    }
+
+    pub fn sigma(&self) -> &f64 {
+        &self.sigma
+    }
+
+    pub fn epsilon(&self) -> &f64 {
+        &self.epsilon
+    }
+
+    pub fn charge(&self) -> &f64 {
+        &self.charge
+    }
+}

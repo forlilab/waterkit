@@ -108,3 +108,7 @@ autodocksuite-4.2.6-src/autogrid/aclocal.m4
 autodocksuite-4.2.6-src/autogrid/configure
 autodocksuite-4.2.6-src/autogrid/Makefile.in
 autodocksuite-4.2.6-src/autogrid/x86_Linux2/
+
+*.xyz
+*.txt
+example/*
