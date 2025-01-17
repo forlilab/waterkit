@@ -1,7 +1,7 @@
 use pyo3::prelude::*;
 
-const RADIUS_WATER: f64 = 1.4;
-const EPSILON_WATER: f64 = 0.1521; // According to AMBER
+pub const RADIUS_WATER: f64 = 1.4;
+pub const EPSILON_WATER: f64 = 0.1521; // According to AMBER
 
 
 #[derive(Debug, Clone)]

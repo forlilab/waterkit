@@ -1,7 +1,7 @@
 import rust_waterkit
 
-def to_xyz(traj):
-    with open("traj_12.xyz", 'w') as fo:
+def to_xyz(traj, step_size):
+    with open(f"traj_{step_size}.xyz", 'w') as fo:
         fo.write(f"{len(traj)}\n")
         fo.write("\n")
         for t in traj:
@@ -65,9 +65,9 @@ if __name__ == "__main__":
         surface_points.append(point)
 
     start = time.time()
-    step_size = 1
+    step_size = 1.4
     trajectories = rust_waterkit.roll_sphere(surface_points, step_size)
     print(f"Time to grid: {time.time() - start}")
-    to_xyz(trajectories)
+    to_xyz(trajectories, step_size)
     # energy = rust_waterkit.energy(lysine_atoms, water_atoms)
     # print(f"Energy computed with rust: {energy}")

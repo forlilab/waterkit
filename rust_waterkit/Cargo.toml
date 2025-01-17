@@ -9,3 +9,4 @@ crate-type = ["cdylib", "lib"]
 
 [dependencies]
 pyo3 = "0.23.4"
+rand = "0.8.5"

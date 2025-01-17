@@ -15,6 +15,21 @@ def is_accessible(probe_center, surface_points, probe_radius):
             return False
     return True
 
+def find_valid_start(point, probe_radius, other_points):
+    directions = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1], 
+                           [-1, 0, 0], [0, -1, 0], [0, 0, -1]])
+    for direction in directions:
+        probe_center = point + direction * probe_radius
+        if is_accessible(probe_center, probe_radius, other_points):
+            return probe_center
+    # As a fallback, use random sampling
+    for _ in range(100):
+        offset = np.random.uniform(-probe_radius, probe_radius, size=3)
+        probe_center = point + offset
+        if is_accessible(probe_center, probe_radius, other_points):
+            return probe_center
+    raise ValueError("No valid starting position found.")
+
 def roll_sphere(surface_points, probe_radius, step_size):
     """
     Roll a sphere on a surface defined by 3D points.
@@ -36,16 +51,15 @@ def roll_sphere(surface_points, probe_radius, step_size):
     # Iterate over all surface points
     for i, point in enumerate(surface_points):
         # Start the probe at the surface point
-        probe_center = point + np.array([0, 0, probe_radius])
-        print(probe_center)
+        probe_center = point + np.array([0, 0, 0])
         # Check if the probe is accessible at the initial position
-        if not is_accessible(probe_center, surface_points, probe_radius):
-            continue
+        if is_accessible(probe_center, surface_points, probe_radius):
+            sampled_points.append(probe_center)
 
         # Roll the sphere by moving it in a grid-like manner around the initial point
-        for dx in [-step_size, 0, step_size]:
-            for dy in [-step_size, 0, step_size]:
-                for dz in [-step_size, 0, step_size]:
+        for dx in np.arange(-step_size, step_size, 0.5):
+            for dy in np.arange(-step_size, step_size, 0.5):
+                for dz in np.arange(-step_size, step_size, 0.5):
                     if dx == 0 and dy == 0 and dz == 0:
                         continue
                     candidate_position = probe_center + np.array([dx, dy, dz])
@@ -67,8 +81,8 @@ def to_xyz(traj):
 if __name__ == "__main__":
     import time
     # select as, i. 111+107+103+162+150+98+97+184+96+93+55+52+51+138+139+136+135
-    probe_radius = 1.5
-    step_size = 0.5
+    probe_radius = 1.4
+    step_size = 1.2
 
     with open("/data/phd/waterkit/example/pocket.txt") as fi:
         lines = fi.readlines()
