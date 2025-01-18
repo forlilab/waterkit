@@ -1,12 +1,11 @@
 use std::f64;
+use std::fmt::Debug;
 use pyo3::prelude::*;
 
-use crate::{spheric_probe::Sphere, spheric_probe::RADIUS_WATER, utils::FloatRange};
-
-// Helper function to generate a random number in a range
-fn rand_in_range(min: &f64, max: &f64) -> f64 {
-    min + (max - min) * (rand::random::<f64>())
-}
+use crate::atom::Atom;
+use crate::energy::spheric_energy;
+use crate::spheric_probe::RADIUS_WATER;
+use crate::utils::FloatRange;
 
 // Basic geometric operations on points
 pub fn sum_points(p1: &[f64; 3], p2: &[f64; 3]) -> [f64; 3] {
@@ -49,70 +48,52 @@ pub fn normalize(p1: &[f64; 3]) -> [f64; 3] {
 
 /// Check if a probe sphere is accessible at a given position.
 /// A position is accessible if the sphere does not overlap with any surface atom.
-pub fn is_accessible(radius: &f64, sphere_coords: &[f64; 3], surface_points: &Vec<[f64; 3]>) -> bool {
-    for point in surface_points {
-        if &euclidean_distance(&sphere_coords, &point) < radius {
-            return false;
-        }
-    }
-    true
+
+trait CheckAccessibility {
+    fn is_accessible(self, radius: &f64, sphere_coords: &[f64; 3]) -> bool;
 }
 
+// Implement the trait for &Vec<[f64; 3]>
+impl CheckAccessibility for &Vec<[f64; 3]> {
+    fn is_accessible(self, radius: &f64, sphere_coords: &[f64; 3]) -> bool {
+        for point in self {
+            if &euclidean_distance(&sphere_coords, &point) < radius {
+                return false;
+            }
+        }
+        true
+    }
+}
 
-/// Determine if the starting_point [0.0, 0.0, probe_radius] is accessible
-/// otherwise check the surrounding to find a good starting point. 
-// pub fn find_valid_start(point: &[f64; 3], radius: &f64, surface_points: &Vec<[f64; 3]>) -> Result<[f64; 3], String> {
-//     let directions = [
-//         [1.0, 0.0, 0.0],
-//         [0.0, 1.0, 0.0],
-//         [0.0, 0.0, 1.0],
-//         [-1.0, 0.0, 0.0],
-//         [0.0, -1.0, 0.0],
-//         [0.0, 0.0, -1.0],
-//     ];
-    
-//     for direction in &directions {
-//         let probe_center = scale_point(&sum_points(point, direction), radius);
-//         if is_accessible(radius, &probe_center, surface_points) {
-//             return Ok(probe_center);
-//         }
-//     }
+impl CheckAccessibility for &Vec<Atom> {
+    fn is_accessible(self, radius: &f64, sphere_coords: &[f64; 3]) -> bool {
+        for point in self {
+            if &euclidean_distance(&sphere_coords, &point.coords()) < radius {
+                return false;
+            }
+        }
+        true
+    }
+}
 
-//     for _ in 0..100 {
-//         let negative_radius = -radius;
-//         let offset = [
-//             rand_in_range(&negative_radius, radius),
-//             rand_in_range(&negative_radius, radius),
-//             rand_in_range(&negative_radius, radius),
-//         ];
-
-//         let probe_center = sum_points(point, &offset);
-//         if is_accessible(radius, &probe_center, surface_points) {
-//             return Ok(probe_center);
-//         }
-//     }
-
-//     Err("No valid starting position found to start rolling the sphere on the surface".to_string())
-// }
+// A generic function to accept any type that implements PrintValue
+fn is_accessible<T: CheckAccessibility + Debug>(value: T, radius: &f64, sphere_coords: &[f64; 3]) -> bool {
+    value.is_accessible(radius, sphere_coords)
+}
 
 #[pyfunction]
 pub fn roll_sphere(surface_points: Vec<[f64; 3]>,
                    step_size: f64) -> Vec<[f64; 3]> {
 
-    let sphere = Sphere::new([0.0, 0.0, 0.0]);
     let mut trajectory = Vec::new();
-    // match find_valid_start(&sphere.coords(), sphere.radius(), &surface_points) {
-    //     Ok(valid_start) => {
     let surface_points_cloned = surface_points.clone();
     
     for point in surface_points.iter() {
-        // if point == &[3.447000026702881, 15.916000366210938, 21.625] {
         // Start the probe at the surface point
-        // let center = [0.0, 0.0, 0.0];
         for d_radius in FloatRange::new(0.0, RADIUS_WATER*2.0, 0.7) {
             let probe_center = [point[0]+d_radius, point[1] + d_radius, point[2] + d_radius];
             // Check if the probe is accessible at the initial position
-            if is_accessible(&d_radius, &probe_center, &surface_points_cloned) {
+            if is_accessible(&surface_points_cloned, &d_radius, &probe_center) {
                 trajectory.push(probe_center);
             }
 
@@ -127,18 +108,63 @@ pub fn roll_sphere(surface_points: Vec<[f64; 3]>,
 
                         let candidate_position = sum_points(&probe_center, &new_point);
 
-                        if is_accessible(&d_radius, &candidate_position, &surface_points_cloned) {
+                        if is_accessible(&surface_points_cloned, &d_radius, &candidate_position) {
                             trajectory.push(candidate_position);
                         }
                     }
                 }
-                // }
             }
 
         }
     }
-    //     },
-    //     Err(err) => println!("Error: {}", err),
-    // }
     trajectory
+}
+
+
+#[pyfunction]
+pub fn roll_sphere_and_compute_energies(surface_points: Vec<Atom>,
+                                        step_size: f64) -> (Vec<f64>, Vec<[f64; 3]>) {
+
+    let mut energies = Vec::new();
+    let mut trajectories = Vec::new();
+
+    let surface_points_cloned = surface_points.clone();
+    
+    for point in surface_points.iter() {
+        // Start the probe at the surface point
+        let point_coords = point.coords();
+        for d_radius in FloatRange::new(0.0, RADIUS_WATER*2.0, 0.7) {
+            let probe_center = [point_coords[0] + d_radius, 
+                point_coords[1] + d_radius, 
+                point_coords[2] + d_radius];
+            // Check if the probe is accessible at the initial position
+            if is_accessible(&surface_points_cloned, &d_radius, &probe_center) {
+                // Compute the energy
+                energies.push(spheric_energy(&surface_points_cloned, &probe_center));
+                trajectories.push(probe_center);
+            }
+
+            // Roll the sphere by moving it in a grid-like manner around the initial point
+            for dx in FloatRange::new(-step_size, step_size, 0.5) {
+                for dy in FloatRange::new(-step_size, step_size, 0.5) {
+                    for dz in FloatRange::new(-step_size, step_size, 0.5) {
+                        if dx == 0.0 && dy == 0.0 && dz == 0.0 {
+                            continue;
+                        }
+                        let new_point = [dx, dy, dz];
+
+                        let candidate_position = sum_points(&probe_center, &new_point);
+
+                        if is_accessible(&surface_points_cloned, &d_radius, &probe_center) {
+                            // Compute the energy
+                            energies.push(spheric_energy(&surface_points_cloned, &candidate_position));
+                            trajectories.push(candidate_position);
+                        }
+                    }
+                }
+            }
+
+        }
+    }
+    (energies, trajectories) 
 }

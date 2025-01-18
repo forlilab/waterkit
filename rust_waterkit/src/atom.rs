@@ -13,7 +13,7 @@ pub struct Atom {
     coords: [f64; 3],
 
     // sigma value of the VdW
-    sigma: f64,
+    rmin_half: f64,
 
     // epsilon value of the VdW
     epsilon: f64,
@@ -25,12 +25,12 @@ pub struct Atom {
 #[pymethods]
 impl Atom {
     #[new]
-    pub fn new(atom_type: String, atom_id: String, coords_point: [f64; 3], sigma: f64, epsilon: f64, charge: f64) -> Atom {
+    pub fn new(atom_type: String, atom_id: String, coords_point: [f64; 3], rmin_half: f64, epsilon: f64, charge: f64) -> Atom {
         let atom = Self {
             atom_type: atom_type,
             atom_id: atom_id,
             coords: coords_point,
-            sigma: sigma,
+            rmin_half: rmin_half,
             epsilon: epsilon,
             charge: charge
         };
@@ -50,8 +50,8 @@ impl Atom {
         self.coords
     }
 
-    pub fn sigma(&self) -> &f64 {
-        &self.sigma
+    pub fn rmin_half(&self) -> &f64 {
+        &self.rmin_half
     }
 
     pub fn epsilon(&self) -> &f64 {

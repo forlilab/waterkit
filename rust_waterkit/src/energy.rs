@@ -1,5 +1,7 @@
 use pyo3::prelude::*;
-use crate::{atom::Atom, geometry::euclidean_distance, spheric_probe::Sphere};
+use crate::atom::Atom;
+use crate::geometry::euclidean_distance;
+use crate::spheric_probe::{EPSILON_WATER, RADIUS_WATER, RMIN_HALF_WATER};
 
 
 /// Calculate the Lennard-Jones interaction energy
@@ -14,6 +16,16 @@ use crate::{atom::Atom, geometry::euclidean_distance, spheric_probe::Sphere};
 pub fn lennard_jones(r: &f64, epsilon: &f64, sigma: &f64) -> f64 {
     let term = (sigma / r).powi(6);
     let lj = 4.0 * epsilon * (term.powi(2) - term);
+    lj
+}
+
+pub fn lennard_jones_rmin_half(epsilon_1: &f64, epsilon_2: &f64, dist: &f64, rmin_half1: &f64, rmin_half2: &f64) -> f64 {
+    const SCALE_VDW: f64 = 1.0;
+    let rmin = rmin_half1 + rmin_half2;
+    let epsilon = (epsilon_1 * epsilon_2).sqrt();
+    let c12 = SCALE_VDW * epsilon * rmin.powi(12);
+    let c6 = SCALE_VDW * 2.0 * epsilon * rmin.powi(6);
+    let lj = c12 / dist.powi(12) - c6 / dist.powi(6);
     lj
 }
 
@@ -45,10 +57,14 @@ pub fn energy(atoms_1: Vec<Atom>, atoms_2: Vec<Atom>) -> f64 {
             let r = euclidean_distance(&atom_1_coords, &atom_2_coords);
             
             // Combine parameters using Lorentz-Berthelot rules
-            let epsilon = (atom_1.epsilon() * atom_2.epsilon()).sqrt();
-            let sigma = (atom_1.sigma() + atom_2.sigma()) / 2.0;
+            // let epsilon = (atom_1.epsilon() * atom_2.epsilon()).sqrt();
+            // let sigma = (atom_1.rmin_half() + atom_2.rmin_half()) / 2.0;
             
-            let lj_energy = lennard_jones(&r, &epsilon, &sigma);
+            let lj_energy = lennard_jones_rmin_half(atom_1.epsilon(), 
+                atom_2.epsilon(), &r, 
+                atom_1.rmin_half(), 
+                atom_2.rmin_half());
+            // let lj_energy = lennard_jones(&r, &epsilon, &sigma);
             let coulomb_energy = coulomb_energy(atom_1.charge(), atom_2.charge(), &r);
             
             // Add to total energy
@@ -58,21 +74,24 @@ pub fn energy(atoms_1: Vec<Atom>, atoms_2: Vec<Atom>) -> f64 {
     total_energy
 }
 
-pub fn spheric_energy(atoms_1: Vec<Atom>, sphere: Sphere) -> f64 {
+pub fn spheric_energy(atoms_1: &Vec<Atom>, sphere_center: &[f64; 3]) -> f64 {
     let mut total_energy = 0.0;
     for atom_1 in atoms_1.iter() {
         let atom_1_coords = atom_1.coords();
-        let sphere_coords = sphere.coords();
+        let sphere_coords = sphere_center;
 
         // Calculate distance
         let r = euclidean_distance(&atom_1_coords, &sphere_coords);
         
-        if r < (atom_1.sigma() + sphere.radius()) {
-            let epsilon = (atom_1.epsilon() * sphere.epsilon()).sqrt();
-            let sigma = (atom_1.sigma() + sphere.radius()) / 2.0;
-            let lj_energy = lennard_jones(&r, &epsilon, &sigma);
-            total_energy += lj_energy; 
-        }
+        // if r < (atom_1.rmin_half() + RADIUS_WATER) {
+            // let epsilon = (atom_1.epsilon() * EPSILON_WATER).sqrt();
+            // let sigma = (atom_1.rmin_half() + RADIUS_WATER) / 2.0;
+            // let lj_energy = lennard_jones(&r, &epsilon, &sigma);
+        let lj_energy = lennard_jones_rmin_half(atom_1.epsilon(), 
+        &EPSILON_WATER, &r, 
+        atom_1.rmin_half(), &RMIN_HALF_WATER);
+        total_energy += lj_energy; 
+        // }
     }
     total_energy
 }

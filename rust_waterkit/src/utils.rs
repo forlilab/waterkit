@@ -1,3 +1,4 @@
+// Helper to generate ranges with float step_size
 pub struct FloatRange {
     current: f64,
     end: f64,
