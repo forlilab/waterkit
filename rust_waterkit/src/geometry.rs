@@ -4,7 +4,7 @@ use pyo3::prelude::*;
 
 use crate::atom::Atom;
 use crate::energy::spheric_energy;
-use crate::spheric_probe::RADIUS_WATER;
+use crate::utils::RADIUS_WATER;
 use crate::utils::FloatRange;
 
 // Basic geometric operations on points

@@ -1,7 +1,7 @@
 use pyo3::prelude::*;
 use crate::atom::Atom;
 use crate::geometry::euclidean_distance;
-use crate::spheric_probe::{EPSILON_WATER, RADIUS_WATER, RMIN_HALF_WATER};
+use crate::utils::{EPSILON_WATER, RMIN_HALF_WATER};
 
 
 /// Calculate the Lennard-Jones interaction energy
@@ -53,18 +53,14 @@ pub fn energy(atoms_1: Vec<Atom>, atoms_2: Vec<Atom>) -> f64 {
             let atom_1_coords = atom_1.coords();
             let atom_2_coords = atom_2.coords();
             
-            // Calculate distance
-            let r = euclidean_distance(&atom_1_coords, &atom_2_coords);
-            
-            // Combine parameters using Lorentz-Berthelot rules
-            // let epsilon = (atom_1.epsilon() * atom_2.epsilon()).sqrt();
-            // let sigma = (atom_1.rmin_half() + atom_2.rmin_half()) / 2.0;
+            // Calculate distance avoiding division by 0
+            let r = f64::max(euclidean_distance(&atom_1_coords, 
+                &atom_2_coords), 1e-8_f64.sqrt());
             
             let lj_energy = lennard_jones_rmin_half(atom_1.epsilon(), 
                 atom_2.epsilon(), &r, 
                 atom_1.rmin_half(), 
                 atom_2.rmin_half());
-            // let lj_energy = lennard_jones(&r, &epsilon, &sigma);
             let coulomb_energy = coulomb_energy(atom_1.charge(), atom_2.charge(), &r);
             
             // Add to total energy
@@ -80,8 +76,9 @@ pub fn spheric_energy(atoms_1: &Vec<Atom>, sphere_center: &[f64; 3]) -> f64 {
         let atom_1_coords = atom_1.coords();
         let sphere_coords = sphere_center;
 
-        // Calculate distance
-        let r = euclidean_distance(&atom_1_coords, &sphere_coords);
+        // Calculate distance avoiding division by 0
+        let r = f64::max(euclidean_distance(&atom_1_coords, 
+            &sphere_coords), 1e-8_f64.sqrt());
         
         // if r < (atom_1.rmin_half() + RADIUS_WATER) {
             // let epsilon = (atom_1.epsilon() * EPSILON_WATER).sqrt();

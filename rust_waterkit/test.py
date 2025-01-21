@@ -1,3 +1,6 @@
+import numpy as np
+import prody
+
 import meeko
 import rust_waterkit
 
@@ -45,51 +48,7 @@ def get_data_form_meeko(wanted_residues, pdb_file):
                 surface_atoms.append(new_atom)
     return surface_atoms
 
-def xyz_to_pdb_with_temp(xyz_file, pdb_file, energies):
-    """
-    Convert an XYZ file to a PDB file and add temperature data.
-    
-    Parameters:
-    - xyz_file: str, path to the input XYZ file.
-    - pdb_file: str, path to the output PDB file.
-    - temperature_data: list of float, temperature factors for each atom.
-    """
-    pdb_lines = []
-    
-    with open(xyz_file, 'r') as f:
-        lines = f.readlines()
-    
-    # The first two lines of an XYZ file are metadata (atom count and comment).
-    atom_count = int(lines[0].strip())
-    comment = lines[1].strip()
-    
-    # Check if temperature_data matches the number of atoms
-    if len(energies) != atom_count:
-        raise ValueError("Temperature data does not match the number of atoms in the XYZ file.")
-    
-    # Parse XYZ atoms and create PDB lines
-    for i, line in enumerate(lines[2:], start=1):
-        parts = line.split()
-        atom_type = parts[0]
-        x, y, z = map(float, parts[1:4])
-        temp_factor = energies[i - 1]
-        
-        # Format according to PDB specifications
-        pdb_line = (
-            f"ATOM  {i:5d} {atom_type:<4} MOL     1    "  # Atom serial, name, residue
-            f"{x:8.3f}{y:8.3f}{z:8.3f}  1.00{temp_factor:6.2f}           {atom_type:>2}"
-        )
-        pdb_lines.append(pdb_line)
-    
-    # Write to PDB file
-    with open(pdb_file, 'w') as f:
-        f.write(f"REMARK Converted from XYZ file: {comment}\n")
-        f.write("\n".join(pdb_lines))
-        f.write("\nEND\n")
-    return
-
 def pdb_with_temp(pdb_file, traj, energies):
-    import prody
     capped_energies = list()
     for e in energies:
         if e > 100:
@@ -104,6 +63,13 @@ def pdb_with_temp(pdb_file, traj, energies):
     ag.setBetas(capped_energies)
     prody.writePDB(pdb_file, ag)
     return
+
+def load_waters_orientations(orientations="/data/phd/waterkit/waterkit/data/water_orientations.txt"):
+    usecols = [0, 1, 2, 3, 4, 5]
+    water_orientations = np.loadtxt(orientations, usecols=usecols)
+    shape = (water_orientations.shape[0], 2, 3)
+    water_orientations_reshaped = water_orientations.reshape(shape)
+    return water_orientations_reshaped
 
 if __name__ == "__main__":
     # select as, i. 111+107+103+162+150+98+97+184+96+93+55+52+51+138+139+136+135

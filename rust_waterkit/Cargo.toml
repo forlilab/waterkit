@@ -1,6 +1,6 @@
 [package]
 name = "rust_waterkit"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 
 [lib]
@@ -8,5 +8,7 @@ name = "rust_waterkit"
 crate-type = ["cdylib", "lib"]
 
 [dependencies]
+ndarray = "0.16.1"
 pyo3 = "0.23.4"
 rand = "0.8.5"
+rayon = "1.10.0"
