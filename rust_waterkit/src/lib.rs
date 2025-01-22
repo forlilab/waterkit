@@ -1,6 +1,7 @@
 pub mod utils;
 pub mod geometry;
 pub mod atom;
+pub mod water;
 pub mod energy;
 pub mod sampling;
 pub mod waterkit;
