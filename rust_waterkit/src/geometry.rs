@@ -121,8 +121,7 @@ pub fn roll_sphere(surface_points: Vec<[f64; 3]>,
 }
 
 
-#[pyfunction]
-pub fn roll_sphere_and_compute_energies(surface_points: Vec<Atom>,
+pub fn roll_sphere_and_compute_energies(surface_points: &Vec<Atom>,
                                         step_size: f64) -> (Vec<f64>, Vec<[f64; 3]>) {
 
     let mut energies = Vec::new();

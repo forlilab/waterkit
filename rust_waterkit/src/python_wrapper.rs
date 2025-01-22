@@ -10,7 +10,7 @@ use crate::waterkit::run_waterkit;
 fn rust_waterkit(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Atom>()?;
     m.add_class::<WaterMolecule>()?;
-    m.add_wrapped(wrap_pyfunction!(roll_sphere_and_compute_energies))?;
+    // m.add_wrapped(wrap_pyfunction!(roll_sphere_and_compute_energies))?;
     m.add_wrapped(wrap_pyfunction!(run_waterkit))?;
     Ok(())
 }

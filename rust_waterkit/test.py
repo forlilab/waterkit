@@ -48,6 +48,24 @@ def get_data_form_meeko(wanted_residues, pdb_file):
                 surface_atoms.append(new_atom)
     return surface_atoms
 
+def to_pdb(pdb_file, w_map):
+    ag = prody.AtomGroup('Surface')
+    coords = []
+    names = []
+    resnames = []
+    for atom in w_map:
+        coords.append(atom.coords())
+        names.append(atom.atom_type())
+        resnames.append("HOH")
+        
+    ag.setCoords(coords)
+    ag.setNames(names)
+    ag.setResnames(resnames)
+    ag.setResnums([1 for _ in w_map])
+    # ag.setBetas(capped_energies)
+    prody.writePDB(pdb_file, ag)
+    return
+
 def pdb_with_temp(pdb_file, traj, energies, atom_type="He"):
     capped_energies = list()
     for e in energies:
@@ -87,9 +105,10 @@ if __name__ == "__main__":
     waters = load_waters_orientations()
     start = time.time()
     step_size = 1.4
-    trajectories, energies = rust_waterkit.run_waterkit(parametrized_atoms, waters, step_size)
+    waters_map = rust_waterkit.run_waterkit(parametrized_atoms, waters, step_size)
+    # trajectories, energies = rust_waterkit.run_waterkit(parametrized_atoms, waters, step_size)
     # energies, trajectories = rust_waterkit.roll_sphere_and_compute_energies(parametrized_atoms, step_size)
     print(f"Time to grid: {time.time() - start}")
-    to_xyz(trajectories, step_size, "trajectory")
-    pdb_with_temp("surface_distribution.pdb", trajectories, energies,  atom_type="H")
+    # to_xyz(trajectories, step_size, "trajectory")
+    to_pdb("surface_distribution.pdb", waters_map)
     

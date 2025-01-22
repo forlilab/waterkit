@@ -3,7 +3,7 @@ use pyo3::prelude::*;
 use crate::atom::Atom;
 use crate::energy::energy;
 use crate::geometry::roll_sphere_and_compute_energies;
-use crate::sampling::boltzmann_sampling;
+use crate::sampling::{boltzmann_sampling, sample_real_waters};
 use crate::water::WaterMolecule;
 
 
@@ -19,37 +19,34 @@ use crate::water::WaterMolecule;
 ///         and the Metropolis acceptance/rejection criteria.
 /// Step 4: Update the surface with the new points and keep repeat.
 #[pyfunction]
-pub fn run_waterkit(surface_positions: Vec<Atom>, water_configurations: Vec<[f64; 6]>, step_size: f64) -> (Vec<[f64; 3]>, Vec<f64>) {
+pub fn run_waterkit(surface_positions: Vec<Atom>, water_configurations: Vec<[f64; 6]>, step_size: f64) -> Vec<Atom> {
     // let mut frame = Vec::new();
     let mut map = surface_positions.clone();
-    let (energies, trajectories) = roll_sphere_and_compute_energies(surface_positions, step_size);
+    let mut waters_map: Vec<Atom> = Vec::new();
+    let (energies, trajectories) = roll_sphere_and_compute_energies(&surface_positions, step_size);
     
     // Pick one with Monte Carlo
     let initial_placement_index = boltzmann_sampling(&energies);
     let oxygen_position = trajectories[initial_placement_index];
+    
     // Now need to sample all the possible configurations. Need to translate the 
     // hydrogens in place and then compute the energy
-    let mut possible_waters: Vec<WaterMolecule> = Vec::new();
-    let mut possible_waters_energies: Vec<f64> = Vec::new();
-    let mut possible_waters_coords: Vec<[f64; 3]> = Vec::new();
+    // println!("Before upgrading map: {:?}", &map);
+    (map, waters_map) = sample_real_waters(&oxygen_position, &water_configurations, map, waters_map);
+    // println!("After upgrading map: {:?}", &map);
+    
 
-    let mut counter = 0;
-    println!("Sampling the real waters for the oxygen in position: {:?} - {}", oxygen_position, counter);
-    for configuration in water_configurations {
-        let h1_coords = [configuration[0] + oxygen_position[0], 
-            configuration[1] + oxygen_position[1], 
-            configuration[2] + oxygen_position[2]];
-        let h2_coords: [f64; 3] = [configuration[3] + oxygen_position[0], 
-            configuration[4] + oxygen_position[1], 
-            configuration[5] + oxygen_position[2]];
-        let water = WaterMolecule::new(h1_coords, h2_coords, oxygen_position);
-        let h = water.as_vec()[1].coords();
-        possible_waters.push(water);
-        possible_waters_coords.push(h);
-        possible_waters_energies.push(energy(&map, &possible_waters.last().unwrap().as_vec()));
-        counter += 1;
+    while waters_map.len() < 60 {
+        println!("{}", waters_map.len());
+        let (energies, trajectories) = roll_sphere_and_compute_energies(&map, step_size);
+    
+        // Pick one with Monte Carlo
+        let initial_placement_index = boltzmann_sampling(&energies);
+        let oxygen_position = trajectories[initial_placement_index];
+        
+        // Now need to sample all the possible configurations. Need to translate the 
+        // hydrogens in place and then compute the energy
+        (map, waters_map) = sample_real_waters(&oxygen_position, &water_configurations, map, waters_map);
     }
-    println!("Done sampling real waters! {}", counter);
-    // frame
-    (possible_waters_coords, possible_waters_energies)
+    waters_map
 }

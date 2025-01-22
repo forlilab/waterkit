@@ -1,7 +1,45 @@
 use crate::utils::*;
+use crate::atom::Atom;
+use crate::water::WaterMolecule;
+use crate::energy::energy;
 use ndarray::Array1;
 use rand::prelude::*;
 use rand::distributions::WeightedIndex;
+
+pub fn sample_real_waters(oxygen_position: &[f64; 3], 
+    water_configurations: &Vec<[f64; 6]>,
+    mut map: Vec<Atom>,
+    mut waters_map: Vec<Atom>) -> (Vec<Atom>, Vec<Atom>) {
+    // Want to update the map when selected the new water
+    let mut possible_waters: Vec<WaterMolecule> = Vec::new();
+    let mut possible_waters_energies: Vec<f64> = Vec::new();
+    let mut possible_waters_coords: Vec<[f64; 3]> = Vec::new();
+    
+    for configuration in water_configurations {
+        let h1_coords: [f64; 3] = [configuration[0] + oxygen_position[0], 
+            configuration[1] + oxygen_position[1], 
+            configuration[2] + oxygen_position[2]];
+        let h2_coords: [f64; 3] = [configuration[3] + oxygen_position[0], 
+            configuration[4] + oxygen_position[1], 
+            configuration[5] + oxygen_position[2]];
+        let water: WaterMolecule = WaterMolecule::new(h1_coords, h2_coords, oxygen_position.clone());
+        let h: [f64; 3] = water.as_vec()[1].coords();
+        possible_waters.push(water);
+        possible_waters_coords.push(h);
+        possible_waters_energies.push(energy(&map, &possible_waters.last().unwrap().as_vec()));
+    }
+    let choice = boltzmann_sampling(&possible_waters_energies);
+    if boltzmann_acceptance_rejection(&possible_waters_energies[choice], 
+        &BOLTZMANN_ENERGY_CUTOFF, 
+        &300.0, 
+        &BOLTZMANN_K) {
+        for atom in possible_waters[choice].as_vec() {
+            waters_map.push(atom.clone());
+            map.push(atom.clone());
+        }
+    }
+    (map, waters_map)
+}
 
 fn boltzmann_probabilities(energies: &Vec<f64>)  -> Vec<f64> {
     let energies_array = Array1::from(energies.clone());
