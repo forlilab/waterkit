@@ -22,6 +22,7 @@ def get_data_form_meeko(wanted_residues, pdb_file):
         load_atom_params=["openff"],
         charge_model="espaloma",
     )
+    box_boundaries = list()
     templates = meeko.ResidueChemTemplates.create_from_defaults()
     polymer = meeko.Polymer.from_pdb_string(pdb_string=pdbstring, 
                                             chem_templates=templates, 
@@ -30,23 +31,26 @@ def get_data_form_meeko(wanted_residues, pdb_file):
                                             default_altloc="A")
     for res_id, monomer in polymer.get_valid_monomers().items():
         unique_id = f"{res_id.split(':')[0]}:{monomer.input_resname}:{res_id.split(':')[-1]}"
-        if unique_id in wanted_residues:
-
-            for atom in monomer.molsetup.atoms:
-                if atom.is_ignore:
-                    continue
-                rmin_half = monomer.molsetup.atom_params["rmin_half"][atom.index]
-                epsilon = monomer.molsetup.atom_params["epsilon"][atom.index]
-                charge = atom.charge
-                atom_type = atom.pdbinfo.name
-                new_atom = rust_waterkit.Atom(atom_type=atom_type, 
-                            atom_id=f"{unique_id}:{atom_type}", 
-                            coords_point=atom.coord, 
-                            rmin_half=rmin_half, 
-                            epsilon=epsilon, 
-                            charge=charge)
-                surface_atoms.append(new_atom)
-    return surface_atoms
+        for atom in monomer.molsetup.atoms:
+            if atom.is_ignore:
+                continue
+            rmin_half = monomer.molsetup.atom_params["rmin_half"][atom.index]
+            epsilon = monomer.molsetup.atom_params["epsilon"][atom.index]
+            charge = atom.charge
+            atom_type = atom.pdbinfo.name
+            new_atom = rust_waterkit.Atom(atom_type=atom_type, 
+                        atom_id=f"{unique_id}:{atom_type}", 
+                        coords_point=atom.coord, 
+                        rmin_half=rmin_half, 
+                        epsilon=epsilon, 
+                        charge=charge)
+            surface_atoms.append(new_atom)
+            if unique_id in wanted_residues:
+                box_boundaries.append(atom.coord)
+    box_boundaries = np.array(box_boundaries)
+    min_box_boundaries = [np.min(box_boundaries[:, 0]), np.min(box_boundaries[:, 1]), np.min(box_boundaries[:, 2])]
+    max_box_boundaries = [np.max(box_boundaries[:, 0]), np.max(box_boundaries[:, 1]), np.max(box_boundaries[:, 2])]
+    return surface_atoms, min_box_boundaries, max_box_boundaries
 
 def to_pdb(pdb_file, w_map):
     ag = prody.AtomGroup('Surface')
@@ -82,7 +86,7 @@ def pdb_with_temp(pdb_file, traj, energies, atom_type="He"):
     prody.writePDB(pdb_file, ag)
     return
 
-def load_waters_orientations(orientations="/home/niccolo/phd/waterkit/waterkit/data/water_orientations.txt"):
+def load_waters_orientations(orientations="/data/phd/waterkit/waterkit/data/water_orientations.txt"):
     usecols = [0, 1, 2, 3, 4, 5]
     water_orientations = np.loadtxt(orientations, usecols=usecols)
     # shape = (water_orientations.shape[0], 2, 3)
@@ -100,15 +104,28 @@ if __name__ == "__main__":
                        "A:ALA:111", "A:GLY:135", "A:VAL:136", 
                        "A:PHE:138", "A:TYR:139", "A:VAL:150", 
                        "A:TRP:162", "A:THR:184"]
-    # parametrized_atoms = get_data_form_meeko(wanted_residues, "/data/phd/waterkit/example/1uyg.pdb")
-    parametrized_atoms = get_data_form_meeko(wanted_residues, "/home/niccolo/phd/waterkit/example/1uyg.pdb")
+    # wanted_residues = list()
+    parametrized_atoms, min_box_boundaries, max_box_boundaries = get_data_form_meeko(wanted_residues, "/data/phd/waterkit/example/1uyg_no_ligand.pdb")
+    # parametrized_atoms = get_data_form_meeko(wanted_residues, "/home/niccolo/phd/waterkit/example/1uyg.pdb")
     waters = load_waters_orientations()
-    start = time.time()
+    
     step_size = 1.4
-    waters_map = rust_waterkit.run_waterkit(parametrized_atoms, waters, step_size)
-    # trajectories, energies = rust_waterkit.run_waterkit(parametrized_atoms, waters, step_size)
-    # energies, trajectories = rust_waterkit.roll_sphere_and_compute_energies(parametrized_atoms, step_size)
-    print(f"Time to grid: {time.time() - start}")
-    # to_xyz(trajectories, step_size, "trajectory")
-    to_pdb("surface_distribution.pdb", waters_map)
+    # print("Starting waterkit!")
+    # start = time.time()
+    # energies, waters_map = rust_waterkit.get_map(parametrized_atoms, waters, step_size, min_box_boundaries, max_box_boundaries)
+    # # trajectories, energies = rust_waterkit.run_waterkit(parametrized_atoms, waters, step_size)
+    # # energies, trajectories = rust_waterkit.roll_sphere_and_compute_energies(parametrized_atoms, step_size)
+    # print(f"Time to grid: {time.time() - start}")
+    # # to_xyz(trajectories, step_size, "trajectory")
+    # pdb_with_temp(f"map.pdb", energies=energies, traj=waters_map)
+
+    print("Starting waterkit!")
+    for i in range(1):
+        start = time.time()
+        waters_map = rust_waterkit.run_waterkit(parametrized_atoms, waters, step_size, min_box_boundaries, max_box_boundaries)
+        # trajectories, energies = rust_waterkit.run_waterkit(parametrized_atoms, waters, step_size)
+        # energies, trajectories = rust_waterkit.roll_sphere_and_compute_energies(parametrized_atoms, step_size)
+        print(f"Time to grid: {time.time() - start}")
+        # to_xyz(trajectories, step_size, "trajectory")
+        to_pdb(f"surface_distribution_{i}.pdb", waters_map)
     

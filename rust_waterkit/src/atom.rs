@@ -61,4 +61,9 @@ impl Atom {
     pub fn charge(&self) -> &f64 {
         &self.charge
     }
+
+    pub fn is_heavy_atom(&self) -> bool {
+        let atom_id = self.atom_id();
+        atom_id != "H" && atom_id != "HW"
+    }
 }
