@@ -7,22 +7,28 @@ pub struct GridPoint {
 }
 pub struct Grid3D {
     data: Vec<GridPoint>,
-    x_size: usize,
-    y_size: usize,
-    z_size: usize,
+    x_size: f64,
+    y_size: f64,
+    z_size: f64,
 }
 
 impl Grid3D {
     /// Creates a new grid with initialized coordinates based on grid indices
-    pub fn new(x_size: usize, y_size: usize, z_size: usize, spacing: f64, center: [f64; 3]) -> Self {
+    /// Creates a new grid with float dimensions and spacing
+    pub fn new(x_size: f64, y_size: f64, z_size: f64, spacing: f64, center: [f64; 3]) -> Self {
         let mut data = Vec::new();
-        let half_x = (x_size as f64 - 1.0) / 2.0 * spacing;
-        let half_y = (y_size as f64 - 1.0) / 2.0 * spacing;
-        let half_z = (z_size as f64 - 1.0) / 2.0 * spacing;
 
-        for z in 0..z_size {
-            for y in 0..y_size {
-                for x in 0..x_size {
+        let half_x = (x_size - 1.0) / 2.0 * spacing;
+        let half_y = (y_size - 1.0) / 2.0 * spacing;
+        let half_z = (z_size - 1.0) / 2.0 * spacing;
+
+        let x_steps = (x_size / spacing).ceil() as usize;
+        let y_steps = (y_size / spacing).ceil() as usize;
+        let z_steps = (z_size / spacing).ceil() as usize;
+
+        for z in 0..z_steps {
+            for y in 0..y_steps {
+                for x in 0..x_steps {
                     let coords = [
                         center[0] + (x as f64 * spacing - half_x),
                         center[1] + (y as f64 * spacing - half_y),
@@ -44,23 +50,23 @@ impl Grid3D {
         }
     }
 
-    pub fn get(&self, x: usize, y: usize, z: usize) -> Option<&GridPoint> {
+    pub fn get(&self, x: f64, y: f64, z: f64) -> Option<&GridPoint> {
         if x < self.x_size && y < self.y_size && z < self.z_size {
-            let index = self.index(x, y, z);
+            let index = self.index(x, y, z) as usize;
             self.data.get(index)
         } else {
             None
         }
     }
 
-    pub fn set(&mut self, x: usize, y: usize, z: usize, energy: f64) {
+    pub fn set(&mut self, x: f64, y: f64, z: f64, energy: f64) {
         if x < self.x_size && y < self.y_size && z < self.z_size {
-            let index = self.index(x, y, z);
+            let index = self.index(x, y, z) as usize;
             self.data[index].energy = energy;
         }
     }
 
-    fn index(&self, x: usize, y: usize, z: usize) -> usize {
+    fn index(&self, x: f64, y: f64, z: f64) -> f64 {
         z * self.x_size * self.y_size + y * self.x_size + x
     }
 

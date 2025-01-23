@@ -76,6 +76,38 @@ pub fn energy(atoms_1: &Vec<Atom>, atoms_2: &Vec<Atom>) -> f64 {
     total_energy
 }
 
+pub fn energy_for_real_water(atoms_1: &Vec<Atom>, atoms_2: &Vec<Atom>) -> (f64, f64) {
+    let mut total_energy = 0.0;
+    let mut lj_energy = 0.0;
+    for atom_1 in atoms_1.iter() {
+        // Atoms2 are the water's atoms
+        for atom_2 in atoms_2.iter() {
+            let atom_1_coords = atom_1.coords();
+            let atom_2_coords = atom_2.coords();
+            
+            // Calculate distance avoiding division by 0
+            let r = f64::max(euclidean_distance(&atom_1_coords, 
+                &atom_2_coords), 1e-8_f64.sqrt());
+            
+            if r < ELECTROSTATICS_CUTOFF {
+                
+                if atom_1.atom_type() != &"HW".to_string() && atom_2.atom_type() != &"HW".to_string() { 
+                    lj_energy = lennard_jones_rmin_half(atom_1.epsilon(), 
+                        atom_2.epsilon(), &r, 
+                        atom_1.rmin_half(), 
+                        atom_2.rmin_half());
+                }
+                
+                let coulomb_energy = coulomb_energy(atom_1.charge(), atom_2.charge(), &r);
+                
+                // Add to total energy
+                total_energy += lj_energy + coulomb_energy;
+            }
+        }
+    }
+    (total_energy, lj_energy)
+}
+
 pub fn spheric_energy(atoms_1: &Vec<Atom>, sphere_center: &[f64; 3]) -> f64 {
     let mut total_energy = 0.0;
     for atom_1 in atoms_1.iter() {

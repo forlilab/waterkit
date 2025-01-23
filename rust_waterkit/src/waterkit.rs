@@ -37,7 +37,7 @@ pub fn get_map(receptor_points: Vec<Atom>, water_configurations: Vec<[f64; 6]>, 
 ///         and the Metropolis acceptance/rejection criteria.
 /// Step 4: Update the surface with the new points and keep repeat.
 #[pyfunction]
-pub fn run_waterkit(receptor_points: Vec<Atom>, water_configurations: Vec<[f64; 6]>, x_size: usize, y_size: usize, z_size: usize, spacing: f64, center: [f64; 3]) -> Vec<Atom> {
+pub fn run_waterkit(receptor_points: Vec<Atom>, water_configurations: Vec<[f64; 6]>, x_size: f64, y_size: f64, z_size: f64, spacing: f64, center: [f64; 3]) -> Vec<Atom> {
     let mut receptor_map = receptor_points.clone();
     let mut grid = roll_sphere_and_compute_energies_grid(&receptor_points, x_size, y_size, z_size, spacing, center);
     
@@ -51,7 +51,7 @@ pub fn run_waterkit(receptor_points: Vec<Atom>, water_configurations: Vec<[f64; 
     // Now need to sample all the possible configurations. Need to translate the 
     // hydrogens in place and then compute the energy
     // println!("Before upgrading map: {:?}", &map);
-    (map, waters_map, receptor_map) = sample_real_waters(&oxygen_position, &water_configurations, map, waters_map, receptor_map);
+    (receptor_map, grid) = sample_real_waters(&oxygen_position, &water_configurations, grid, receptor_map);
     // println!("After upgrading map: {:?}", &map);
     
     let mut tries = 0; 
@@ -64,16 +64,13 @@ pub fn run_waterkit(receptor_points: Vec<Atom>, water_configurations: Vec<[f64; 
     while tries < 500 {
         println!("{}", waters_map.len()/3);
         // If not picked in the previous round try to draw again from the same energies
-        if picked {
-            (energies, trajectories) = roll_sphere_and_compute_energies(&receptor_map, &map, step_size, &min_box, &max_box);
-        }
         // Pick one with Monte Carlo
         let initial_placement_index = boltzmann_sampling(&energies);
         let oxygen_position = trajectories[initial_placement_index];
         
         // Now need to sample all the possible configurations. Need to translate the 
         // hydrogens in place and then compute the energy
-        (map, waters_map, receptor_map) = sample_real_waters(&oxygen_position, &water_configurations, map, waters_map, receptor_map);
+        (receptor_map, grid) = sample_real_waters(&oxygen_position, &water_configurations, grid, receptor_map);
 
         if waters_map.len() == previous_length {
             picked = false;

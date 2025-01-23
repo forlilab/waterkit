@@ -3,7 +3,7 @@ use crate::grid::Grid3D;
 use crate::utils::*;
 use crate::atom::Atom;
 use crate::water::WaterMolecule;
-use crate::energy::{energy, spheric_energy};
+use crate::energy::{energy, energy_for_real_water, spheric_energy};
 use std::fmt::Debug;
 use std::sync::Mutex;
 use ndarray::Array1;
@@ -56,9 +56,9 @@ fn in_box(min_boundaries: &[f64; 3], max_boundaries: &[f64; 3], positions: &[f64
 
 pub fn roll_sphere_and_compute_energies_grid(
                                         receptor_points: &Vec<Atom>,
-                                        x_size: usize,
-                                        y_size: usize,
-                                        z_size: usize,
+                                        x_size: f64,
+                                        y_size: f64,
+                                        z_size: f64,
                                         spacing: f64,
                                         center: [f64; 3]) -> Grid3D {
 
@@ -198,9 +198,8 @@ pub fn roll_sphere_and_compute_energies_single_th(surface_points: &Vec<Atom>,
 
 pub fn sample_real_waters(oxygen_position: &[f64; 3], 
     water_configurations: &Vec<[f64; 6]>,
-    mut map: Vec<Atom>,
-    mut waters_map: Vec<Atom>,
-    mut receptor_points: Vec<Atom>) -> (Vec<Atom>, Vec<Atom>, Vec<Atom>) {
+    mut grid: Grid3D,
+    mut receptor_points: Vec<Atom>) -> (Vec<Atom>, Grid3D) {
     // Want to update the map when selected the new water
     // let mut possible_waters: Vec<WaterMolecule> = Vec::new();
     // let mut possible_waters_energies: Vec<f64> = Vec::new();
@@ -222,7 +221,7 @@ pub fn sample_real_waters(oxygen_position: &[f64; 3],
     //     possible_waters_energies.push(energy(&map, &possible_waters.last().unwrap().as_vec()));
     // }
     // Let's parallelize
-    let possible_results: Vec<(WaterMolecule, f64)> = water_configurations
+    let possible_results: Vec<(WaterMolecule, f64, f64)> = water_configurations
         .into_par_iter()
         .map(|configuration| {
             // H1 in position
@@ -242,26 +241,30 @@ pub fn sample_real_waters(oxygen_position: &[f64; 3],
             let water = WaterMolecule::new(h1_coords, h2_coords, oxygen_position.clone());
 
             // Compute energy
-            let energy_value = energy(&map, &water.as_vec());
+            let (energy_value, oxygen_energy) = energy_for_real_water(&receptor_points, &water.as_vec());
 
-            (water, energy_value)
+            (water, energy_value, oxygen_energy)
         })
         .collect();
     
-    let possible_waters: Vec<WaterMolecule> = possible_results.iter().map(|(w, _)| w.clone()).collect();
-    let possible_waters_energies: Vec<f64> = possible_results.iter().map(|(_, e)| *e).collect();
+    let possible_waters: Vec<WaterMolecule> = possible_results.iter().map(|(w, _, _)| w.clone()).collect();
+    let possible_waters_energies: Vec<f64> = possible_results.iter().map(|(_, e, _)| *e).collect();
+    let oxygen_energies: Vec<f64> = possible_results.iter().map(|(_, _, o)| *o).collect();
     let choice = boltzmann_sampling(&possible_waters_energies);
     if boltzmann_acceptance_rejection(&possible_waters_energies[choice], 
         &BOLTZMANN_ENERGY_CUTOFF, 
         &TEMPERATURE, 
         &BOLTZMANN_K) {
         for atom in possible_waters[choice].as_vec() {
-            waters_map.push(atom.clone());
-            map.push(atom.clone());
+            if atom.atom_id() == "OW" {
+                let oxygen_coords = atom.coords();
+                grid.set(oxygen_coords[0], oxygen_coords[1], oxygen_coords[2], oxygen_energies[choice]);
+            }
             receptor_points.push(atom.clone());
         }
+
     }
-    (map, waters_map, receptor_points)
+    (receptor_points, grid)
 }
 
 
