@@ -109,20 +109,22 @@ if __name__ == "__main__":
     # parametrized_atoms = get_data_form_meeko(wanted_residues, "/home/niccolo/phd/waterkit/example/1uyg.pdb")
     waters = load_waters_orientations()
     
-    step_size = 1.4
-    # print("Starting waterkit!")
-    # start = time.time()
-    # energies, waters_map = rust_waterkit.get_map(parametrized_atoms, waters, step_size, min_box_boundaries, max_box_boundaries)
-    # # trajectories, energies = rust_waterkit.run_waterkit(parametrized_atoms, waters, step_size)
-    # # energies, trajectories = rust_waterkit.roll_sphere_and_compute_energies(parametrized_atoms, step_size)
-    # print(f"Time to grid: {time.time() - start}")
-    # # to_xyz(trajectories, step_size, "trajectory")
-    # pdb_with_temp(f"map.pdb", energies=energies, traj=waters_map)
+    spacing = 0.375
+    center = [2.699591, 11.453864, 24.802502]
+    x_size, y_size, z_size = 65, 65, 65
+    print("Starting waterkit!")
+    start = time.time()
+    energies, waters_map = rust_waterkit.get_map(parametrized_atoms, waters, x_size, y_size, z_size, spacing, center)
+    # trajectories, energies = rust_waterkit.run_waterkit(parametrized_atoms, waters, step_size)
+    # energies, trajectories = rust_waterkit.roll_sphere_and_compute_energies(parametrized_atoms, step_size)
+    print(f"Time to grid: {time.time() - start}")
+    # to_xyz(trajectories, step_size, "trajectory")
+    pdb_with_temp(f"map.pdb", energies=energies, traj=waters_map)
 
     print("Starting waterkit!")
     for i in range(1):
         start = time.time()
-        waters_map = rust_waterkit.run_waterkit(parametrized_atoms, waters, step_size, min_box_boundaries, max_box_boundaries)
+        waters_map = rust_waterkit.run_waterkit(parametrized_atoms, waters, x_size, y_size, z_size, spacing, center)
         # trajectories, energies = rust_waterkit.run_waterkit(parametrized_atoms, waters, step_size)
         # energies, trajectories = rust_waterkit.roll_sphere_and_compute_energies(parametrized_atoms, step_size)
         print(f"Time to grid: {time.time() - start}")

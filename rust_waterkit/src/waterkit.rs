@@ -1,8 +1,9 @@
 use pyo3::prelude::*;
-use rayon::str::MatchIndices;
+use rayon::prelude::*;
 
 use crate::atom::Atom;
-use crate::sampling::{boltzmann_sampling, roll_sphere_and_compute_energies, sample_real_waters};
+use crate::grid::Grid3D;
+use crate::sampling::{boltzmann_sampling, roll_sphere_and_compute_energies, roll_sphere_and_compute_energies_grid, sample_real_waters};
 
 
 // fn stop_hydration(map: &Vec<Atom>, water_map: &Vec<Atom>) -> bool {
@@ -10,21 +11,17 @@ use crate::sampling::{boltzmann_sampling, roll_sphere_and_compute_energies, samp
 // } 
 
 #[pyfunction]
-pub fn get_map(receptor_points: Vec<Atom>, water_configurations: Vec<[f64; 6]>, step_size: f64, min_box: [f64; 3], max_box: [f64; 3]) -> (Vec<f64>, Vec<[f64; 3]>) {
-    let surface_points: Vec<Atom> = receptor_points.iter()
-            .filter(|&point| {
-                let coords = point.coords();
-                coords[0] > min_box[0] && coords[0] < max_box[0] &&
-                coords[1] > min_box[1] && coords[1] < max_box[1] &&
-                coords[2] > min_box[2] && coords[2] < max_box[2]
-            })
-            .cloned() // Clone each matching point to collect into a new Vec
-        .collect();
-
-    let mut map = surface_points.clone();
-    let mut waters_map: Vec<Atom> = Vec::new();
+pub fn get_map(receptor_points: Vec<Atom>, water_configurations: Vec<[f64; 6]>, x_size: usize, y_size: usize, z_size: usize, spacing: f64, center: [f64; 3]) -> (Vec<f64>, Vec<[f64; 3]>) {
     let mut receptor_map = receptor_points.clone();
-    let (energies, trajectories) = roll_sphere_and_compute_energies(&receptor_points, &surface_points, step_size, &min_box, &max_box);
+    let grid = roll_sphere_and_compute_energies_grid(&receptor_map, x_size, y_size, z_size, spacing, center);
+    let points = grid.all_points();
+    
+    let mut energies = Vec::new();
+    let mut trajectories = Vec::new();
+    for point in points {
+        energies.push(point.energy);
+        trajectories.push(point.coords);
+    }
     (energies, trajectories)
 }
 
@@ -40,22 +37,12 @@ pub fn get_map(receptor_points: Vec<Atom>, water_configurations: Vec<[f64; 6]>, 
 ///         and the Metropolis acceptance/rejection criteria.
 /// Step 4: Update the surface with the new points and keep repeat.
 #[pyfunction]
-pub fn run_waterkit(receptor_points: Vec<Atom>, water_configurations: Vec<[f64; 6]>, step_size: f64, min_box: [f64; 3], max_box: [f64; 3]) -> Vec<Atom> {
-    // let mut frame = Vec::new();
-    let surface_points: Vec<Atom> = receptor_points.iter()
-            .filter(|&point| {
-                let coords = point.coords();
-                coords[0] > min_box[0] && coords[0] < max_box[0] &&
-                coords[1] > min_box[1] && coords[1] < max_box[1] &&
-                coords[2] > min_box[2] && coords[2] < max_box[2]
-            })
-            .cloned() // Clone each matching point to collect into a new Vec
-        .collect();
-
-    let mut map = surface_points.clone();
-    let mut waters_map: Vec<Atom> = Vec::new();
+pub fn run_waterkit(receptor_points: Vec<Atom>, water_configurations: Vec<[f64; 6]>, x_size: usize, y_size: usize, z_size: usize, spacing: f64, center: [f64; 3]) -> Vec<Atom> {
     let mut receptor_map = receptor_points.clone();
-    let (energies, trajectories) = roll_sphere_and_compute_energies(&receptor_points, &surface_points, step_size, &min_box, &max_box);
+    let mut grid = roll_sphere_and_compute_energies_grid(&receptor_points, x_size, y_size, z_size, spacing, center);
+    
+    // this need to change -> Probably the boltzmann needs to see the grid?
+    let (energies, trajectories) = grid.extract_energies_and_coordinates_parallel();
     
     // Pick one with Monte Carlo
     let initial_placement_index = boltzmann_sampling(&energies);

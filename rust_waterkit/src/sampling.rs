@@ -1,4 +1,5 @@
 use crate::geometry::{euclidean_distance, sum_points};
+use crate::grid::Grid3D;
 use crate::utils::*;
 use crate::atom::Atom;
 use crate::water::WaterMolecule;
@@ -53,6 +54,26 @@ fn in_box(min_boundaries: &[f64; 3], max_boundaries: &[f64; 3], positions: &[f64
     x_in && y_in && z_in
 }
 
+pub fn roll_sphere_and_compute_energies_grid(
+                                        receptor_points: &Vec<Atom>,
+                                        x_size: usize,
+                                        y_size: usize,
+                                        z_size: usize,
+                                        spacing: f64,
+                                        center: [f64; 3]) -> Grid3D {
+
+    let mut grid = Grid3D::new(x_size, y_size, z_size, spacing, center);
+    
+    grid.all_points_mut()
+        .par_iter_mut()
+        .for_each(|point| {
+            let energy = spheric_energy(receptor_points, &point.coords);
+            point.energy =  energy;
+        }); 
+    grid
+}
+
+
 /// Parallel version of rolling the sphere
 pub fn roll_sphere_and_compute_energies(
     receptor_points: &Vec<Atom>,
@@ -86,7 +107,7 @@ pub fn roll_sphere_and_compute_energies(
             // Check accessibility at the initial position
             if is_accessible(&surface_points_cloned, &d_radius, &probe_center){
                 // Compute energy
-                local_energies.push(spheric_energy(&surface_points_cloned, &probe_center));
+                local_energies.push(spheric_energy(&receptor_points, &probe_center));
                 local_trajectories.push(probe_center);
             }
 
@@ -105,7 +126,7 @@ pub fn roll_sphere_and_compute_energies(
 
                         if is_accessible(&surface_points_cloned, &d_radius, &candidate_position){
                             // Compute energy
-                            local_energies.push(spheric_energy(&surface_points_cloned, &candidate_position));
+                            local_energies.push(spheric_energy(&receptor_points, &candidate_position));
                             local_trajectories.push(candidate_position);
                         }
                     }
