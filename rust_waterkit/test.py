@@ -4,6 +4,16 @@ import prody
 import meeko
 import rust_waterkit
 
+def load_anchor_points(filename):
+    ap_coords = list()
+    with open(filename) as fi:
+        lines = fi.readlines()
+
+    for line in lines:
+        line = line.strip().split(",")
+        ap_coords.append(np.array([float(line[0]), float(line[1]), float(line[2])]))
+    return ap_coords
+
 def to_xyz(traj, step_size, fname):
     with open(f"{fname}.xyz", 'w') as fo:
         fo.write(f"{len(traj)}\n")
@@ -61,7 +71,6 @@ def to_pdb(pdb_file, w_map):
         coords.append(atom.coords())
         names.append(atom.atom_type())
         resnames.append("HOH")
-        
     ag.setCoords(coords)
     ag.setNames(names)
     ag.setResnames(resnames)
@@ -86,6 +95,37 @@ def pdb_with_temp(pdb_file, traj, energies, atom_type="He"):
     prody.writePDB(pdb_file, ag)
     return
 
+def pdb_corners(pdb_file, traj, atom_type="He"):
+    x_min, y_min, z_min = np.min(traj, axis=0)
+    x_max, y_max, z_max = np.max(traj, axis=0)
+    
+    # Generate all combinations of extrema
+    corners = np.array([
+        [x_min, y_min, z_min],
+        [x_min, y_min, z_max],
+        [x_min, y_max, z_min],
+        [x_min, y_max, z_max],
+        [x_max, y_min, z_min],
+        [x_max, y_min, z_max],
+        [x_max, y_max, z_min],
+        [x_max, y_max, z_max],
+    ])
+    ag = prody.AtomGroup('Surface')
+    ag.setCoords(corners)
+    ag.setNames([atom_type for _ in corners])
+    ag.setResnames(["MOL" for _ in corners])
+    ag.setResnums([1 for _ in corners])    
+    prody.writePDB(pdb_file, ag)
+
+    x_center = sum(corner[0] for corner in corners) / 8
+
+    y_center = sum(corner[1] for corner in corners) / 8
+
+    z_center = sum(corner[2] for corner in corners) / 8
+
+    print(x_center, y_center, z_center)
+    return
+
 def load_waters_orientations(orientations="/data/phd/waterkit/waterkit/data/water_orientations.txt"):
     usecols = [0, 1, 2, 3, 4, 5]
     water_orientations = np.loadtxt(orientations, usecols=usecols)
@@ -108,26 +148,40 @@ if __name__ == "__main__":
     parametrized_atoms, min_box_boundaries, max_box_boundaries = get_data_form_meeko(wanted_residues, "/data/phd/waterkit/example/1uyg_no_ligand.pdb")
     # parametrized_atoms = get_data_form_meeko(wanted_residues, "/home/niccolo/phd/waterkit/example/1uyg.pdb")
     waters = load_waters_orientations()
-    
+    anchor_points = load_anchor_points("/data/phd/waterkit/rust_waterkit/anchor_points_hsp90.txt")
     spacing = 0.375
-    center = [2.699591, 11.453864, 24.802502]
-    x_size, y_size, z_size = 65, 65, 65
+    center = [2.7, 11.45, 24.80]
+    # center = [2.699591, 11.453864, 24.802502]
+    x_size, y_size, z_size = 24.0, 24.0, 24.0
+    # print("Starting waterkit!")
+    # start = time.time()
+    # energies, waters_map = rust_waterkit.get_map(parametrized_atoms, waters, x_size, y_size, z_size, spacing, center)
+    # # trajectories, energies = rust_waterkit.run_waterkit(parametrized_atoms, waters, step_size)
+    # # energies, trajectories = rust_waterkit.roll_sphere_and_compute_energies(parametrized_atoms, step_size)
+    # print(f"Time to grid: {time.time() - start}")
+    # # to_xyz(trajectories, step_size, "trajectory")
+    # # pdb_with_temp(f"map.pdb", energies=energies, traj=waters_map)
+    # pdb_corners(f"box.pdb", traj=waters_map)
+
+    # Allowed points
+    # start = time.time()
+    # energies, waters_map = rust_waterkit.test_allowed_points(parametrized_atoms, x_size, y_size, z_size, spacing, center)
+    # # trajectories, energies = rust_waterkit.run_waterkit(parametrized_atoms, waters, step_size)
+    # # energies, trajectories = rust_waterkit.roll_sphere_and_compute_energies(parametrized_atoms, step_size)
+    # print(f"Time to grid: {time.time() - start}")
+    # # to_xyz(trajectories, step_size, "trajectory")
+    # pdb_with_temp(f"map.pdb", energies=energies, traj=waters_map)
+
+
     print("Starting waterkit!")
+    # for i in range(1):
     start = time.time()
-    energies, waters_map = rust_waterkit.get_map(parametrized_atoms, waters, x_size, y_size, z_size, spacing, center)
+    map = rust_waterkit.run_waterkit_simple(parametrized_atoms, waters, anchor_points, x_size, y_size, z_size, spacing, center)
+    waters_map = [x for x in map if x.atom_type() == "HW" or x.atom_type() == "OW"]
     # trajectories, energies = rust_waterkit.run_waterkit(parametrized_atoms, waters, step_size)
     # energies, trajectories = rust_waterkit.roll_sphere_and_compute_energies(parametrized_atoms, step_size)
     print(f"Time to grid: {time.time() - start}")
+    to_pdb("surface_distribution.pdb", waters_map)
     # to_xyz(trajectories, step_size, "trajectory")
-    pdb_with_temp(f"map.pdb", energies=energies, traj=waters_map)
-
-    print("Starting waterkit!")
-    for i in range(1):
-        start = time.time()
-        waters_map = rust_waterkit.run_waterkit(parametrized_atoms, waters, x_size, y_size, z_size, spacing, center)
-        # trajectories, energies = rust_waterkit.run_waterkit(parametrized_atoms, waters, step_size)
-        # energies, trajectories = rust_waterkit.roll_sphere_and_compute_energies(parametrized_atoms, step_size)
-        print(f"Time to grid: {time.time() - start}")
-        # to_xyz(trajectories, step_size, "trajectory")
-        to_pdb(f"surface_distribution_{i}.pdb", waters_map)
+    # to_pdb(f"surface_distribution_{i}.pdb", waters_map)
     

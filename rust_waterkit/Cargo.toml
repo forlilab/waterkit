@@ -8,6 +8,10 @@ name = "rust_waterkit"
 crate-type = ["cdylib", "lib"]
 
 [dependencies]
+fixed = "1.28.0"
+itertools = "0.14.0"
+kiddo = "5.0.3"
+nalgebra = "0.33.2"
 ndarray = "0.16.1"
 pyo3 = "0.23.4"
 rand = "0.8.5"

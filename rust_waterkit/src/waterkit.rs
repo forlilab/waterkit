@@ -1,9 +1,11 @@
+use pyo3::ffi::Py_Initialize;
 use pyo3::prelude::*;
 use rayon::prelude::*;
 
 use crate::atom::Atom;
-use crate::grid::Grid3D;
-use crate::sampling::{boltzmann_sampling, roll_sphere_and_compute_energies, roll_sphere_and_compute_energies_grid, sample_real_waters};
+use crate::grid::{Grid3D, GridPoint};
+use crate::sampling::{boltzmann_acceptance_rejection, boltzmann_sampling, order_boltzmann_sampling, roll_sphere_and_compute_energies_grid, sample_real_waters, sample};
+use crate::utils::{BOLTZMANN_ENERGY_CUTOFF, BOLTZMANN_K, TEMPERATURE};
 
 
 // fn stop_hydration(map: &Vec<Atom>, water_map: &Vec<Atom>) -> bool {
@@ -11,7 +13,7 @@ use crate::sampling::{boltzmann_sampling, roll_sphere_and_compute_energies, roll
 // } 
 
 #[pyfunction]
-pub fn get_map(receptor_points: Vec<Atom>, water_configurations: Vec<[f64; 6]>, x_size: usize, y_size: usize, z_size: usize, spacing: f64, center: [f64; 3]) -> (Vec<f64>, Vec<[f64; 3]>) {
+pub fn get_map(receptor_points: Vec<Atom>, water_configurations: Vec<[f64; 6]>, x_size: f64, y_size: f64, z_size: f64, spacing: f64, center: [f64; 3]) -> (Vec<f64>, Vec<[f64; 3]>) {
     let mut receptor_map = receptor_points.clone();
     let grid = roll_sphere_and_compute_energies_grid(&receptor_map, x_size, y_size, z_size, spacing, center);
     let points = grid.all_points();
@@ -20,6 +22,23 @@ pub fn get_map(receptor_points: Vec<Atom>, water_configurations: Vec<[f64; 6]>, 
     let mut trajectories = Vec::new();
     for point in points {
         energies.push(point.energy);
+        trajectories.push(point.coords);
+    }
+    (energies, trajectories)
+}
+
+#[pyfunction]
+pub fn test_allowed_points(receptor_points: Vec<Atom>, x_size: f64, y_size: f64, z_size: f64, spacing: f64, center: [f64; 3]) -> (Vec<f64>, Vec<[f64; 3]>) {
+    let mut receptor_map = receptor_points.clone();
+    let grid = roll_sphere_and_compute_energies_grid(&receptor_map, x_size, y_size, z_size, spacing, center);
+    let points = grid.allowed_points();
+    
+    let mut energies = Vec::new();
+    let mut trajectories = Vec::new();
+    for point in points {
+        let coords = point.coords; 
+        let p = grid.get(coords[0], coords[1], coords[1]);
+        energies.push(p.energy);
         trajectories.push(point.coords);
     }
     (energies, trajectories)
@@ -38,49 +57,134 @@ pub fn get_map(receptor_points: Vec<Atom>, water_configurations: Vec<[f64; 6]>, 
 /// Step 4: Update the surface with the new points and keep repeat.
 #[pyfunction]
 pub fn run_waterkit(receptor_points: Vec<Atom>, water_configurations: Vec<[f64; 6]>, x_size: f64, y_size: f64, z_size: f64, spacing: f64, center: [f64; 3]) -> Vec<Atom> {
+    // let mut placements = 0;
+
     let mut receptor_map = receptor_points.clone();
-    let mut grid = roll_sphere_and_compute_energies_grid(&receptor_points, x_size, y_size, z_size, spacing, center);
-    
-    // this need to change -> Probably the boltzmann needs to see the grid?
-    let (energies, trajectories) = grid.extract_energies_and_coordinates_parallel();
-    
-    // Pick one with Monte Carlo
-    let initial_placement_index = boltzmann_sampling(&energies);
-    let oxygen_position = trajectories[initial_placement_index];
-    
-    // Now need to sample all the possible configurations. Need to translate the 
-    // hydrogens in place and then compute the energy
-    // println!("Before upgrading map: {:?}", &map);
-    (receptor_map, grid) = sample_real_waters(&oxygen_position, &water_configurations, grid, receptor_map);
-    // println!("After upgrading map: {:?}", &map);
-    
-    let mut tries = 0; 
-    let mut previous_length = waters_map.len();
-    
-    let mut picked = true;
-    let mut energies = Vec::new();
-    let mut trajectories = Vec::new();
+    // let receptor_length = receptor_map.len();
+    // let mut grid = roll_sphere_and_compute_energies_grid(&receptor_points, x_size, y_size, z_size, spacing, center);
+    // // grid.set_allowed_points();
 
-    while tries < 500 {
-        println!("{}", waters_map.len()/3);
-        // If not picked in the previous round try to draw again from the same energies
-        // Pick one with Monte Carlo
-        let initial_placement_index = boltzmann_sampling(&energies);
-        let oxygen_position = trajectories[initial_placement_index];
+    // // this need to change -> Probably the boltzmann needs to see the grid?
+    // let (initial_energies, initial_trajectories) = grid.extract_energies_and_coordinates_for_allowed();
+    
+    // // Pick one with Monte Carlo
+    // let mut initial_placement_index = boltzmann_sampling(&initial_energies);
+    // if initial_placement_index.is_some() {
         
-        // Now need to sample all the possible configurations. Need to translate the 
-        // hydrogens in place and then compute the energy
-        (receptor_map, grid) = sample_real_waters(&oxygen_position, &water_configurations, grid, receptor_map);
+    //     placements += 1;
 
-        if waters_map.len() == previous_length {
-            picked = false;
-            tries += 1; // Increment stagnant count
- 
-        } else {
-            picked = true;
-            tries = 0; // Reset count if length changes
-        }
-        previous_length = waters_map.len();
+    //     let oxygen_position = initial_trajectories[initial_placement_index.unwrap()];
+    //     // println!("Initial energies: \n{:?}", grid.get(oxygen_position[0], oxygen_position[0], oxygen_position[0]));
+    //     // Now need to sample all the possible configurations. Need to translate the 
+    //     // hydrogens in place and then compute the energy
+    //     // println!("Before upgrading map: {:?}", &map);
+    //     (receptor_map, grid) = sample_real_waters(&oxygen_position, &water_configurations, grid, receptor_map);
+    //     // grid.update_allowed_points(&oxygen_position);
+        
+    //     // println!("After upgrading map: {:?}", &map);
+        
+    //     let mut tries = 0; 
+    //     let mut previous_length = 0;
+        
+    //     let mut picked = false;
+
+    //     // Now the energies changed after the first placement? maybe unnecessary.
+    //     let (mut energies, mut trajectories) = grid.extract_energies_and_coordinates_for_allowed();
+    //     // println!("Energies after first placement: \n{:?}", grid.get(oxygen_position[0], oxygen_position[0], oxygen_position[0]));
+    //     while tries < 500 {
+    //         placements += 1;
+
+    //         // println!("Previous length: {}", previous_length);
+    //         // println!("Tries: {}", tries);
+    //         // println!("{}", (receptor_map.len() - receptor_length) / 3);
+    //         // If not picked in the previous round try to draw again from the same energies
+    //         // Pick one with Monte Carlo
+    //         if picked {
+    //             (energies, trajectories) = grid.extract_energies_and_coordinates_for_allowed();
+    //         }
+
+    //         initial_placement_index = boltzmann_sampling(&energies);
+    //         if initial_placement_index.is_some() {
+    //             let oxygen_position = trajectories[initial_placement_index.unwrap()];
+    //             // Now need to sample all the possible configurations. Need to translate the 
+    //             // hydrogens in place and then compute the energy
+    //             (receptor_map, grid) = sample_real_waters(&oxygen_position, &water_configurations, grid, receptor_map);
+                
+    //             if (receptor_map.len() - receptor_length) == previous_length {
+    //                 // println!("Real sample rejected!");
+    //                 picked = false;
+    //                 tries += 1; // Increment stagnant count
+        
+    //             } else {
+    //                 picked = true;
+    //                 tries = 0; // Reset count if length changes
+    //                 // grid.update_allowed_points(&oxygen_position);
+    //                 previous_length = receptor_map.len() - receptor_length;
+
+    //             }
+    //         }
+    //         else {
+    //             picked = false;
+    //             tries += 1;
+    //         }
+            
+    //     }
+    // }
+    // println!("Total number of placements: {}", placements);
+    receptor_map
+}
+
+#[pyfunction]
+pub fn run_waterkit_simple(receptor_points: Vec<Atom>, water_configurations: Vec<[f64; 6]>, anchor_points: Vec<[f64; 3]>, x_size: f64, y_size: f64, z_size: f64, spacing: f64, center: [f64; 3]) -> Vec<Atom> {
+    let mut placements = 0;
+
+    let mut receptor_map = receptor_points.clone();
+    let receptor_length = receptor_map.len();
+    let mut grid = roll_sphere_and_compute_energies_grid(&receptor_points, x_size, y_size, z_size, spacing, center);
+    let mut receptor_map_in_grid = grid.get_anchor_points_in_grid(&anchor_points);
+    grid.set_possible_points(&receptor_map_in_grid);
+    let mut shell = 0;
+    let mut length = receptor_map_in_grid.len();
+
+    while shell < 5 {
+        (receptor_map, grid, receptor_map_in_grid) = sample(grid, receptor_map, receptor_map_in_grid, &water_configurations);
+        // println!("Waters placed after shell # {shell}: {:?}", receptor_map_in_grid.len() - length);
+        shell += 1;
+        // length = anchor_points.len();
     }
-    waters_map
+    // let possible_points_first_shell = grid.get_neighbors(&receptor_map_in_grid);
+
+    // let initial_energies = possible_points_first_shell
+    //     .clone()
+    //     .into_par_iter()
+    //     .map(|x| x.energy)
+    //     .collect::<Vec<f64>>();
+
+    // let initial_trajectories = possible_points_first_shell
+    //     .clone()
+    //     .into_par_iter()
+    //     .map(|x| x.coords)
+    //     .collect::<Vec<[f64; 3]>>();
+
+    // let initial_placement_index = order_boltzmann_sampling(&initial_energies);
+    // println!("{:?}", initial_placement_index);
+    // for order in initial_placement_index {
+    //     if boltzmann_acceptance_rejection(&initial_energies[order], &BOLTZMANN_ENERGY_CUTOFF, &TEMPERATURE, &BOLTZMANN_K) {
+    //         println!("Accepted");
+    //         let oxygen_position = initial_trajectories[order];
+    //         (receptor_map, grid) = sample_real_waters(&oxygen_position, &water_configurations, grid, receptor_map);
+    //         // grid.update_allowed_points(&oxygen_position);
+    //     }
+    // }
+
+    // println!("Total number of placements: {}", placements);
+    // let mut allowed_grid_as_atoms = Vec::new();
+    // for point in possible_points_first_shell {
+    //     let coords = point;
+    //     allowed_grid_as_atoms.push(
+    //         Atom::new("HW".to_string(), "1".to_string(), coords.coords, 0.0, 0.0, 0.0)
+    //     );
+    // }
+    // allowed_grid_as_atoms
+    receptor_map
 }
