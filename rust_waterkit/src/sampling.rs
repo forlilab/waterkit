@@ -37,6 +37,7 @@ pub fn sample(mut grid: Grid3D, mut receptor_points: Vec<Atom>, mut anchor_point
             if boltzmann_acceptance_rejection(&energies[index], &BOLTZMANN_ENERGY_CUTOFF, &TEMPERATURE, &BOLTZMANN_K) {
                 (receptor_points, grid, new_ap) = sample_real_waters(&trajectories[index], water_configurations, grid, receptor_points);
                 if new_ap != [0.0, 0.0, 0.0] {
+                    println!("After placing: {:?}", grid.get(new_ap[0], new_ap[1], new_ap[2]));
                     new_aps.push(new_ap);
                 }
             }
@@ -107,6 +108,7 @@ pub fn sample_real_waters(oxygen_position: &[f64; 3],
     let choice = boltzmann_sampling(&possible_waters_energies);
     if choice.is_some() {
         let value = choice.unwrap();
+        println!("Water's energy: {}", possible_waters_energies[value]);
         if boltzmann_acceptance_rejection(&possible_waters_energies[value], 
             &BOLTZMANN_ENERGY_CUTOFF, 
             &TEMPERATURE, 
@@ -126,9 +128,9 @@ pub fn sample_real_waters(oxygen_position: &[f64; 3],
         }
 
     }
-    else {
-        println!("Problem in sampling real water Boltzmann sampling");
-    }
+    // else {
+    //     println!("Problem in sampling real water Boltzmann sampling");
+    // }
     (receptor_points, grid, new_ap)
 }
 
@@ -144,7 +146,7 @@ fn boltzmann_probabilities(energies: &Vec<f64>)  -> Vec<f64> {
         let p = distribution.mapv(|e| e/distribution_sum);
         return p.to_vec();
     }
-
+    // println!("Distribution: {}", distribution);
     // Too high energies
     vec![0.0; energies.len()]
 }
@@ -153,6 +155,7 @@ fn boltzmann_probabilities(energies: &Vec<f64>)  -> Vec<f64> {
 /// This function returns the index of a randomly sampled energy based
 /// on the Boltzmann probability distribution
 pub fn boltzmann_sampling(energies: &Vec<f64>) -> Option<usize> {
+    // println!("{:?}",energies);
     let probability_distribution = boltzmann_probabilities(energies);
     let sum: f64 = probability_distribution.iter().sum();
     if sum == 0. {
