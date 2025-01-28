@@ -4,7 +4,7 @@ use rayon::prelude::*;
 
 use crate::atom::Atom;
 use crate::grid::{Grid3D, GridPoint};
-use crate::sampling::{boltzmann_acceptance_rejection, boltzmann_sampling, order_boltzmann_sampling, roll_sphere_and_compute_energies_grid, sample_real_waters, sample};
+use crate::sampling::{boltzmann_acceptance_rejection, boltzmann_sampling, order_boltzmann_sampling, roll_sphere_and_compute_energies_grid, sample, sample_real_waters, sample_with_order};
 use crate::utils::{BOLTZMANN_ENERGY_CUTOFF, BOLTZMANN_K, TEMPERATURE};
 
 
@@ -38,8 +38,10 @@ pub fn test_allowed_points(receptor_points: Vec<Atom>, x_size: f64, y_size: f64,
     for point in points {
         let coords = point.coords; 
         let p = grid.get(coords[0], coords[1], coords[1]);
-        energies.push(p.energy);
-        trajectories.push(point.coords);
+        if p.is_some() {
+            energies.push(p.unwrap().energy);
+            trajectories.push(p.unwrap().coords);
+        }
     }
     (energies, trajectories)
 }
@@ -135,56 +137,41 @@ pub fn run_waterkit(receptor_points: Vec<Atom>, water_configurations: Vec<[f64; 
 }
 
 #[pyfunction]
-pub fn run_waterkit_simple(receptor_points: Vec<Atom>, water_configurations: Vec<[f64; 6]>, anchor_points: Vec<[f64; 3]>, x_size: f64, y_size: f64, z_size: f64, spacing: f64, center: [f64; 3]) -> Vec<Atom> {
-    let mut placements = 0;
+pub fn run_waterkit_simple(receptor_points: Vec<Atom>, 
+    water_configurations: Vec<[f64; 6]>, 
+    anchor_points: Vec<[f64; 3]>, 
+    x_size: f64, 
+    y_size: f64, 
+    z_size: f64, 
+    spacing: f64, 
+    center: [f64; 3],
+    shells: usize) -> Vec<Atom> {
 
     let mut receptor_map = receptor_points.clone();
-    let receptor_length = receptor_map.len();
     let mut grid = roll_sphere_and_compute_energies_grid(&receptor_points, x_size, y_size, z_size, spacing, center);
     let mut receptor_map_in_grid = grid.get_anchor_points_in_grid(&anchor_points);
     grid.set_possible_points(&receptor_map_in_grid);
     let mut shell = 0;
-    let mut length = receptor_map_in_grid.len();
-
-    while shell < 5 {
+    
+    while shell < shells {
         (receptor_map, grid, receptor_map_in_grid) = sample(grid, receptor_map, receptor_map_in_grid, &water_configurations);
-        // println!("Waters placed after shell # {shell}: {:?}", receptor_map_in_grid.len() - length);
         shell += 1;
-        // length = anchor_points.len();
     }
-    // let possible_points_first_shell = grid.get_neighbors(&receptor_map_in_grid);
-
-    // let initial_energies = possible_points_first_shell
-    //     .clone()
-    //     .into_par_iter()
-    //     .map(|x| x.energy)
-    //     .collect::<Vec<f64>>();
-
-    // let initial_trajectories = possible_points_first_shell
-    //     .clone()
-    //     .into_par_iter()
-    //     .map(|x| x.coords)
-    //     .collect::<Vec<[f64; 3]>>();
-
-    // let initial_placement_index = order_boltzmann_sampling(&initial_energies);
-    // println!("{:?}", initial_placement_index);
-    // for order in initial_placement_index {
-    //     if boltzmann_acceptance_rejection(&initial_energies[order], &BOLTZMANN_ENERGY_CUTOFF, &TEMPERATURE, &BOLTZMANN_K) {
-    //         println!("Accepted");
-    //         let oxygen_position = initial_trajectories[order];
-    //         (receptor_map, grid) = sample_real_waters(&oxygen_position, &water_configurations, grid, receptor_map);
-    //         // grid.update_allowed_points(&oxygen_position);
-    //     }
-    // }
 
     // println!("Total number of placements: {}", placements);
     // let mut allowed_grid_as_atoms = Vec::new();
-    // for point in possible_points_first_shell {
-    //     let coords = point;
+    // let mut e = Vec::new();
+    // for point in grid.all_points() {
+    //     let coords = point.coords;
+    //     // allowed_grid_as_atoms.push(
+    //     //     Atom::new("HW".to_string(), "1".to_string(), coords, 0.0, 0.0, 0.0)
+    //     // );
     //     allowed_grid_as_atoms.push(
-    //         Atom::new("HW".to_string(), "1".to_string(), coords.coords, 0.0, 0.0, 0.0)
+    //         coords
     //     );
+    //     e.push(point.energy);
     // }
-    // allowed_grid_as_atoms
+    // (allowed_grid_as_atoms, e)
     receptor_map
+    // receptor_map
 }

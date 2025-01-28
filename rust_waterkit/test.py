@@ -176,12 +176,13 @@ if __name__ == "__main__":
     print("Starting waterkit!")
     # for i in range(1):
     start = time.time()
-    map = rust_waterkit.run_waterkit_simple(parametrized_atoms, waters, anchor_points, x_size, y_size, z_size, spacing, center)
+    map = rust_waterkit.run_waterkit_simple(parametrized_atoms, waters, anchor_points, x_size, y_size, z_size, spacing, center, shells=3)
     waters_map = [x for x in map if x.atom_type() == "HW" or x.atom_type() == "OW"]
     # trajectories, energies = rust_waterkit.run_waterkit(parametrized_atoms, waters, step_size)
     # energies, trajectories = rust_waterkit.roll_sphere_and_compute_energies(parametrized_atoms, step_size)
     print(f"Time to grid: {time.time() - start}")
-    to_pdb("surface_distribution.pdb", waters_map)
+    to_pdb("surface.pdb", waters_map)
+    # to_pdb("receptor_second_shell.pdb", rec_map)
     # to_xyz(trajectories, step_size, "trajectory")
     # to_pdb(f"surface_distribution_{i}.pdb", waters_map)
     

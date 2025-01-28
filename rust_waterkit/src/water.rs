@@ -18,7 +18,7 @@ impl WaterMolecule {
     #[new]
     pub fn new(hydrogen_1_coords: [f64; 3], 
         hydrogen_2_coords: [f64; 3], 
-        oxygen_coords: [f64; 3]) -> WaterMolecule {
+        oxygen_coords: [f64; 3]) -> Self {
             let oxygen = Atom::new("OW".to_string(),
                 "0".to_string(),
                 oxygen_coords,
@@ -40,12 +40,11 @@ impl WaterMolecule {
                 0.0,
                 0.4170,
             );
-            let water = Self {
+            WaterMolecule {
                 oxygen: oxygen,
                 hydrogen_1: hydrogen_1, 
                 hydrogen_2: hydrogen_2,
-            };
-            water
+            }
         }
 
     pub fn as_vec(&self) -> Vec<Atom> {

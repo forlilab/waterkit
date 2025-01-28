@@ -5,12 +5,12 @@ use crate::utils::{ELECTROSTATICS_CUTOFF, EPSILON_WATER, RMIN_HALF_WATER};
 
 
 /// Calculate the Lennard-Jones interaction energy
-/// 
+///
 /// Parameters:
 ///     r (&f64): Distance between two atoms (in angstroms).
 ///     epsilon (&f64): Depth of the potential well (in kcal/mol).
 ///     sigma (&f64): Distance at which the potential is zero (in angstroms).
-/// 
+///
 /// Returns:
 ///     f64: Lennard-Jones energy (in kcal/mol).
 pub fn lennard_jones(r: &f64, epsilon: &f64, sigma: &f64) -> f64 {
@@ -34,7 +34,7 @@ pub fn lennard_jones_rmin_half(epsilon_1: &f64, epsilon_2: &f64, dist: &f64, rmi
 ///     q1 (&f64): Charge of the first atom (in e).
 ///     q2 (&f64): Charge of the second atom (in e).
 ///     r (&f64): Distance between two atoms (in angstroms).
-/// 
+///
 /// Returns:
 ///     f64: Coulomb energy (in kcal/mol).
 pub fn coulomb_energy(q1: &f64, q2: &f64, r: &f64) -> f64 {
@@ -51,23 +51,23 @@ pub fn energy(atoms_1: &Vec<Atom>, atoms_2: &Vec<Atom>) -> f64 {
         for atom_2 in atoms_2.iter() {
             let atom_1_coords = atom_1.coords();
             let atom_2_coords = atom_2.coords();
-            
+
             // Calculate distance avoiding division by 0
-            let r = f64::max(euclidean_distance(&atom_1_coords, 
+            let r = f64::max(euclidean_distance(&atom_1_coords,
                 &atom_2_coords), 1e-8_f64.sqrt());
-            
+
             if r < ELECTROSTATICS_CUTOFF {
                 let mut lj_energy = 0.0;
-                
-                if atom_1.atom_type() != &"HW".to_string() && atom_2.atom_type() != &"HW".to_string() { 
-                    lj_energy = lennard_jones_rmin_half(atom_1.epsilon(), 
-                        atom_2.epsilon(), &r, 
-                        atom_1.rmin_half(), 
+
+                if atom_1.atom_type() != &"HW".to_string() && atom_2.atom_type() != &"HW".to_string() {
+                    lj_energy = lennard_jones_rmin_half(atom_1.epsilon(),
+                        atom_2.epsilon(), &r,
+                        atom_1.rmin_half(),
                         atom_2.rmin_half());
                 }
-                
+
                 let coulomb_energy = coulomb_energy(atom_1.charge(), atom_2.charge(), &r);
-                
+
                 // Add to total energy
                 total_energy += lj_energy + coulomb_energy;
             }
@@ -76,36 +76,44 @@ pub fn energy(atoms_1: &Vec<Atom>, atoms_2: &Vec<Atom>) -> f64 {
     total_energy
 }
 
-pub fn energy_for_real_water(atoms_1: &Vec<Atom>, atoms_2: &Vec<Atom>) -> (f64, f64) {
+pub fn energy_for_real_water(atoms_1: &Vec<Atom>, atoms_2: &Vec<Atom>) -> f64 {
     let mut total_energy = 0.0;
-    let mut lj_energy = 0.0;
+    let mut coulomb = 0.0;
+    let mut lj = 0.0;
     for atom_1 in atoms_1.iter() {
+        let atom_1_coords = atom_1.coords();
+
         // Atoms2 are the water's atoms
         for atom_2 in atoms_2.iter() {
-            let atom_1_coords = atom_1.coords();
             let atom_2_coords = atom_2.coords();
-            
             // Calculate distance avoiding division by 0
-            let r = f64::max(euclidean_distance(&atom_1_coords, 
+            let r = f64::max(euclidean_distance(&atom_1_coords,
                 &atom_2_coords), 1e-8_f64.sqrt());
-            
+
+            let coulomb_energy = coulomb_energy(atom_1.charge(), atom_2.charge(), &r);
+            total_energy += coulomb_energy;
+            coulomb += coulomb_energy;
             if r < ELECTROSTATICS_CUTOFF {
-                
-                if atom_1.atom_type() != &"HW".to_string() && atom_2.atom_type() != &"HW".to_string() { 
-                    lj_energy = lennard_jones_rmin_half(atom_1.epsilon(), 
-                        atom_2.epsilon(), &r, 
-                        atom_1.rmin_half(), 
+                if atom_1.atom_type() != &"HW".to_string() && atom_2.atom_type() != &"HW".to_string() {
+                    // println!("Atom1: {}, Atom2: {}", atom_1.atom_type(), atom_2.atom_type());
+                    let lj_energy = lennard_jones_rmin_half(atom_1.epsilon(),
+                        atom_2.epsilon(), &r,
+                        atom_1.rmin_half(),
                         atom_2.rmin_half());
+                    total_energy += lj_energy;
+                    lj += lj_energy;
+                    println!("Distance: {}", r);
+                    println!("Atom 1 coords: {:?}", atom_1);
+                    println!("Atom 2 coords: {:?}", atom_2);
+
                 }
-                
-                let coulomb_energy = coulomb_energy(atom_1.charge(), atom_2.charge(), &r);
-                
-                // Add to total energy
-                total_energy += lj_energy + coulomb_energy;
             }
         }
     }
-    (total_energy, lj_energy)
+    if total_energy > 1000.0 {
+        println!("total energy messed up: {} -> {} {}", total_energy, coulomb, lj);
+    }
+    total_energy
 }
 
 pub fn spheric_energy(atoms_1: &Vec<Atom>, sphere_center: &[f64; 3]) -> f64 {
@@ -115,14 +123,14 @@ pub fn spheric_energy(atoms_1: &Vec<Atom>, sphere_center: &[f64; 3]) -> f64 {
         let sphere_coords = sphere_center;
 
         // Calculate distance avoiding division by 0
-        let r = f64::max(euclidean_distance(&atom_1_coords, 
+        let r = f64::max(euclidean_distance(&atom_1_coords,
             &sphere_coords), 1e-8_f64.sqrt());
-        
+
         if r < ELECTROSTATICS_CUTOFF {
-            let lj_energy = lennard_jones_rmin_half(atom_1.epsilon(), 
-            &EPSILON_WATER, &r, 
+            let lj_energy = lennard_jones_rmin_half(atom_1.epsilon(),
+            &EPSILON_WATER, &r,
             atom_1.rmin_half(), &RMIN_HALF_WATER);
-            total_energy += lj_energy; 
+            total_energy += lj_energy;
         }
     }
     total_energy

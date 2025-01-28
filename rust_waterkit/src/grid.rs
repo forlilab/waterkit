@@ -22,27 +22,6 @@ impl PartialEq for GridPoint {
 
 impl Eq for GridPoint { }
 
-// impl RTreeObject for GridPoint {
-//     type Envelope = AABB<[f64; 3]>;
-
-//     fn envelope(&self) -> Self::Envelope {
-//         AABB::from_point(self.coords)
-//     }
-// }
-
-// impl PointDistance for GridPoint {
-//     fn distance_2(&self, point: &[f64; 3]) -> f64 {
-//         let dx = self.coords[0] - point[0];
-//         let dy = self.coords[1] - point[1];
-//         let dz = self.coords[2] - point[2];
-//         dx * dx + dy * dy + dz * dz
-//     }
-
-//     fn contains_point(&self, point: &[f64; 3]) -> bool {
-//         self.coords == *point
-//     }
-// }
-
 pub struct Grid3D {
     data: Vec<GridPoint>,
     possible_points: Vec<GridPoint>,
@@ -63,6 +42,9 @@ pub struct Grid3D {
     x_max: f64,
     y_max: f64,
     z_max: f64,
+
+    spacing: f64, 
+
     // tree: RTree<GridPoint>,
     tree: KdTree<f32, u32, 3, 300000, u32>,
 }
@@ -124,18 +106,37 @@ impl Grid3D {
             x_max,
             y_max,
             z_max,
+            spacing,
             tree,
         }
     }
 
-    pub fn get(&self, x: f64, y: f64, z: f64) -> &GridPoint {
-        let index = self.index(x, y, z) as usize;
-        self.data.get(index).unwrap()
+    pub fn get(&self, x: f64, y: f64, z: f64) -> Option<&GridPoint> {
+        if !self.in_box(&[x, y, z]) {
+            return None
+        }
+        let i = ((x - self.x_min) / self.spacing).round() as usize;
+        let j = ((y - self.y_min) / self.spacing).round() as usize;
+        let k = ((z - self.z_min) / self.spacing).round() as usize;
+
+        let y_points = ((self.y_max - self.y_min) / self.spacing).ceil() as usize + 1;
+        let z_points = ((self.z_max - self.z_min) / self.spacing).ceil() as usize + 1;
+
+        let index = i * y_points * z_points + j * z_points + k;
+
+        self.data.get(index) // Safely access the data point
     }
 
     pub fn set(&mut self, x: f64, y: f64, z: f64, energy: f64) {
         if self.in_box(&[x, y, z]) {
-            let index = self.index(x, y, z) as usize;
+            let i = ((x - self.x_min) / self.spacing).round() as usize;
+            let j = ((y - self.y_min) / self.spacing).round() as usize;
+            let k = ((z - self.z_min) / self.spacing).round() as usize;
+
+            let y_points = ((self.y_max - self.y_min) / self.spacing).ceil() as usize + 1;
+            let z_points = ((self.z_max - self.z_min) / self.spacing).ceil() as usize + 1;
+
+            let index = i * y_points * z_points + j * z_points + k;
             self.data[index].energy = energy;
             if self.allowed_points.len() > 0 {
                 self.allowed_points[index].energy = energy;
@@ -148,10 +149,6 @@ impl Grid3D {
         (self.y_min <= point[1] && point[1] <= self.y_max) && 
         (self.z_min <= point[2] && point[2] <= self.z_max) 
 
-    }
-
-    fn index(&self, x: f64, y: f64, z: f64) -> f64 {
-        x * self.x_size * (y + self.y_size * self.z_size)
     }
 
     pub fn all_points_mut(&mut self) -> &mut [GridPoint] {
@@ -184,6 +181,15 @@ impl Grid3D {
         let energies: Vec<f64> = self.allowed_points.par_iter().map(|point| point.energy).collect();
         let coordinates: Vec<[f64; 3]> = self.allowed_points.par_iter().map(|point| point.coords).collect();
         (energies, coordinates)
+    }
+
+    pub fn get_energies_for_points(&self, points: &Vec<[f64; 3]>) -> Vec<f64> {
+        let mut energies: Vec<f64> = Vec::new();
+        for point in points {
+            energies.push(self.get(point[0], point[1], point[1]).unwrap().energy);
+
+        }
+        energies
     }
 
     // Returns the list of points within the specified min and max from the anchor_point
@@ -243,7 +249,7 @@ impl Grid3D {
         // Those points are going to be the tree of the grid.
         let mut tree: KdTree<f32, u32, 3, 300000, u32> = KdTree::new();
         let mut possible_points = Vec::new();
-        let radius = 24.;
+        let radius = 50.;
         let mut tmp_tree: KdTree<f32, u32, 3, 300000, u32> = KdTree::new();
         let all_points = self.all_points_mut();
 
@@ -276,54 +282,6 @@ impl Grid3D {
         self.tree = tree;
         self.possible_points = possible_points;
     }
-
-    // pub fn set_all_possible_points(&mut self, receptor_map: &Vec<Atom>) {
-    //     let mut surface_points = Vec::new();
-    //     for atom in receptor_map {
-    //         surface_points.push(
-    //             GridPoint {
-    //                 coords: atom.coords(),
-    //                 energy: 0.0,
-    //             }
-    //         )
-    //     }
-    //     self.tree = RTree::bulk_load(surface_points);
-    //     let mut max_allowed_points = Vec::new();
-    //     for point in self.all_points() {
-    //         if self.tree
-    //             .locate_within_distance(point.coords, WATER_LIMIT)
-    //             .next()
-    //             .is_some()
-    //             {
-    //                 max_allowed_points.push(point.clone());
-    //             }
-    //     }
-    //     self.possible_points = max_allowed_points;
-    //     println!("# of possible points {:?}", self.possible_points.len());
-    // }
-
-    // pub fn set_allowed_points(&mut self) {
-    //     let mut nearby_points = Vec::new();
-
-    //     for point in self.possible_points() {
-    //         if self.tree
-    //             .locate_within_distance(point.coords, SHELL_LIMIT)
-    //             .next()
-    //             .is_some()
-    //             {
-    //                 nearby_points.push(point.clone());
-    //             }
-    //     }
-
-    //     self.allowed_points = nearby_points;
-    //     // println!("# of allowed points: {}", self.allowed_points.len());
-    // }
-
-    // pub fn update_allowed_points(&mut self, new_point: &[f64; 3]) {
-    //     let p = self.get(new_point[0], new_point[1], new_point[2]).clone();
-    //     self.allowed_points.retain(|x| x != &p);
-    //     // println!("# of allowed points: {}", self.allowed_points.len());
-    // }
 
     pub fn get_receptor_points_in_grid(&self, receptor_map: &Vec<Atom>) -> Vec<Atom> {
         let mut grid_points = Vec::new();
