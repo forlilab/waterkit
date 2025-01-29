@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use crate::grid::{Grid3D, GridPoint};
 use crate::utils::*;
 use crate::atom::Atom;
@@ -61,11 +63,11 @@ pub fn sample_with_order(mut grid: Grid3D, mut receptor_points: Vec<Atom>, ancho
             // println!("Energy of the selected point: {}", &energies[index]);
             if boltzmann_acceptance_rejection(&energies[index], &BOLTZMANN_ENERGY_CUTOFF, &TEMPERATURE, &BOLTZMANN_K) {
                 println!("Accepted oxygen's energy: {}", energies[index]);
-                (receptor_points, new_ap) = sample_real_waters(&trajectories[index], water_configurations, receptor_points);
+                // (receptor_points, new_ap) = sample_real_waters(&trajectories[index], water_configurations, receptor_points);
                 if new_ap != [0.0, 0.0, 0.0] {
                     // println!("After placing: {:?}", grid.get(new_ap[0], new_ap[1], new_ap[2]));
                     new_aps.push(new_ap);
-                    grid = update_grid_energies(&receptor_points, grid)
+                    // update_grid_energies(&receptor_points, &mut grid)
                 }
             }
             else {
@@ -89,37 +91,125 @@ pub fn sample_with_order(mut grid: Grid3D, mut receptor_points: Vec<Atom>, ancho
 /// then move on updating the anchor points list with the new atoms
 /// and repeat until no more atoms available within the 
 /// distance threshold of 12. Angstrom.
-pub fn sample(mut grid: Grid3D, mut receptor_points: Vec<Atom>, anchor_points: Vec<[f64; 3]>, water_configurations: &Vec<[f64; 6]> ) -> (Vec<Atom>, Grid3D, Vec<[f64; 3]>){
+pub fn sample(grid: &mut Grid3D, receptor_points: &mut Vec<Atom>, anchor_points: &mut Vec<[f64; 3]>, water_configurations: &Vec<[f64; 6]>) -> Vec<[f64; 3]> {
     let anchor_points_to_iter = anchor_points.clone();
+    let mut starting_waters = Vec::new();
+    println!("# of anchor points: {}", anchor_points.len());
+    for ap in anchor_points {
+        let nearest = grid.get_nearest(ap);
+        starting_waters.push(nearest);
+    }
     let mut new_aps = Vec::new();
+    let mut rejected = 0;
     for anchor_point in anchor_points_to_iter {
         let shell_points = grid.get_neighbor_for_point(&anchor_point);
-        // println!("Possible points: {}", shell_points.len());
-        let mut energies = Vec::new();
-        let mut trajectories = Vec::new();
-        // println!("# of Shell points for {:?}: {}", anchor_point, shell_points.len());
-        for point in shell_points {
-            energies.push(point.energy);
-            trajectories.push(point.coords);
-        }
+        let (energies, points) = shell_points.into_iter().map(|x| (x.energy, x)).collect::<(Vec<f64>, Vec<GridPoint>)>();
         
-        let mc_index = monte_carlo_sampling(&energies);
-        let mut new_ap = [0.0; 3];
-        // let index = mc_index.unwrap();
-        let index = mc_index;
-        // println!("Energy of the selected point: {}", &energies[index]);
-        if boltzmann_acceptance_rejection(&energies[index], &BOLTZMANN_ENERGY_CUTOFF, &TEMPERATURE, &BOLTZMANN_K) {
-            println!("\nAccepted oxygen's energy: {}", energies[index]);
-            (receptor_points, new_ap) = sample_real_waters(&trajectories[index], water_configurations, receptor_points);
-            if new_ap != [0.0, 0.0, 0.0] {
-                // println!("After placing: {:?}", grid.get(new_ap[0], new_ap[1], new_ap[2]));
-                new_aps.push(new_ap);
-                grid = update_grid_energies(&receptor_points, grid);
+        let mc_index = boltzmann_sampling(&energies);
+        if mc_index.is_some() {
+            let index = mc_index.unwrap();
+            if boltzmann_acceptance_rejection(&energies[index], &BOLTZMANN_ENERGY_CUTOFF, &TEMPERATURE, &BOLTZMANN_K) {
+                let oxygen = &points[index];
+                assert_eq!(oxygen.energy, energies[index], "Let's see if the energies match!");
+                // println!("Energy of the selected oxygen: {}", oxygen.energy);
+                let new_ap = sample_real_waters(&oxygen, water_configurations, receptor_points);
+                if new_ap != [0.0, 0.0, 0.0] {
+                    new_aps.push(new_ap);
+                    grid.update_grid_energies(&receptor_points);
+                }
+            }
+            else {
+                println!("Rejected before real water sampling: {}", energies[index]);
+                rejected += 1;
+
             }
         }
+        else {
+            println!("Rejected before acceptance rejection");
+        }
     }
-    println!("Waters placed: {}", new_aps.len());
+    new_aps
+}
+
+pub fn sample_basic(mut grid: Grid3D, mut receptor_points: Vec<Atom>, anchor_points: Vec<[f64; 3]>, water_configurations: &Vec<[f64; 6]>) -> (Vec<Atom>, Grid3D, Vec<[f64; 3]>) {
+    receptor_points = Vec::new();
+    let anchor_points_to_iter = vec![anchor_points[132], anchor_points[132], anchor_points[132], anchor_points[132], anchor_points[132], anchor_points[132]];
+    let mut new_aps = Vec::new();
+    println!("# of anchor points: {}", anchor_points_to_iter.len());
+    let mut cnt = 0;
+    let mut rejected = 0;
+    for anchor_point in anchor_points_to_iter {
+        let shell_points = grid.get_neighbor_for_point(&anchor_point);
+        println!("# of shell points: {}", shell_points.len());
+        let shell_points_to_iter = shell_points.clone();
+        let shp = shell_points.clone();
+        let (energies, points) = shell_points.into_iter().map(|x| (x.energy, x)).collect::<(Vec<f64>, Vec<GridPoint>)>();
+        // let energies_sum: usize = energies.into_iter().filter(|x| x < &0.0).collect::<Vec<f64>>().len();
+        // println!("Energies sum before updating: {:?}", energies_sum);
+        // let min_energy = shell_points_to_iter
+        //     .into_iter()
+        //     .map(|x| x.energy)
+        //     .collect::<Vec<f64>>()
+        //     .into_iter()
+        //     .min_by(|a, b| a.partial_cmp(b).unwrap()).unwrap();
+        let mut min_energy = 1.0;
+        let mut min_energy_idx = 2;
+        for (idx, energy) in energies.iter().enumerate() {
+            if energy < &min_energy {
+                min_energy = *energy;
+                min_energy_idx = idx;
+            }
+        }
+        if min_energy > 0.0 {
+            rejected += 1;
+        }
+        else {
+            // println!("\nAccepted oxygen's energy: {}", energies[index]);
+            let oxygen: GridPoint = points[min_energy_idx].clone();
+            // println!("Selected oxygen: {:?}", oxygen);
+            assert_eq!(oxygen.energy, min_energy, "Let's see if the energies match!");
+            // Add only the oxygen and see how it goes:
+            let new_atom = Atom::new("OW".to_string(), 
+                "0".to_string(), 
+                oxygen.coords,
+                RMIN_HALF_WATER,
+                EPSILON_WATER,
+                -0.8340);
+            println!("# of atoms before adding to the receptor: {}", receptor_points.len());
+            receptor_points.push(new_atom);
+            cnt +=1;
+            grid.update_grid_energies(&receptor_points);
+            // let points = grid.all_points();
+            // for p in points {
+            //     println!("{:?}", p.updated);
+            // }
+            let new_shell_points = grid.get_neighbor_for_point(&anchor_point);
+            let new_energies = new_shell_points.into_iter().map(|x| x.energy).collect::<Vec<f64>>();
+            // assert_eq!(energies, new_energies, "Checking if the neighbors are the same");
+            // let energies_after: usize = new_shell_points.into_iter().filter(|x| x.energy < 0.0).collect::<Vec<GridPoint>>().len();
+            // // assert_eq!(energies_sum, energies_after, "Checking energies");
+            // println!("Energies sum updating: {:?}\n", energies_after);
+        }
+    }
+    println!("# of Oxygens added: {}", cnt);
+    // println!("Waters placed: {}", new_aps.len());
+    println!("Waters rejected: {}", rejected);
     (receptor_points, grid, new_aps)
+}
+
+
+pub fn save_shell_and_energies(mut grid: Grid3D, mut receptor_points: Vec<Atom>, anchor_points: Vec<[f64; 3]>, water_configurations: &Vec<[f64; 6]>) -> (Vec<f64>, Vec<[f64; 3]>) {
+    let anchor_points_to_iter = anchor_points.clone();
+    let mut energies = Vec::new();
+    let mut points = Vec::new();
+    for anchor_point in anchor_points_to_iter {
+        let shell_points = grid.get_neighbor_for_point(&anchor_point);
+        for p in shell_points {
+            energies.push(p.energy);
+            points.push(p.coords);
+        }
+    }
+    (energies, points)
 }
 
 pub fn roll_sphere_and_compute_energies_grid(
@@ -136,58 +226,24 @@ pub fn roll_sphere_and_compute_energies_grid(
         .for_each(|point| {
             let energy = spheric_energy(receptor_points, &point.coords);
             point.energy =  energy;
+            point.updated = true;
         }); 
     println!("Finished setting the possible points");
     grid
 }
 
-pub fn update_grid_energies(
-    receptor_points: &Vec<Atom>,
-    mut grid: Grid3D,) -> Grid3D {
-    
-    grid.all_points_mut()
-        .par_iter_mut()
-        // .filter(|point| !to_exclude.contains(&point.coords))
-        .for_each(|point| {
-            let energy = spheric_energy(receptor_points, &point.coords);
-            point.energy = energy
-        });
-    grid
-}
 
-pub fn sample_real_waters(oxygen_position: &[f64; 3], 
+
+pub fn sample_real_waters(oxygen_atom: &GridPoint, 
     water_configurations: &Vec<[f64; 6]>,
-    mut receptor_points: Vec<Atom>) -> (Vec<Atom>, [f64; 3]) {
+    receptor_points: &mut Vec<Atom>) -> [f64; 3] {
     // Let's parallelize
-    // let possible_results: Vec<(WaterMolecule, f64)> = water_configurations
-    //     .into_par_iter()
-    //     .map(|configuration| {
-    //         // H1 in position
-    //         let h1_coords: [f64; 3] = [
-    //             configuration[0] + oxygen_position[0],
-    //             configuration[1] + oxygen_position[1],
-    //             configuration[2] + oxygen_position[2],
-    //         ];
-    //         // H2 in position
-    //         let h2_coords: [f64; 3] = [
-    //             configuration[3] + oxygen_position[0],
-    //             configuration[4] + oxygen_position[1],
-    //             configuration[5] + oxygen_position[2],
-    //         ];
-
-    //         // Create water molecule
-    //         let water = WaterMolecule::new(h1_coords, h2_coords, oxygen_position.clone());
-
-    //         // Compute energy
-    //         let energy_value = energy_for_real_water(&receptor_points, &water.as_vec());
-    //         (water, energy_value)
-    //     })
-    //     .collect();
-
-    let mut possible_waters = Vec::new();
-    let mut possible_waters_energies = Vec::new();
-    for configuration in water_configurations {
-        let h1_coords: [f64; 3] = [
+    let oxygen_position = oxygen_atom.coords;
+    let possible_results: Vec<(WaterMolecule, f64)> = water_configurations
+        .into_par_iter()
+        .map(|configuration| {
+            // H1 in position
+            let h1_coords: [f64; 3] = [
                 configuration[0] + oxygen_position[0],
                 configuration[1] + oxygen_position[1],
                 configuration[2] + oxygen_position[2],
@@ -198,36 +254,43 @@ pub fn sample_real_waters(oxygen_position: &[f64; 3],
                 configuration[4] + oxygen_position[1],
                 configuration[5] + oxygen_position[2],
             ];
+
             // Create water molecule
             let water = WaterMolecule::new(h1_coords, h2_coords, oxygen_position.clone());
 
             // Compute energy
             let energy_value = energy_for_real_water(&receptor_points, &water.as_vec());
-            possible_waters.push(water);
-            possible_waters_energies.push(energy_value);
-    }
+            (water, energy_value)
+        })
+        .collect();
     let mut new_ap: [f64; 3] = [0.0; 3];
-    // let possible_waters_energies: Vec<f64> = possible_results.iter().map(|(_, e)| *e).collect();
-    let energies_g_0 = possible_waters_energies.iter().filter(|w| w < &&0.0).collect::<Vec<&f64>>(); 
-    println!("{:?}", energies_g_0.len());
-    let choice = monte_carlo_sampling(&possible_waters_energies);
-
-    let value = choice;
-    // println!("Water's energy: {}", possible_waters_energies[value]);
-    if boltzmann_acceptance_rejection(&possible_waters_energies[value], 
-        &BOLTZMANN_ENERGY_CUTOFF, 
-        &TEMPERATURE, 
-        &BOLTZMANN_K) {
-        for atom in possible_waters[value].as_vec() {
-            if atom.atom_type() == "OW" {
-                let oxygen_coords = atom.coords();
-                new_ap = oxygen_coords;
+    let possible_waters_energies: Vec<f64> = possible_results.iter().map(|(_, e)| *e).collect();
+    let choice = boltzmann_sampling(&possible_waters_energies);
+    // let energies_good: Vec<f64> = possible_waters_energies.clone().into_iter().filter(|x| x < &0.0).collect();
+    // println!("Good water configurations: {}", energies_good.len());
+    if choice.is_some() {
+        let value = choice.unwrap();
+        if boltzmann_acceptance_rejection(&possible_waters_energies[value], 
+            &BOLTZMANN_ENERGY_CUTOFF, 
+            &TEMPERATURE, 
+            &BOLTZMANN_K) {
+            for atom in possible_results[value].0.as_vec() {
+                if atom.atom_type() == "OW" {
+                    let oxygen_coords = atom.coords();
+                    new_ap = oxygen_coords;
+                }
+                receptor_points.push(atom.clone());
             }
-            receptor_points.push(atom.clone());
-        }
 
+        }
+        else {
+            println!("Rejected during real water sampling");
+        }
     }
-    (receptor_points, new_ap)
+    else {
+        println!("Rejected during real water sampling before acceptance");
+    }
+    new_ap
 }
 
 

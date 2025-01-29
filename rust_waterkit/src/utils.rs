@@ -1,7 +1,8 @@
-pub const ELECTROSTATICS_CUTOFF: f64 = 20.; // Electrostatics distance cutoff
+pub const ELECTROSTATICS_CUTOFF: f64 = 12.; // Electrostatics distance cutoff
 pub const RMIN_HALF_WATER: f64 = 1.7682; // TIP3P 
 pub const RADIUS_WATER: f64 = 1.4;
 pub const EPSILON_WATER: f64 = 0.1521; // According to AMBER
+// pub const EPSILON_WATER: f64 = 0.6364;
 pub const BOLTZMANN_K: f64 = 0.0019872041; // Boltzmann constant (kcal/mol)
 pub const TEMPERATURE: f64 = 300.; // Temperature used for Boltzmann sampling (K)
 pub const BOLTZMANN_ENERGY_CUTOFF: f64 = 0.;

@@ -160,8 +160,8 @@ if __name__ == "__main__":
     # # energies, trajectories = rust_waterkit.roll_sphere_and_compute_energies(parametrized_atoms, step_size)
     # print(f"Time to grid: {time.time() - start}")
     # # to_xyz(trajectories, step_size, "trajectory")
-    # # pdb_with_temp(f"map.pdb", energies=energies, traj=waters_map)
-    # pdb_corners(f"box.pdb", traj=waters_map)
+    # pdb_with_temp(f"map.pdb", energies=energies, traj=waters_map)
+    # # pdb_corners(f"box.pdb", traj=waters_map)
 
     # Allowed points
     # start = time.time()
@@ -170,19 +170,24 @@ if __name__ == "__main__":
     # # energies, trajectories = rust_waterkit.roll_sphere_and_compute_energies(parametrized_atoms, step_size)
     # print(f"Time to grid: {time.time() - start}")
     # # to_xyz(trajectories, step_size, "trajectory")
-    # pdb_with_temp(f"map.pdb", energies=energies, traj=waters_map)
+    # pdb_with_temp(f"map_allowed.pdb", energies=energies, traj=waters_map)
 
 
-    print("Starting waterkit!")
-    # for i in range(1):
+    # Shell related stuff
+    # start = time.time()
+    # (e, map) = rust_waterkit.save_shell_points_with_energies(parametrized_atoms, waters, anchor_points, x_size, y_size, z_size, spacing, center, shells=1)
+    # print(f"Time to grid: {time.time() - start}")
+    # pdb_with_temp("shell.pdb", map, e)
+
+    # # print("Starting waterkit!")
+    # # for i in range(1):
     start = time.time()
     map = rust_waterkit.run_waterkit_simple(parametrized_atoms, waters, anchor_points, x_size, y_size, z_size, spacing, center, shells=3)
     waters_map = [x for x in map if x.atom_type() == "HW" or x.atom_type() == "OW"]
     # trajectories, energies = rust_waterkit.run_waterkit(parametrized_atoms, waters, step_size)
     # energies, trajectories = rust_waterkit.roll_sphere_and_compute_energies(parametrized_atoms, step_size)
     print(f"Time to grid: {time.time() - start}")
-    to_pdb("surface.pdb", waters_map)
     # to_pdb("receptor_second_shell.pdb", rec_map)
     # to_xyz(trajectories, step_size, "trajectory")
-    # to_pdb(f"surface_distribution_{i}.pdb", waters_map)
+    to_pdb(f"surface_distribution.pdb", waters_map)
     
