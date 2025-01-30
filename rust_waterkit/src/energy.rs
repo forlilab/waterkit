@@ -119,13 +119,14 @@ pub fn spheric_energy(atoms_1: &Vec<Atom>, sphere_center: &[f64; 3]) -> f64 {
             sphere_center), 1e-8_f64);
 
         if r < ELECTROSTATICS_CUTOFF {
-
-            let lj_energy = lennard_jones_rmin_half(atom_1.epsilon(),
-            &EPSILON_WATER, 
-            &r,
-            atom_1.rmin_half(), 
-            &RMIN_HALF_WATER);
-            total_energy += lj_energy;
+            if atom_1.atom_type() != &"HW" {
+                let lj_energy = lennard_jones_rmin_half(atom_1.epsilon(),
+                &EPSILON_WATER, 
+                &r,
+                atom_1.rmin_half(), 
+                &RMIN_HALF_WATER);
+                total_energy += lj_energy;
+            }
         }
     }
     total_energy

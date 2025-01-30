@@ -4,7 +4,7 @@ use rayon::prelude::*;
 
 use crate::atom::Atom;
 use crate::grid::{Grid3D, GridPoint};
-use crate::sampling::{boltzmann_acceptance_rejection, boltzmann_sampling, order_boltzmann_sampling, roll_sphere_and_compute_energies_grid, sample, sample_basic, sample_real_waters, sample_with_order, save_shell_and_energies};
+use crate::sampling::{roll_sphere_and_compute_energies_grid, sampling_order_for_anchor_points, save_shell_and_energies, sample, test_anchor_points};
 use crate::utils::{BOLTZMANN_ENERGY_CUTOFF, BOLTZMANN_K, TEMPERATURE};
 
 
@@ -149,8 +149,8 @@ pub fn get_shells(receptor_points: Vec<Atom>,
 
     let mut receptor_map = receptor_points.clone();
     let mut grid = roll_sphere_and_compute_energies_grid(&receptor_points, x_size, y_size, z_size, spacing, center);
-    let mut receptor_map_in_grid = grid.get_anchor_points_in_grid(&anchor_points);
-    grid.set_possible_points();
+    // let mut receptor_map_in_grid = grid.get_anchor_points_in_grid(&anchor_points);
+    // grid.set_possible_points();
     let mut shell = 0;
     
     // while shell < shells {
@@ -161,16 +161,16 @@ pub fn get_shells(receptor_points: Vec<Atom>,
     // println!("Total number of placements: {}", placements);
     let mut allowed_grid_as_atoms = Vec::new();
     let mut e = Vec::new();
-    for point in grid.get_neighbors(&receptor_map_in_grid) {
-        let coords = point.coords;
-        // allowed_grid_as_atoms.push(
-        //     Atom::new("HW".to_string(), "1".to_string(), coords, 0.0, 0.0, 0.0)
-        // );
-        allowed_grid_as_atoms.push(
-            coords
-        );
-        e.push(point.energy);
-    }
+    // for point in grid.get_neighbors(&receptor_map_in_grid) {
+    //     let coords = point.coords;
+    //     // allowed_grid_as_atoms.push(
+    //     //     Atom::new("HW".to_string(), "1".to_string(), coords, 0.0, 0.0, 0.0)
+    //     // );
+    //     allowed_grid_as_atoms.push(
+    //         coords
+    //     );
+    //     e.push(point.energy);
+    // }
     (allowed_grid_as_atoms, e)
 }
 
@@ -187,20 +187,28 @@ pub fn run_waterkit_simple(receptor_points: Vec<Atom>,
 
     let mut receptor_map = receptor_points.clone();
     let mut grid = roll_sphere_and_compute_energies_grid(&receptor_points, x_size, y_size, z_size, spacing, center);
-    let mut receptor_map_in_grid = grid.get_anchor_points_in_grid(&anchor_points);
-    grid.set_possible_points();
-    let mut shell = 0;
-    let mut new_aps = Vec::new();
-
-    while shell < shells {
-        if shell < 1 {
-            new_aps = sample(&mut grid, &mut receptor_map, &mut receptor_map_in_grid, &water_configurations);
-        }
-        else {
-            new_aps = sample(&mut grid, &mut receptor_map, &mut new_aps, &water_configurations);
-        }
-        shell += 1;
+    let mut mutable_anchor_points = anchor_points.clone();
+    grid.build_kdtree();
+    // for i in 0..3 {
+    for _ in 0..1 {
+        sample(&mut grid, &mut receptor_map, &mut mutable_anchor_points, &water_configurations);
+        // grid.update_grid_energies(&receptor_points);
     }
+    // }
+    // let mut receptor_map_in_grid = grid.get_anchor_points_in_grid(&anchor_points);
+    // grid.set_possible_points();
+    // let mut shell = 0;
+    // let mut new_aps = Vec::new();
+
+    // while shell < shells {
+    //     if shell < 1 {
+    //         new_aps = sample(&mut grid, &mut receptor_map, &mut receptor_map_in_grid, &water_configurations);
+    //     }
+    //     else {
+    //         new_aps = sample(&mut grid, &mut receptor_map, &mut new_aps, &water_configurations);
+    //     }
+    //     shell += 1;
+    // }
 
     // println!("Total number of placements: {}", placements);
     // for point in grid.possible_points() {
@@ -228,11 +236,61 @@ pub fn save_shell_points_with_energies(receptor_points: Vec<Atom>,
     shells: usize) -> (Vec<f64>, Vec<[f64; 3]>) {
         let mut receptor_map = receptor_points.clone();
         let mut grid = roll_sphere_and_compute_energies_grid(&receptor_points, x_size, y_size, z_size, spacing, center);
-        let mut receptor_map_in_grid = grid.get_anchor_points_in_grid(&anchor_points);
-        grid.set_possible_points();
+        // let mut receptor_map_in_grid = grid.get_anchor_points_in_grid(&anchor_points);
+        // grid.set_possible_points();
         let mut shell = 0;
         
         // while shell < shells {
-        let (energies, positions) = save_shell_and_energies(grid, receptor_map, receptor_map_in_grid, &water_configurations);
+        let (energies, positions) = save_shell_and_energies(grid, receptor_map, anchor_points, &water_configurations);
         (energies, positions)
+    }
+
+#[pyfunction]
+pub fn order_ap(receptor_points: Vec<Atom>, 
+    water_configurations: Vec<[f64; 6]>, 
+    anchor_points: Vec<[f64; 3]>, 
+    x_size: f64, 
+    y_size: f64, 
+    z_size: f64, 
+    spacing: f64, 
+    center: [f64; 3],
+    shells: usize) -> (Vec<f64>, Vec<[f64; 3]>) {
+        let mut receptor_map = receptor_points.clone();
+        let mut grid = roll_sphere_and_compute_energies_grid(&receptor_points, x_size, y_size, z_size, spacing, center);
+        // let mut receptor_map_in_grid = grid.get_anchor_points_in_grid(&anchor_points);
+        // grid.set_possible_points();
+        let mut shell = 0;
+        let (order, grid_points) = sampling_order_for_anchor_points(&anchor_points, &mut grid);
+        
+        // while shell < shells {
+        let mut energies = Vec::new();
+        let mut positions = Vec::new();
+        for idx in order {
+            energies.push(grid_points[idx].energy);
+            positions.push(grid_points[idx].coords);
+        } 
+        // let (energies, positions) = save_shell_and_energies(grid, receptor_map, anchor_points, &water_configurations);
+        (energies, positions)
+    }
+
+#[pyfunction]
+pub fn test_new_aps(receptor_points: Vec<Atom>, 
+    water_configurations: Vec<[f64; 6]>, 
+    anchor_points: Vec<[f64; 3]>, 
+    x_size: f64, 
+    y_size: f64, 
+    z_size: f64, 
+    spacing: f64, 
+    center: [f64; 3],
+    shells: usize) -> Vec<[f64; 3]> {
+        let mut receptor_map = receptor_points.clone();
+        let mut grid = roll_sphere_and_compute_energies_grid(&receptor_points, x_size, y_size, z_size, spacing, center);
+        // grid.set_possible_points();
+        let mut shell = 0;
+        let mut mutable_anchor_points = anchor_points.clone();
+
+        let new_anchor_points = test_anchor_points(&mut grid, &mut receptor_map, &mut mutable_anchor_points, &water_configurations);
+        
+        // let (energies, positions) = save_shell_and_energies(grid, receptor_map, anchor_points, &water_configurations);
+        new_anchor_points
     }

@@ -3,6 +3,7 @@ pub mod geometry;
 pub mod atom;
 pub mod water;
 pub mod energy;
+pub mod monte_carlo;
 pub mod sampling;
 pub mod grid;
 pub mod waterkit;

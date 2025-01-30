@@ -2,7 +2,7 @@ use pyo3::prelude::*;
 
 use crate::atom::Atom;
 use crate::water::WaterMolecule;
-use crate::waterkit::{get_map, get_shells, run_waterkit, run_waterkit_simple, save_shell_points_with_energies, test_allowed_points};
+use crate::waterkit::{get_map, get_shells, run_waterkit, run_waterkit_simple, save_shell_points_with_energies, test_allowed_points, order_ap, test_new_aps};
 
 
 #[pymodule(name = "rust_waterkit")]
@@ -15,5 +15,7 @@ fn rust_waterkit(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(get_shells))?;
     m.add_wrapped(wrap_pyfunction!(test_allowed_points))?;
     m.add_wrapped(wrap_pyfunction!(save_shell_points_with_energies))?;
+    m.add_wrapped(wrap_pyfunction!(order_ap))?;
+    m.add_wrapped(wrap_pyfunction!(test_new_aps))?;
     Ok(())
 }

@@ -1,12 +1,11 @@
-
-use std::collections::HashSet;
-
 use rayon::prelude::*;
+use kdtree::distance::squared_euclidean;
+use kdtree::KdTree;
 
-use kiddo::{float::kdtree::KdTree, SquaredEuclidean};
-
-use crate::{atom::Atom, energy::spheric_energy, utils::{SHELL_LIMIT, WATER_LIMIT}};
-
+use crate::atom::Atom;
+use crate::energy::spheric_energy;
+use crate::geometry;
+use crate::water::WaterMolecule;
 
 #[derive(Clone, Debug)]
 pub struct GridPoint {
@@ -25,7 +24,7 @@ impl PartialEq for GridPoint {
 impl Eq for GridPoint { }
 
 pub struct Grid3D {
-    pub data: Vec<GridPoint>,
+    data: Vec<GridPoint>,
     x_size: f64,
     y_size: f64,
     z_size: f64,
@@ -46,7 +45,7 @@ pub struct Grid3D {
     spacing: f64, 
 
     // tree: RTree<GridPoint>,
-    tree: KdTree<f32, u32, 3, 300000, u32>,
+    pub kdtree: KdTree<f64, usize, [f64; 3]>,
 
     // updated: bool,
 }
@@ -73,7 +72,8 @@ impl Grid3D {
     
         // Preallocate the vector
         let mut data = Vec::with_capacity(x_points * y_points * z_points);
-        let tree = KdTree::new();
+        let kdtree: KdTree<f64, usize, [f64; 3]> = KdTree::new(3);
+
         // Generate points using iterators
         // let mut counter = 0;
         let mut index = 0;
@@ -107,8 +107,7 @@ impl Grid3D {
             y_max,
             z_max,
             spacing,
-            tree,
-            // updated: false,
+            kdtree,
         }
     }
 
@@ -117,43 +116,19 @@ impl Grid3D {
         receptor_points: &Vec<Atom>) {
         self.all_points_mut()
             .par_iter_mut()
-            // .filter(|point| !to_exclude.contains(&point.coords))
             .for_each(|point| {
                 let energy = spheric_energy(receptor_points, &point.coords);
                 point.energy = energy;
                 point.updated = false;
             });
-        // self.updated = true;
     }
 
-    pub fn get(&self, x: f64, y: f64, z: f64) -> Option<&GridPoint> {
-        if !self.in_box(&[x, y, z]) {
-            return None
-        }
-        let i = ((x - self.x_min) / self.spacing).round() as usize;
-        let j = ((y - self.y_min) / self.spacing).round() as usize;
-        let k = ((z - self.z_min) / self.spacing).round() as usize;
-
-        let y_points = ((self.y_max - self.y_min) / self.spacing).ceil() as usize + 1;
-        let z_points = ((self.z_max - self.z_min) / self.spacing).ceil() as usize + 1;
-
-        let index = i * y_points * z_points + j * z_points + k;
-
-        self.data.get(index) // Safely access the data point
+    pub fn all_points(&self) -> &Vec<GridPoint> {
+        &self.data
     }
 
-    pub fn set(&mut self, x: f64, y: f64, z: f64, energy: f64) {
-        if self.in_box(&[x, y, z]) {
-            let i = ((x - self.x_min) / self.spacing).round() as usize;
-            let j = ((y - self.y_min) / self.spacing).round() as usize;
-            let k = ((z - self.z_min) / self.spacing).round() as usize;
-
-            let y_points = ((self.y_max - self.y_min) / self.spacing).ceil() as usize + 1;
-            let z_points = ((self.z_max - self.z_min) / self.spacing).ceil() as usize + 1;
-
-            let index = i * y_points * z_points + j * z_points + k;
-            self.data[index].energy = energy;
-        }
+    pub fn all_points_mut(&mut self) -> &mut Vec<GridPoint>{
+        &mut self.data
     }
 
     pub fn in_box(&self, point: &[f64; 3]) -> bool {
@@ -163,150 +138,92 @@ impl Grid3D {
 
     }
 
-    pub fn all_points_mut(&mut self) -> &mut [GridPoint] {
-        &mut self.data
-    }
-
-    pub fn all_points(&self) -> &[GridPoint] {
-        &self.data
-    }
-
-    pub fn all_points_as_vec(&self) -> &Vec<GridPoint> {
-        &self.data
-    }
-
-    pub fn extract_energies_and_coordinates_parallel(&self) -> (Vec<f64>, Vec<[f64; 3]>) {
-        let energies: Vec<f64> = self.data.par_iter().map(|point| point.energy).collect();
-        let coordinates: Vec<[f64; 3]> = self.data.par_iter().map(|point| point.coords).collect();
-        (energies, coordinates)
-    }
-
-    pub fn get_energies_for_points(&self, points: &Vec<[f64; 3]>) -> Vec<f64> {
-        let mut energies: Vec<f64> = Vec::new();
-        for point in points {
-            energies.push(self.get(point[0], point[1], point[1]).unwrap().energy);
-
+    pub fn build_kdtree(&mut self) {
+        let mut tree = KdTree::new(3);
+        for (idx, point) in self.data
+            .iter()
+            .enumerate() {
+                let _ = tree.add(point.coords, idx);
         }
-        energies
+        self.kdtree = tree;
     }
 
-    // Returns the list of points within the specified min and max from the anchor_point
-    pub fn get_neighbor_for_point(&self, anchor_point: &[f64; 3]) -> Vec<GridPoint> {
-        let min = 2.5f32.powf(2.0);
-        let max = 3.6f32.powf(2.0);
+    pub fn get_nearest_neighbor(&mut self, query_point: &[f64; 3]) -> Option<&GridPoint> {
+        let nearest = self.kdtree
+            .nearest(query_point, 
+                1,
+            &squared_euclidean::<f64>,
+        ).unwrap();
+        if let Some((distance, &index)) = nearest.first() {
+            let nearest_point = &self.data[index];
+            Some(nearest_point)
+        }
+        else {
+            None
+        } 
+    }
 
-        let mut points_for_shell = Vec::new();
-        let coords = anchor_point;
-        let tmp_max: Vec<u32> = self.tree
-            .within::<kiddo::SquaredEuclidean>(&[coords[0] as f32, coords[1] as f32, coords[2] as f32], max)
+    pub fn get_neighbors_within_distance(&mut self, query_point:&[f64; 3]) -> Vec<&GridPoint> {
+        let min_distance: f64 = 2.5f64.powf(2.0); // Minimum distance in angstroms
+        let max_distance: f64 = 3.6f64.powf(2.0); // Maximum distance in angstroms
+
+        // Query all points within the maximum distance (3.6 Å)
+        let within_max_distance = self.kdtree
+            .within(query_point, max_distance, &squared_euclidean)
+            .unwrap();
+        // println!("Points found: {}", within_max_distance.len());
+
+        // Filter out points that are closer than the minimum distance (2.5 Å)
+        let in_range: Vec<_> = within_max_distance
             .into_iter()
-            .map(|n| n.item)
+            .filter(|&(distance, _)| distance >= min_distance) // Compare squared distances
             .collect();
-        let tmp_min: Vec<u32> = self.tree
-            .within::<kiddo::SquaredEuclidean>(&[coords[0] as f32, coords[1] as f32, coords[2] as f32], min)
-            .into_iter()
-            .map(|n| n.item)
-            .collect();
-        // println!("Max: {} Min: {}", tmp_max.len(), tmp_min.len());
-        let points: Vec<u32> = difference(&tmp_max, &tmp_min);
-        for p in points {
-            points_for_shell.push(self.data[p as usize].clone());
+        // println!("Points found: {}", in_range.len());
+        
+        let mut neighbor_points = Vec::new();
+        for (distance, &index) in in_range {
+            neighbor_points.push(&self.data[index]);
         }
-        // println!("Grid updated: {}", self.updated);
-        // for point in points_for_shell.clone() {
-        //     println!("Point updated: {}", point.updated);
-        // }
-        points_for_shell
+        // println!("# Neighbors found: {}", neighbor_points.len());
+        neighbor_points
     }
 
-    pub fn get_neighbors(&self, receptor_points_in_box: &Vec<[f64; 3]>) -> Vec<GridPoint>{
-        let min = 2.5f32.powf(2.0);
-        let max = 3.6f32.powf(2.0);
+    pub fn guess_new_hydrogen_bonds(
+        &self,
+        water: &WaterMolecule,
+    ) -> Vec<[f64; 3]> {
+        let mut hydrogen_bond_points = Vec::new();
+    
+        // Hydrogen bond distance range (1.5–2.5 Å)
+        let min_distance = 1.5;
+        let max_distance = 2.5;
+        
+        let water_atoms = water.as_vec();
+        let oxygen_atom = water_atoms[0].clone();
+        let hydrogen_atoms = [water_atoms[1].clone(), water_atoms[2].clone()];
 
-        let mut points_for_shell = Vec::new();
-        for point in receptor_points_in_box {
-            let coords = &point;
-            let tmp_max: Vec<u32> = self.tree
-                .within::<kiddo::SquaredEuclidean>(&[coords[0] as f32, coords[1] as f32, coords[2] as f32], max)
-                .into_iter()
-                .map(|n| n.item)
-                .collect();
-            let tmp_min: Vec<u32> = self.tree
-                .within::<kiddo::SquaredEuclidean>(&[coords[0] as f32, coords[1] as f32, coords[2] as f32], min)
-                .into_iter()
-                .map(|n| n.item)
-                .collect();
-            // println!("Max: {} Min: {}", tmp_max.len(), tmp_min.len());
-            let points: Vec<u32> = difference(&tmp_max, &tmp_min);
-            for p in points {
-                points_for_shell.push(self.data[p as usize].clone());
+        // Iterate over the grid points
+        for point in self.data.iter() {
+
+            // Skip the central oxygen point
+            if point.coords == oxygen_atom.coords() {
+                continue;
+            }
+    
+            // Check distance from the oxygen to the grid point
+            let dist = geometry::euclidean_distance(&oxygen_atom.coords(), &point.coords);
+            if dist >= min_distance && dist <= max_distance {
+                // Check if the grid point is along the direction of a hydrogen bond
+                for hydrogen in &hydrogen_atoms {
+                    let angle = geometry::calculate_angle(&hydrogen.coords(), &oxygen_atom.coords(), &point.coords);
+                    if (angle - std::f64::consts::PI).abs() < 0.2 { // Allow a small deviation from 180°
+                        hydrogen_bond_points.push(point.coords);
+                        break; // No need to check the other hydrogen for this grid point
+                    }
+                }
             }
         }
-        points_for_shell
+    
+        hydrogen_bond_points
     }
-
-    pub fn get_nearest(&self, query_point: &[f64; 3]) -> GridPoint {
-        let q_point = [query_point[0] as f32, query_point[1] as f32, query_point[2] as f32];
-        let nearest = self.tree.nearest_one::<kiddo::SquaredEuclidean>(&q_point);
-        self.data[nearest.item as usize].clone()
-    }
-
-    pub fn set_possible_points(&mut self) {
-        let mut tree: KdTree<f32, u32, 3, 300000, u32> = KdTree::new();
-        let all_points = self.all_points();
-
-        for (idx, gridpoint) in all_points.iter().enumerate() {
-            let coords = &gridpoint.coords;
-            tree.add(&[coords[0] as f32, coords[1] as f32, coords[2] as f32], idx as u32);
-        }
-        self.tree = tree;
-        println!("Created the first tree");
-    }
-
-    pub fn get_receptor_points_in_grid(&self, receptor_map: &Vec<Atom>) -> Vec<Atom> {
-        let mut grid_points = Vec::new();
-        for atom in receptor_map {
-            let coords = atom.coords();
-            if self.in_box(&coords) {
-                // println!("{:?}", coords);
-                grid_points.push(atom.clone());
-            }
-        }
-        grid_points
-    } 
-
-    pub fn get_anchor_points_in_grid(&self, receptor_map: &Vec<[f64; 3]>) -> Vec<[f64; 3]> {
-        let mut grid_points = Vec::new();
-        for atom in receptor_map {
-            if self.in_box(atom) {
-                // println!("{:?}", coords);
-                grid_points.push(atom.clone());
-            }
-        }
-        grid_points
-    } 
-}
-
-pub fn update_grid_energies(
-    source_grid: &Grid3D,
-    target_grid: &mut Grid3D,
-) {
-    // Ensure dimensions match
-    assert_eq!(source_grid.data.len(), target_grid.data.len(), "Grids must have the same size");
-
-    target_grid
-        .all_points_mut()
-        .par_iter_mut()
-        .zip(source_grid.all_points().par_iter())
-        .for_each(|(target_point, source_point)| {
-            target_point.energy += source_point.energy;
-        });
-}
-
-fn difference<T: Eq + std::hash::Hash + Clone>(vec1: &[T], vec2: &[T]) -> Vec<T> {
-    let set2: HashSet<_> = vec2.iter().collect();
-    vec1.iter()
-        .filter(|item| !set2.contains(item))
-        .cloned()
-        .collect()
 }

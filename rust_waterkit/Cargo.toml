@@ -10,6 +10,7 @@ crate-type = ["cdylib", "lib"]
 [dependencies]
 fixed = "1.28.0"
 itertools = "0.14.0"
+kdtree = "0.7.0"
 kiddo = "5.0.3"
 log = "0.4.25"
 nalgebra = "0.33.2"
