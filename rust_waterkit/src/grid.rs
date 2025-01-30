@@ -192,6 +192,7 @@ impl Grid3D {
         &self,
         water: &WaterMolecule,
     ) -> Vec<[f64; 3]> {
+
         let mut hydrogen_bond_points = Vec::new();
     
         // Hydrogen bond distance range (1.5–2.5 Å)
@@ -200,7 +201,16 @@ impl Grid3D {
         
         let water_atoms = water.as_vec();
         let oxygen_atom = water_atoms[0].clone();
-        let hydrogen_atoms = [water_atoms[1].clone(), water_atoms[2].clone()];
+        let h1 = water_atoms[1].clone();
+        let h2 = water_atoms[2].clone();
+
+        // Calculate lone pair directions
+        let lone_pair_1 = geometry::normalize(&[
+            (h1.coords()[0] + h2.coords()[0]) / 2.0 - oxygen_atom.coords()[0],
+            (h1.coords()[1] + h2.coords()[1]) / 2.0 - oxygen_atom.coords()[1],
+            (h1.coords()[2] + h2.coords()[2]) / 2.0 - oxygen_atom.coords()[2],
+        ]);
+        let lone_pair_2 = [-lone_pair_1[0], -lone_pair_1[1], -lone_pair_1[2]];
 
         // Iterate over the grid points
         for point in self.data.iter() {
@@ -214,12 +224,20 @@ impl Grid3D {
             let dist = geometry::euclidean_distance(&oxygen_atom.coords(), &point.coords);
             if dist >= min_distance && dist <= max_distance {
                 // Check if the grid point is along the direction of a hydrogen bond
-                for hydrogen in &hydrogen_atoms {
+                for hydrogen in &[h1.clone(), h2.clone()] {
                     let angle = geometry::calculate_angle(&hydrogen.coords(), &oxygen_atom.coords(), &point.coords);
                     if (angle - std::f64::consts::PI).abs() < 0.2 { // Allow a small deviation from 180°
                         hydrogen_bond_points.push(point.coords);
                         break; // No need to check the other hydrogen for this grid point
                     }
+                }
+
+            // Check if the grid point is along the direction of a lone pair
+                let angle_lp1 = geometry::calculate_angle(&lone_pair_1, &oxygen_atom.coords(), &point.coords);
+                let angle_lp2 = geometry::calculate_angle(&lone_pair_2, &oxygen_atom.coords(), &point.coords);
+                if (angle_lp1 - std::f64::consts::PI).abs() < 0.2
+                    || (angle_lp2 - std::f64::consts::PI).abs() < 0.2 {
+                    hydrogen_bond_points.push(point.coords);
                 }
             }
         }
