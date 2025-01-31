@@ -1,3 +1,6 @@
+use std::num::NonZeroUsize;
+
+use pyo3::ffi::PyBUF_MAX_NDIM;
 use rayon::prelude::*;
 use kdtree::distance::squared_euclidean;
 use kdtree::KdTree;
@@ -5,6 +8,7 @@ use kdtree::KdTree;
 use crate::atom::Atom;
 use crate::energy::spheric_energy;
 use crate::geometry;
+use crate::utils::ELECTROSTATICS_CUTOFF;
 use crate::water::WaterMolecule;
 
 #[derive(Clone, Debug)]
@@ -111,6 +115,19 @@ impl Grid3D {
         }
     }
 
+    // pub fn update_grid_energies(
+    //     &mut self,
+    //     new_point_placed: &[f64; 3],
+    //     receptor_points: &Vec<Atom>) {
+        
+    //     let indices = self.get_neigbors_within_distance_mut(new_point_placed, ELECTROSTATICS_CUTOFF, 0.);
+    //     for &index in &indices {
+    //         let point = &mut self.data[index];
+    //         let energy = spheric_energy(receptor_points, &point.coords);
+    //         point.energy = energy;
+    //     }
+    // }
+
     pub fn update_grid_energies(
         &mut self,
         receptor_points: &Vec<Atom>) {
@@ -163,9 +180,9 @@ impl Grid3D {
         } 
     }
 
-    pub fn get_neighbors_within_distance(&mut self, query_point:&[f64; 3]) -> Vec<&GridPoint> {
-        let min_distance: f64 = 2.5f64.powf(2.0); // Minimum distance in angstroms
-        let max_distance: f64 = 3.6f64.powf(2.0); // Maximum distance in angstroms
+    pub fn get_neighbors_within_distance(&self, query_point:&[f64; 3], max: f64, min: f64) -> Vec<&GridPoint> {
+        let min_distance: f64 = min.powf(2.0); // Minimum distance in angstroms
+        let max_distance: f64 = max.powf(2.0); // Maximum distance in angstroms
 
         // Query all points within the maximum distance (3.6 Å)
         let within_max_distance = self.kdtree
@@ -186,6 +203,26 @@ impl Grid3D {
         }
         // println!("# Neighbors found: {}", neighbor_points.len());
         neighbor_points
+    }
+
+    // This function returns indices to points that then can be borrowed as mutables
+    pub fn get_neigbors_within_distance_mut(&mut self, query_point:&[f64; 3], max: f64, min: f64) -> Vec<usize> {
+        let min_distance: f64 = min.powf(2.0); // Minimum distance in angstroms
+        let max_distance: f64 = max.powf(2.0); // Maximum distance in angstroms
+
+        // Query all points within the maximum distance (3.6 Å)
+        let within_max_distance = self.kdtree
+            .within(query_point, max_distance, &squared_euclidean)
+            .unwrap();
+        // println!("Points found: {}", within_max_distance.len());
+
+        // Filter out points that are closer than the minimum distance (2.5 Å)
+        let in_range: Vec<_> = within_max_distance
+            .into_iter()
+            .filter(|&(distance, _)| distance >= min_distance) // Compare squared distances
+            .map(|(_, &index)| index)
+            .collect();
+        in_range
     }
 
     pub fn guess_new_hydrogen_bonds(
@@ -211,9 +248,11 @@ impl Grid3D {
             (h1.coords()[2] + h2.coords()[2]) / 2.0 - oxygen_atom.coords()[2],
         ]);
         let lone_pair_2 = [-lone_pair_1[0], -lone_pair_1[1], -lone_pair_1[2]];
-
+        
+        // get grid points within 1.5 and 2.5 Å
+        let points_within = self.get_neighbors_within_distance(&oxygen_atom.coords(), max_distance, min_distance);
         // Iterate over the grid points
-        for point in self.data.iter() {
+        for point in points_within {
 
             // Skip the central oxygen point
             if point.coords == oxygen_atom.coords() {

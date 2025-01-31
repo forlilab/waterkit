@@ -18,8 +18,10 @@ pub fn subtract_points(p1: &[f64; 3], p2: &[f64; 3]) -> [f64; 3] {
 }
 
 pub fn euclidean_distance(p1: &[f64; 3], p2: &[f64; 3]) -> f64 {
-    let distance = ((p1[0] - p2[0]).powi(2) + (p1[1] - p2[1]).powi(2) + (p1[2] - p2[2]).powi(2)).sqrt(); 
-    distance
+    let dx = p1[0] - p2[0];
+    let dy = p1[1] - p2[1];
+    let dz = p1[2] - p2[2];
+    (dx * dx + dy * dy + dz * dz).sqrt()
 }
 
 pub fn scale_point(p1: &[f64; 3], scalar: &f64) -> [f64; 3] {

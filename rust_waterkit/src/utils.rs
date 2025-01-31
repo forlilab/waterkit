@@ -8,6 +8,8 @@ pub const TEMPERATURE: f64 = 300.; // Temperature used for Boltzmann sampling (K
 pub const BOLTZMANN_ENERGY_CUTOFF: f64 = 0.;
 pub const SHELL_LIMIT: f64 = 2.8 * 2.;
 pub const WATER_LIMIT: f64 = 2.8 * 4.; 
+pub const MIN_SHELL_DISTANCE: f64 = 2.5;
+pub const MAX_SHELL_DISTANCE: f64 = 3.6;
 
 // Helper to generate ranges with float step_size
 pub struct FloatRange {

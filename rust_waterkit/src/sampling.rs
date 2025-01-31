@@ -1,3 +1,4 @@
+use rand::seq::SliceRandom;
 use rayon::prelude::*;
 
 use crate::monte_carlo as mc;
@@ -13,6 +14,7 @@ pub fn test_anchor_points(grid: &mut Grid3D, receptor_points: &mut Vec<Atom>, an
     let mut new_anchor_points = Vec::new(); 
     let mut placement = false;
     let mut new_water = WaterMolecule::new([0., 0., 0.], [0., 0., 0.], [0., 0., 0.]);
+    let mut new_receptor_points = Vec::new();
 
     for ap in anchor_points.iter() {
         let p = grid.get_nearest_neighbor(&ap);
@@ -25,7 +27,7 @@ pub fn test_anchor_points(grid: &mut Grid3D, receptor_points: &mut Vec<Atom>, an
     let mc_index = mc::boltzmann_sampling(&ap_energies);
     if mc_index.is_some() {
         let mut neighbors_energies = Vec::new();
-        let neighbors = grid.get_neighbors_within_distance(&anchor_points[mc_index.unwrap()]);
+        let neighbors = grid.get_neighbors_within_distance(&anchor_points[mc_index.unwrap()], MAX_SHELL_DISTANCE, MIN_SHELL_DISTANCE);
         for neighbor in neighbors.iter() {
             neighbors_energies.push(neighbor.energy);
         }
@@ -33,10 +35,11 @@ pub fn test_anchor_points(grid: &mut Grid3D, receptor_points: &mut Vec<Atom>, an
         if neigh_mc_index.is_some() {
             let point_to_sample = neighbors[neigh_mc_index.unwrap()].clone();
             if mc::boltzmann_acceptance_rejection(&point_to_sample.energy, &BOLTZMANN_ENERGY_CUTOFF, &TEMPERATURE, &BOLTZMANN_K) {
-                (placement, new_water) = sample_real_waters(&point_to_sample, water_configurations, receptor_points);
+                (placement, new_water) = sample_real_waters(&point_to_sample, water_configurations, receptor_points, &mut new_receptor_points);
                 if placement {
                     // anchor_points.remove(mc_index.unwrap());
                     // anchor_points.push(point_to_sample.coords);
+                    let oxygen_coords = new_water.as_vec()[0].coords();
                     grid.update_grid_energies(receptor_points);
                     let new_aps = grid.guess_new_hydrogen_bonds(&new_water);
                     for anchor in new_aps {
@@ -61,10 +64,11 @@ pub fn test_anchor_points(grid: &mut Grid3D, receptor_points: &mut Vec<Atom>, an
             let point_to_sample = &ap_on_the_grid[mc_index.unwrap()];
             if mc::boltzmann_acceptance_rejection(&point_to_sample.energy, &BOLTZMANN_ENERGY_CUTOFF, &TEMPERATURE, &BOLTZMANN_K) {
                 println!("No favorable neighbor found, using the original anchor point!");
-                (placement, new_water) = sample_real_waters(&point_to_sample, water_configurations, receptor_points);
+                (placement, new_water) = sample_real_waters(&point_to_sample, water_configurations, receptor_points, &mut new_receptor_points);
                 if placement {
                     // anchor_points.remove(mc_index.unwrap());
                     // anchor_points.push(ap_on_the_grid[mc_index.unwrap()].coords);
+                    let oxygen_coords = new_water.as_vec()[0].coords();
                     grid.update_grid_energies(receptor_points);
                     let new_aps = grid.guess_new_hydrogen_bonds(&new_water);
                     for anchor in new_aps {
@@ -102,16 +106,19 @@ pub fn test_anchor_points(grid: &mut Grid3D, receptor_points: &mut Vec<Atom>, an
 /// 8 -  Metropolos criteria
 /// 9 -  Update grid's energies
 /// 10 - Update points in the receptor's map 
+/// 11 - Update the new anchor points
 pub fn sample(grid: &mut Grid3D, receptor_points: &mut Vec<Atom>, anchor_points: &mut Vec<[f64; 3]>, water_configurations: &Vec<[f64; 6]>) -> bool {
     // Retrieve energies for the anchor points
-    println!("# anchor points: {}", anchor_points.len());
+    // println!("# anchor points: {}", anchor_points.len());
+    let mut new_receptor_points = Vec::new();
     let mut placement = true;
     let mut ap_energies = Vec::new();
     let mut ap_on_the_grid = Vec::new();
     let mut new_water = WaterMolecule::new([0., 0., 0.], [0., 0., 0.], [0., 0., 0.]);
-    
-    
-    for ap in anchor_points.iter() {
+    let ap_iter = anchor_points.clone();
+    let mut new_anchor_points = Vec::new();
+
+    for ap in ap_iter.iter() {
         let p = grid.get_nearest_neighbor(&ap);
         if p.is_some() {
             ap_energies.push(p.unwrap().energy);
@@ -119,11 +126,12 @@ pub fn sample(grid: &mut Grid3D, receptor_points: &mut Vec<Atom>, anchor_points:
         }
     }
 
-    for ap in anchor_points.iter() {
+    for ap in ap_on_the_grid.iter() {
         let mc_index = mc::boltzmann_sampling(&ap_energies);
         if mc_index.is_some() {
             let mut neighbors_energies = Vec::new();
-            let neighbors = grid.get_neighbors_within_distance(&anchor_points[mc_index.unwrap()]);
+            // let neighbors = grid.get_neighbors_within_distance(&anchor_points[mc_index.unwrap()]);
+            let neighbors = grid.get_neighbors_within_distance(&ap.coords, MAX_SHELL_DISTANCE, MIN_SHELL_DISTANCE);
             for neighbor in neighbors.iter() {
                 neighbors_energies.push(neighbor.energy);
             }
@@ -131,48 +139,77 @@ pub fn sample(grid: &mut Grid3D, receptor_points: &mut Vec<Atom>, anchor_points:
             if neigh_mc_index.is_some() {
                 let point_to_sample = neighbors[neigh_mc_index.unwrap()].clone();
                 if mc::boltzmann_acceptance_rejection(&point_to_sample.energy, &BOLTZMANN_ENERGY_CUTOFF, &TEMPERATURE, &BOLTZMANN_K) {
-                    (placement, new_water) = sample_real_waters(&point_to_sample, water_configurations, receptor_points);
+                    (placement, new_water) = sample_real_waters(&point_to_sample, water_configurations, receptor_points, &mut new_receptor_points);
                     if placement {
                         // anchor_points.remove(mc_index.unwrap());
                         // anchor_points.push(point_to_sample.coords);
-                        grid.update_grid_energies(receptor_points);
+                        // grid.update_grid_energies(receptor_points);
+                        let new_aps = grid.guess_new_hydrogen_bonds(&new_water);
+                        if new_aps.len() > 0 {
+                            let chosen = new_aps.choose(&mut rand::thread_rng()).unwrap();
+                            // // for new_ap in new_aps {
+                            // //     new_anchor_points.push(new_ap);
+                            // // }
+                            new_anchor_points.push(chosen.clone());
+                            grid.update_grid_energies(receptor_points);
+
+                        }
                     }
                     else {
-                        println!("Weird stuff while placing real waters!");
+                        // println!("Weird stuff while placing real waters!");
                     }
                     // anchor_points.remove(mc_index.unwrap());
                 }
                 else {
-                    println!("Rejected during Metropolis before sampling real water with energy: {}", &point_to_sample.energy);
+                    // println!("Rejected during Metropolis before sampling real water with energy: {}", &point_to_sample.energy);
                     // anchor_points.remove(mc_index.unwrap());
                 }
             }
             else {
-                let point_to_sample = &ap_on_the_grid[mc_index.unwrap()];
+                // let point_to_sample = &ap_on_the_grid[mc_index.unwrap()];
+                let point_to_sample = &ap;
                 if mc::boltzmann_acceptance_rejection(&point_to_sample.energy, &BOLTZMANN_ENERGY_CUTOFF, &TEMPERATURE, &BOLTZMANN_K) {
-                    println!("No favorable neighbor found, using the original anchor point!");
-                    (placement, new_water) = sample_real_waters(&point_to_sample, water_configurations, receptor_points);
+                    // println!("No favorable neighbor found, using the original anchor point!");
+                    (placement, new_water) = sample_real_waters(&point_to_sample, water_configurations, receptor_points, &mut new_receptor_points);
                     if placement {
                         // anchor_points.remove(mc_index.unwrap());
                         // anchor_points.push(ap_on_the_grid[mc_index.unwrap()].coords);
-                        grid.update_grid_energies(receptor_points);
+                        // grid.update_grid_energies(receptor_points);
+                        let new_aps = grid.guess_new_hydrogen_bonds(&new_water);
+                        if new_aps.len() > 0 {
+                            let chosen = new_aps.choose(&mut rand::thread_rng()).unwrap();
+                            // // for new_ap in new_aps {
+                            // //     new_anchor_points.push(new_ap);
+                            // // }
+                                new_anchor_points.push(chosen.clone());
+                                grid.update_grid_energies(receptor_points);
+
+                        }
                     }
                     else {
-                        println!("Weird stuff while placing real waters after using original point!");
+                        // println!("Weird stuff while placing real waters after using original point!");
                     }
                     // anchor_points.remove(mc_index.unwrap());
                 }
                 else {
-                    println!("Rejected during Metropolis before sampling real water when using real anchor point with energy: {}", &point_to_sample.energy);
+                    // println!("Rejected during Metropolis before sampling real water when using real anchor point with energy: {}", &point_to_sample.energy);
                     // anchor_points.remove(mc_index.unwrap());
                 }
             }
 
         }
         else {
-            println!("No favorable starting point found!");
+            // println!("No favorable starting point found!");
             placement = false;
         }
+    }
+
+    anchor_points.clear();
+    for p in new_anchor_points {
+        anchor_points.push(p);
+    }
+    for new_point in new_receptor_points {
+        receptor_points.push(new_point);
     }
     placement
 }
@@ -182,7 +219,7 @@ pub fn save_shell_and_energies(mut grid: Grid3D, mut receptor_points: Vec<Atom>,
     let mut energies = Vec::new();
     let mut points = Vec::new();
     for anchor_point in anchor_points_to_iter {
-        let shell_points = grid.get_neighbors_within_distance(&anchor_point);
+        let shell_points = grid.get_neighbors_within_distance(&anchor_point, MAX_SHELL_DISTANCE, MIN_SHELL_DISTANCE);
         for p in shell_points {
             energies.push(p.energy);
             points.push(p.coords);
@@ -208,8 +245,8 @@ pub fn roll_sphere_and_compute_energies_grid(
             point.updated = true;
         }); 
     grid.build_kdtree();
-    println!("Tree size: {}", grid.kdtree.size());
-    println!("Finished setting the possible points");
+    // println!("Tree size: {}", grid.kdtree.size());
+    // println!("Finished setting the possible points");
     grid
 }
 
@@ -217,7 +254,8 @@ pub fn roll_sphere_and_compute_energies_grid(
 
 pub fn sample_real_waters(oxygen_atom: &GridPoint, 
     water_configurations: &Vec<[f64; 6]>,
-    receptor_points: &mut Vec<Atom>) -> (bool, WaterMolecule) {
+    receptor_points: &mut Vec<Atom>,
+    new_receptor_points: &mut Vec<Atom>) -> (bool, WaterMolecule) {
     // Let's parallelize
     let oxygen_position = oxygen_atom.coords;
     let possible_results: Vec<(WaterMolecule, f64)> = water_configurations
@@ -244,12 +282,11 @@ pub fn sample_real_waters(oxygen_atom: &GridPoint,
             (water, energy_value)
         })
         .collect();
-    let mut new_ap: [f64; 3] = [0.0; 3];
     let possible_waters_energies: Vec<f64> = possible_results.iter().map(|(_, e)| *e).collect();
     let choice = mc::boltzmann_sampling(&possible_waters_energies);
     let energies_good: Vec<f64> = possible_waters_energies.clone().into_iter().filter(|x| x < &0.0).collect();
-    println!("Chosen oxygen's energy: {}", oxygen_atom.energy);
-    println!("Good water configurations: {}", energies_good.len());
+    // println!("Chosen oxygen's energy: {}", oxygen_atom.energy);
+    // println!("Good water configurations: {}", energies_good.len());
     if choice.is_some() {
         let value = choice.unwrap();
         if mc::boltzmann_acceptance_rejection(&possible_waters_energies[value], 
@@ -257,21 +294,18 @@ pub fn sample_real_waters(oxygen_atom: &GridPoint,
             &TEMPERATURE, 
             &BOLTZMANN_K) {
             for atom in possible_results[value].0.as_vec() {
-                if atom.atom_type() == "OW" {
-                    let oxygen_coords = atom.coords();
-                }
                 receptor_points.push(atom.clone());
             }
             return (true, possible_results[value].0.clone());
 
         }
         else {
-            println!("Rejected during real water sampling");
+            // println!("Rejected during real water sampling");
             return (false, WaterMolecule::new([0., 0., 0.], [0., 0., 0.], [0., 0., 0.])); 
         }
     }
     else {
-        println!("Rejected during real water sampling before acceptance");
+        // println!("Rejected during real water sampling before acceptance");
         return (false, WaterMolecule::new([0., 0., 0.], [0., 0., 0.], [0., 0., 0.]));
     }
 }

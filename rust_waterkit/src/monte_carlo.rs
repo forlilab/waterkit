@@ -25,12 +25,15 @@ pub fn boltzmann_sampling(energies: &Vec<f64>) -> Option<usize> {
     // println!("{:?}",energies);
     let probability_distribution = boltzmann_probabilities(energies);
     let sum: f64 = probability_distribution.iter().sum();
-    if sum == 0. {
+    if sum == 0. || probability_distribution.len() == 0 || probability_distribution.iter().any(|x| x < &0.) {
         return None;
     }
     let mut rng = thread_rng();
-    let dist = WeightedIndex::new(&probability_distribution).unwrap();
-    Some(dist.sample(&mut rng))
+    let dist = WeightedIndex::new(&probability_distribution);
+    if dist.is_ok() {
+        return Some(dist.unwrap().sample(&mut rng));
+    }
+    None
 }
 
 pub fn order_boltzmann_sampling(energies: &Vec<f64>) -> Vec<usize> {

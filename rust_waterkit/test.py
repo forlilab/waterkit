@@ -27,9 +27,10 @@ def to_xyz_water(traj, fname):
     with open(f"{fname}.xyz", 'w') as fo:
         fo.write(f"{len(traj)}\n")
         fo.write("\n")
-        for t in range(len(traj)-1):
+        fo.write(f"O {traj[0][0]} {traj[0][1]} {traj[0][2]}\n")
+        for t in range(1, len(traj)):
             fo.write(f"H {traj[t][0]} {traj[t][1]} {traj[t][2]}\n")
-        fo.write(f"O {traj[-1][0]} {traj[-1][1]} {traj[-1][2]}\n")
+        # fo.write(f"O {traj[-1][0]} {traj[-1][1]} {traj[-1][2]}\n")
     return 
 
 def get_data_form_meeko(wanted_residues, pdb_file):
@@ -135,7 +136,7 @@ def pdb_corners(pdb_file, traj, atom_type="He"):
     print(x_center, y_center, z_center)
     return
 
-def load_waters_orientations(orientations="/home/niccolo/phd/waterkit/waterkit/data/water_orientations.txt"):
+def load_waters_orientations(orientations="/data/phd/waterkit/waterkit/data/water_orientations.txt"):
     usecols = [0, 1, 2, 3, 4, 5]
     water_orientations = np.loadtxt(orientations, usecols=usecols)
     # shape = (water_orientations.shape[0], 2, 3)
@@ -154,10 +155,10 @@ if __name__ == "__main__":
                        "A:PHE:138", "A:TYR:139", "A:VAL:150", 
                        "A:TRP:162", "A:THR:184"]
     # wanted_residues = list()
-    parametrized_atoms, min_box_boundaries, max_box_boundaries = get_data_form_meeko(wanted_residues, "/home/niccolo/phd/waterkit/example/1uyg_no_ligand.pdb")
+    parametrized_atoms, min_box_boundaries, max_box_boundaries = get_data_form_meeko(wanted_residues, "/data/phd/waterkit/example/1uyg_no_ligand.pdb")
     # parametrized_atoms = get_data_form_meeko(wanted_residues, "/home/niccolo/phd/waterkit/example/1uyg.pdb")
     waters = load_waters_orientations()
-    anchor_points = load_anchor_points("/home/niccolo/phd/waterkit/rust_waterkit/anchor_points_hsp90.txt")
+    anchor_points = load_anchor_points("/data/phd/waterkit/rust_waterkit/anchor_points_hsp90.txt")
     spacing = 0.375
     center = [2.7, 11.45, 24.80]
     # center = [2.699591, 11.453864, 24.802502]
@@ -188,17 +189,13 @@ if __name__ == "__main__":
     # print(f"Time to grid: {time.time() - start}")
     # pdb_with_temp("shell.pdb", map, e)
 
-    # print("Starting waterkit!")
-    # # for i in range(1):
-    # start = time.time()
-    # map = rust_waterkit.run_waterkit_simple(parametrized_atoms, waters, anchor_points, x_size, y_size, z_size, spacing, center, shells=3)
-    # waters_map = [x for x in map if x.atom_type() == "HW" or x.atom_type() == "OW"]
-    # # trajectories, energies = rust_waterkit.run_waterkit(parametrized_atoms, waters, step_size)
-    # # energies, trajectories = rust_waterkit.roll_sphere_and_compute_energies(parametrized_atoms, step_size)
-    # print(f"Time to grid: {time.time() - start}")
-    # # to_pdb("receptor_second_shell.pdb", rec_map)
-    # # to_xyz(trajectories, step_size, "trajectory")
-    # to_pdb(f"surface_distribution.pdb", waters_map)
+    print("Starting waterkit!")
+    start = time.time()
+    wk_map = rust_waterkit.run_waterkit(parametrized_atoms, waters, anchor_points, x_size, y_size, z_size, spacing, center, epochs=10)
+    for (idx, m) in enumerate(wk_map):
+        waters_map = [x for x in m if x.atom_type() == "HW" or x.atom_type() == "OW"]
+        # print(f"Time to grid: {time.time() - start}")
+        to_pdb(f"waterkit_{idx}.pdb", waters_map)
     
     
     # Test ordered
@@ -209,8 +206,15 @@ if __name__ == "__main__":
     #     pdb_with_temp(f"ap_{idx}.pdb", [map[idx]], [v])
     
     # Test new anchor points
-    start = time.time()
-    ap = rust_waterkit.test_new_aps(parametrized_atoms, waters, anchor_points, x_size, y_size, z_size, spacing, center, shells=1)
-    print(f"Time to grid: {time.time() - start}")
-    to_xyz_water(ap, "new_aps.xyz")
+    # start = time.time()
+    # ap = rust_waterkit.test_new_aps(parametrized_atoms, waters, anchor_points, x_size, y_size, z_size, spacing, center, shells=1)
+    # print(f"Time to grid: {time.time() - start}")
+    # to_xyz_water(ap, "new_aps.xyz")
+
+
+    # print("Starting waterkit!")
+    # start = time.time()
+    # (j_wat, n_wat) = rust_waterkit.get_energy_for_water(parametrized_atoms)
+    # to_xyz_water(j_wat, "jerome_wat")
+    # to_xyz_water(n_wat, "nico_wat")
     

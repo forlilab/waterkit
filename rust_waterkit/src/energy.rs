@@ -24,8 +24,8 @@ pub fn lennard_jones_rmin_half(epsilon_1: &f64, epsilon_2: &f64, dist: &f64, rmi
     let rmin = rmin_half1 + rmin_half2;
     let epsilon = (epsilon_1 * epsilon_2).sqrt();
     let c12 = SCALE_VDW * epsilon * rmin.powi(12);
-    let c6 = epsilon * rmin.powi(6);
-    // let c6 = SCALE_VDW * 2.0 * epsilon * rmin.powi(6);
+    // let c6 = epsilon * rmin.powi(6);
+    let c6 = SCALE_VDW * 2.0 * epsilon * rmin.powi(6);
     let lj = c12 / dist.powi(12) - c6 / dist.powi(6);
     lj
 }
@@ -41,7 +41,7 @@ pub fn lennard_jones_rmin_half(epsilon_1: &f64, epsilon_2: &f64, dist: &f64, rmi
 pub fn coulomb_energy(q1: &f64, q2: &f64, r: &f64) -> f64 {
     let k_e = 332.0636; // Electrostatic constant in kcal·Å/(mol·e^2)
     let dielectric = 1.0; // Dielectric constant of the medium (default: 1.0)
-    let coulomb = k_e * (q1 * q2) / (dielectric * r);
+    let coulomb = k_e * ((q1 * q2) / r);
     coulomb
 }
 
@@ -91,6 +91,10 @@ pub fn energy_for_real_water(atoms_1: &Vec<Atom>, atoms_2: &Vec<Atom>) -> f64 {
 
             if r < ELECTROSTATICS_CUTOFF {
                 let coulomb_energy = coulomb_energy(atom_1.charge(), atom_2.charge(), &r);
+                // if coulomb_energy > 0. {
+                //     println!("Atom 1: {:?}, Atom 2: {:?}, distance: {}, Coulomb: {}", atom_1.atom_type(), atom_2.atom_type(), r, coulomb_energy);
+                //     // println!("Coulomb {} - LJ {}", coulomb_energy, lj_energy);
+                // }
                 total_energy += coulomb_energy;
                 if atom_1.atom_type() != &"HW" && atom_2.atom_type() != &"HW" {
                     let lj_energy = lennard_jones_rmin_half(atom_1.epsilon(),
@@ -99,7 +103,12 @@ pub fn energy_for_real_water(atoms_1: &Vec<Atom>, atoms_2: &Vec<Atom>) -> f64 {
                         atom_1.rmin_half(),
                         atom_2.rmin_half());
                     total_energy += lj_energy;
+                    // if lj_energy > 0. {
+                    //     println!("Atom 1: {:?}, Atom 2: {:?}, distance: {}, LJ: {}", atom_1.atom_type(), atom_2.atom_type(), r, lj_energy);
+                    //     // println!("Coulomb {} - LJ {}", coulomb_energy, lj_energy);
+                    // }
                 }
+                
             }
         }
     }
