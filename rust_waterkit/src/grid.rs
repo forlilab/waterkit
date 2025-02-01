@@ -199,6 +199,7 @@ impl Grid3D {
         
         let mut neighbor_points = Vec::new();
         for (distance, &index) in in_range {
+            // if geometry::get_angle_for_neighbors(a, b, c, degree)
             neighbor_points.push(&self.data[index]);
         }
         // println!("# Neighbors found: {}", neighbor_points.len());

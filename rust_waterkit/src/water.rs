@@ -15,9 +15,9 @@ pub struct WaterMolecule {
 // #[pymethods]
 impl WaterMolecule {
     // #[new]
-    pub fn new(hydrogen_1_coords: [f64; 3],
-        hydrogen_2_coords: [f64; 3],
-        oxygen_coords: [f64; 3]) -> Self {
+    pub fn new(oxygen_coords: [f64; 3], 
+        hydrogen_1_coords: [f64; 3],
+        hydrogen_2_coords: [f64; 3],) -> Self {
             let oxygen = Atom::new("OW".to_string(),
                 "0".to_string(),
                 oxygen_coords,

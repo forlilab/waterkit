@@ -117,3 +117,6 @@ autodocksuite-4.2.6-src/autogrid/x86_Linux2/
 *.dx
 example/*
 autodocksuite-*/*
+rust_waterkit/amber/*
+rust_waterkit/single_anchor_point/*
+rust_waterkit/waterkit_data/*

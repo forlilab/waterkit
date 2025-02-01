@@ -358,6 +358,7 @@ pub fn run_waterkit(receptor_points: Vec<Atom>,
     // }
     let elapsed_time = start_time.elapsed();
     println!("Time taken for {} maps: {:?}", epochs, elapsed_time);
+    // println!("{:?}", results);
     results
 }
 
@@ -383,6 +384,9 @@ pub fn get_energy_for_water(receptor_points: Vec<Atom>) -> (Vec<[f64; 3]>, Vec<[
     for atom in water_j.as_vec() {
         atoms_j.push(atom.coords());
     }
+    // closest ap to the oxygen
+    // atoms_j.push([-5.15488359,  9.00213151, 34.99793656]);
+    
     for atom in water_n.as_vec() {
         atoms_n.push(atom.coords());
     }
