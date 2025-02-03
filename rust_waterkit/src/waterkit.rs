@@ -307,14 +307,10 @@ pub fn test_new_aps(receptor_points: Vec<Atom>,
 fn run_single_waterkit(receptor_points: &Vec<Atom>, 
     water_configurations: &Vec<[f64; 6]>, 
     anchor_points: &Vec<[f64; 3]>, 
-    x_size: f64, 
-    y_size: f64, 
-    z_size: f64, 
-    spacing: f64, 
-    center: [f64; 3]) -> Vec<Atom> {
+    mut grid: Grid3D) -> Vec<Atom> {
         let start_time = Instant::now();
         let mut receptor_map = receptor_points.clone();
-        let mut grid = roll_sphere_and_compute_energies_grid(&receptor_points, x_size, y_size, z_size, spacing, center);
+        
         let mut mutable_anchor_points = anchor_points.clone();
         grid.build_kdtree();
 
@@ -337,6 +333,7 @@ pub fn run_waterkit(receptor_points: Vec<Atom>,
     center: [f64; 3],
     epochs: usize) -> Vec<Vec<Atom>> {
     let start_time = Instant::now();
+    let grid = roll_sphere_and_compute_energies_grid(&receptor_points, x_size, y_size, z_size, spacing, center);
     let results: Vec<Vec<Atom>> = (0..epochs)
         .into_par_iter()
         .map(|_| {
@@ -344,11 +341,7 @@ pub fn run_waterkit(receptor_points: Vec<Atom>,
                 &receptor_points,
                 &water_configurations,
                 &anchor_points,
-                x_size,
-                y_size,
-                z_size,
-                spacing,
-                center,
+                grid.clone()
             )
         })
         .collect();

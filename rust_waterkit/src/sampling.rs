@@ -103,7 +103,7 @@ pub fn test_anchor_points(grid: &mut Grid3D, receptor_points: &mut Vec<Atom>, an
 ///      previously selected
 /// 6 -  Sample real waters configurations
 /// 7 -  MC sampling of the energies for the real waters
-/// 8 -  Metropolos criteria
+/// 8 -  Metropolis criteria
 /// 9 -  Update grid's energies
 /// 10 - Update points in the receptor's map
 /// 11 - Update the new anchor points
@@ -129,11 +129,11 @@ pub fn sample(grid: &mut Grid3D, receptor_points: &mut Vec<Atom>, anchor_points:
     for ap in ap_on_the_grid.iter() {
         // println!("GridPoint: {:?}", ap);
         // println!("Energies: {:?}", ap_energies);
-        let mc_index = mc::boltzmann_sampling(&ap_energies);
-        if mc_index.is_some() {
+        // let mc_index = mc::boltzmann_sampling(&ap_energies);
+        // if mc_index.is_some() {
             let mut neighbors_energies = Vec::new();
             // let neighbors = grid.get_neighbors_within_distance(&anchor_points[mc_index.unwrap()]);
-            let neighbors = grid.get_neighbors_within_distance(&ap.coords, 2.0, 0.0);
+            let neighbors = grid.get_neighbors_within_distance(&ap.coords, 1.5, 0.0);
             // println!("{}\n\n", neighbors.len());
             for neighbor in neighbors.iter() {
                 neighbors_energies.push(neighbor.energy);
@@ -170,11 +170,11 @@ pub fn sample(grid: &mut Grid3D, receptor_points: &mut Vec<Atom>, anchor_points:
                 }
             }
             else {
-                // let point_to_sample = &ap_on_the_grid[mc_index.unwrap()];
+                let point_to_sample = ap;
                 // let point_to_sample = &ap;
-                let point_to_sample = GridPoint {index: 1, coords: [-4.742, 8.555, 35.23], energy: 0.0, updated: false};
+                // let point_to_sample = GridPoint {index: 1, coords: [-4.742, 8.555, 35.23], energy: 0.0, updated: false};
                 if mc::boltzmann_acceptance_rejection(&point_to_sample.energy, &BOLTZMANN_ENERGY_CUTOFF, &TEMPERATURE, &BOLTZMANN_K) {
-                    println!("No favorable neighbor found, using the original anchor point!");
+                    // println!("No favorable neighbor found, using the original anchor point!");
                     (placement, new_water) = sample_real_waters(&point_to_sample, water_configurations, receptor_points, &mut new_receptor_points);
                     if placement {
                         // anchor_points.remove(mc_index.unwrap());
@@ -187,7 +187,7 @@ pub fn sample(grid: &mut Grid3D, receptor_points: &mut Vec<Atom>, anchor_points:
                             // //     new_anchor_points.push(new_ap);
                             // // }
                                 new_anchor_points.push(chosen.clone());
-                                // grid.update_grid_energies(receptor_points);
+                                grid.update_grid_energies(receptor_points);
 
                         }
                     }
@@ -202,11 +202,11 @@ pub fn sample(grid: &mut Grid3D, receptor_points: &mut Vec<Atom>, anchor_points:
                 }
             }
 
-        }
-        else {
-            // println!("No favorable starting point found!");
-            placement = false;
-        }
+        // }
+        // else {
+        //     // println!("No favorable starting point found!");
+        //     placement = false;
+        // }
     }
 
     anchor_points.clear();
@@ -218,7 +218,7 @@ pub fn sample(grid: &mut Grid3D, receptor_points: &mut Vec<Atom>, anchor_points:
         receptor_points.push(new_point);
     }
     println!("Placed: {}", placement);
-    // grid.update_grid_energies(receptor_points);
+    grid.update_grid_energies(receptor_points);
     placement
 }
 
@@ -344,8 +344,8 @@ pub fn sample_real_waters(oxygen_atom: &GridPoint,
     if choice.is_some() {
         let value = choice.unwrap();
         // println!("Chosen index: {}", value);
-        println!("Energy for chosen water: {}", possible_waters_energies[value]);
-        // println!("Chosen point: {:?}", possible_results[value].0);
+        // println!("Energy for chosen water: {}", possible_waters_energies[value]);
+        // // println!("Chosen point: {:?}", possible_results[value].0);
         if mc::boltzmann_acceptance_rejection(&possible_waters_energies[value],
             &BOLTZMANN_ENERGY_CUTOFF,
             &TEMPERATURE,

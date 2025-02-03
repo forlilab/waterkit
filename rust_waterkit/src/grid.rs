@@ -27,6 +27,7 @@ impl PartialEq for GridPoint {
 
 impl Eq for GridPoint { }
 
+#[derive(Clone, Debug)]
 pub struct Grid3D {
     data: Vec<GridPoint>,
     x_size: f64,
