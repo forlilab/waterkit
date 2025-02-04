@@ -1,13 +1,14 @@
 use std::num::NonZeroUsize;
 
 use pyo3::ffi::PyBUF_MAX_NDIM;
+use rand::seq::SliceRandom;
 use rayon::prelude::*;
 use kdtree::distance::squared_euclidean;
 use kdtree::KdTree;
 
 use crate::atom::Atom;
 use crate::energy::spheric_energy;
-use crate::geometry;
+use crate::geometry::{self, resize_vector};
 use crate::utils::ELECTROSTATICS_CUTOFF;
 use crate::water::WaterMolecule;
 
@@ -244,13 +245,17 @@ impl Grid3D {
         let h2 = water_atoms[2].clone();
 
         // Calculate lone pair directions
-        let lone_pair_1 = geometry::normalize(&[
-            (h1.coords()[0] + h2.coords()[0]) / 2.0 - oxygen_atom.coords()[0],
-            (h1.coords()[1] + h2.coords()[1]) / 2.0 - oxygen_atom.coords()[1],
-            (h1.coords()[2] + h2.coords()[2]) / 2.0 - oxygen_atom.coords()[2],
-        ]);
-        let lone_pair_2 = [-lone_pair_1[0], -lone_pair_1[1], -lone_pair_1[2]];
+        // let lone_pair_1 = geometry::normalize(&[
+        //     (h1.coords()[0] + h2.coords()[0]) / 2.0 - oxygen_atom.coords()[0],
+        //     (h1.coords()[1] + h2.coords()[1]) / 2.0 - oxygen_atom.coords()[1],
+        //     (h1.coords()[2] + h2.coords()[2]) / 2.0 - oxygen_atom.coords()[2],
+        // ]);
+        // let lone_pair_2 = [-lone_pair_1[0], -lone_pair_1[1], -lone_pair_1[2]];
         
+        let mut hb1 = Vec::new();
+        let mut hb2 = Vec::new();
+        // let mut lp = Vec::new();
+
         // get grid points within 1.5 and 2.5 Å
         let points_within = self.get_neighbors_within_distance(&oxygen_atom.coords(), max_distance, min_distance);
         // Iterate over the grid points
@@ -261,28 +266,38 @@ impl Grid3D {
                 continue;
             }
     
-            // Check distance from the oxygen to the grid point
-            let dist = geometry::euclidean_distance(&oxygen_atom.coords(), &point.coords);
-            if dist >= min_distance && dist <= max_distance {
-                // Check if the grid point is along the direction of a hydrogen bond
-                for hydrogen in &[h1.clone(), h2.clone()] {
-                    let angle = geometry::calculate_angle(&hydrogen.coords(), &oxygen_atom.coords(), &point.coords);
-                    if (angle - std::f64::consts::PI).abs() < 0.2 { // Allow a small deviation from 180°
-                        hydrogen_bond_points.push(point.coords);
-                        break; // No need to check the other hydrogen for this grid point
+            // Check if the grid point is along the direction of a hydrogen bond
+            for (idx, hydrogen) in [h1.clone(), h2.clone()].iter().enumerate() {
+                let angle = geometry::calculate_angle(&hydrogen.coords(), &oxygen_atom.coords(), &point.coords);
+                if (angle - std::f64::consts::PI).abs() < 0.2 { // Allow a small deviation from 180°
+                    // hydrogen_bond_points.push(point.coords);
+                    if idx == 0 {
+                        hb1.push(point.coords);
                     }
-                }
-
-            // Check if the grid point is along the direction of a lone pair
-                let angle_lp1 = geometry::calculate_angle(&lone_pair_1, &oxygen_atom.coords(), &point.coords);
-                let angle_lp2 = geometry::calculate_angle(&lone_pair_2, &oxygen_atom.coords(), &point.coords);
-                if (angle_lp1 - std::f64::consts::PI).abs() < 0.2
-                    || (angle_lp2 - std::f64::consts::PI).abs() < 0.2 {
-                    hydrogen_bond_points.push(point.coords);
+                    else {
+                        hb2.push(point.coords);
+                    }
                 }
             }
         }
-    
+        
+        if hb1.len() > 0 {
+            let  hbc = hb1.choose(&mut rand::thread_rng()).unwrap();
+            // println!("H {} {} {}", hbc[0], hbc[1], hbc[2]);
+            hydrogen_bond_points.push(hbc.clone());
+        }
+        if hb2.len() > 0 {
+            let  hbc = hb2.choose(&mut rand::thread_rng()).unwrap();
+            // println!("H {} {} {}", hbc[0], hbc[1], hbc[2]);
+            hydrogen_bond_points.push(hbc.clone());
+        }
+        let r_h1 = geometry::resize_vector(&h1.coords(), &2.8, &oxygen_atom.coords());
+        // println!("H {} {} {}", r_h1[0], r_h1[1], r_h1[2]);
+
+        let r_h2 = geometry::resize_vector(&h2.coords(), &2.8, &oxygen_atom.coords());
+        // println!("H {} {} {}", r_h2[0], r_h2[1], r_h2[2]);
+        hydrogen_bond_points.push(r_h1);
+        hydrogen_bond_points.push(r_h2);
         hydrogen_bond_points
     }
 }

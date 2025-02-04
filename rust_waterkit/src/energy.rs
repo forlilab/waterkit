@@ -87,8 +87,6 @@ pub fn energy(atoms_1: &Vec<Atom>, atoms_2: &Vec<Atom>) -> f64 {
 
 pub fn energy_for_real_water(atoms_1: &Vec<Atom>, atoms_2: &Vec<Atom>) -> f64 {
     let mut total_energy = 0.0;
-    let mut c_e = 0.0;
-    let mut l_e = 0.0;
     for atom_1 in atoms_1.iter() {
         let atom_1_coords = atom_1.coords().clone();
         let mut cnt = 0;
@@ -115,8 +113,8 @@ pub fn energy_for_real_water(atoms_1: &Vec<Atom>, atoms_2: &Vec<Atom>) -> f64 {
 
                 // Add to total energy
                 total_energy += lj_energy + coulomb_energy;
-                c_e += coulomb_energy;
-                l_e += lj_energy;
+                // c_e += coulomb_energy;
+                // l_e += lj_energy;
             // }
         }
     }
@@ -137,6 +135,7 @@ pub fn spheric_energy(atoms_1: &Vec<Atom>, sphere_center: &[f64; 3]) -> f64 {
             sphere_center), 1e-8_f64);
 
         if r < ELECTROSTATICS_CUTOFF {
+
             if atom_1.atom_type() != &"HW" {
                 let lj_energy = lennard_jones_rmin_half(atom_1.epsilon(),
                 &EPSILON_WATER, 
@@ -145,6 +144,9 @@ pub fn spheric_energy(atoms_1: &Vec<Atom>, sphere_center: &[f64; 3]) -> f64 {
                 &RMIN_HALF_WATER);
                 total_energy += lj_energy;
             }
+
+            let coulomb_energy = coulomb_energy(atom_1.charge(), &-0.8340, &r);
+            total_energy += coulomb_energy;
         }
     }
     total_energy

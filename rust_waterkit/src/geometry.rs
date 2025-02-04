@@ -33,6 +33,12 @@ pub fn scale_point(p1: &[f64; 3], scalar: &f64) -> [f64; 3] {
     retvalue
 }
 
+pub fn resize_vector(v1: &[f64; 3], length: &f64, origin: &[f64; 3]) -> [f64; 3] {
+    let resized_v = normalize(&subtract_points(&v1, &origin));
+    let scaled = scale_point(&resized_v, length);
+    sum_points(&scaled, origin)
+}
+
 
 // Function to calculate the angle between three points (in radians)
 pub fn calculate_angle(a: &[f64; 3], b: &[f64; 3], c: &[f64; 3 ]) -> f64 {
