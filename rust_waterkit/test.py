@@ -136,7 +136,7 @@ def pdb_corners(pdb_file, traj, atom_type="He"):
     print(x_center, y_center, z_center)
     return
 
-def load_waters_orientations(orientations="/data/phd/waterkit/waterkit/data/water_orientations.txt"):
+def load_waters_orientations(orientations="/home/niccolo/phd/waterkit/waterkit/data/water_orientations.txt"):
     usecols = [0, 1, 2, 3, 4, 5]
     water_orientations = np.loadtxt(orientations, usecols=usecols)
     # shape = (water_orientations.shape[0], 2, 3)
@@ -155,10 +155,10 @@ if __name__ == "__main__":
                        "A:PHE:138", "A:TYR:139", "A:VAL:150", 
                        "A:TRP:162", "A:THR:184"]
     # wanted_residues = list()
-    parametrized_atoms, min_box_boundaries, max_box_boundaries = get_data_form_meeko(wanted_residues, "/data/phd/waterkit/example/1uyg_no_ligand.pdb")
+    parametrized_atoms, min_box_boundaries, max_box_boundaries = get_data_form_meeko(wanted_residues, "/home/niccolo/phd/waterkit/example/1uyg_no_ligand.pdb")
     # parametrized_atoms = get_data_form_meeko(wanted_residues, "/home/niccolo/phd/waterkit/example/1uyg.pdb")
     waters = load_waters_orientations()
-    anchor_points = load_anchor_points("/data/phd/waterkit/rust_waterkit/anchor_points_hsp90.txt")
+    anchor_points = load_anchor_points("/home/niccolo/phd/waterkit/rust_waterkit/anchor_points_hsp90.txt")
     spacing = 0.375
     center = [2.7, 11.45, 24.80]
     # center = [2.699591, 11.453864, 24.802502]
@@ -193,7 +193,7 @@ if __name__ == "__main__":
     start = time.time()
     # aps = [[-5.15488359,  9.00213151, 34.99793656]]
     aps = anchor_points
-    wk_map = rust_waterkit.run_waterkit(parametrized_atoms, waters, aps, x_size, y_size, z_size, spacing, center, epochs=10)
+    wk_map = rust_waterkit.run_waterkit(parametrized_atoms, waters, aps, x_size, y_size, z_size, spacing, center, epochs=1)
     for (idx, m) in enumerate(wk_map):
         waters_map = [x for x in m if x.atom_type() == "HW" or x.atom_type() == "OW"]
         # print(f"Time to grid: {time.time() - start}")

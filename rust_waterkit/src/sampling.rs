@@ -1,4 +1,3 @@
-use rand::seq::SliceRandom;
 use rayon::prelude::*;
 
 use crate::monte_carlo as mc;
@@ -94,6 +93,42 @@ pub fn test_anchor_points(grid: &mut Grid3D, receptor_points: &mut Vec<Atom>, an
     new_anchor_points
 }
 
+
+fn optimize_placement_order_grid(grid: &mut Grid3D, points: &Vec<GridPoint>) -> Vec<GridPoint> {
+    let mut energies = Vec::new();
+    let mut min_points = Vec::new();
+    let mut decisions = Vec::new();
+
+    for point in points.iter() {
+        let mut min_energy = point.energy;
+        let mut min_point = point;
+        let neighbors = grid.get_neighbors_within_distance(&point.coords, 1.5, 0.0);
+        for neighbor in neighbors {
+            if neighbor.energy < min_energy {
+                min_energy = neighbor.energy;
+                min_point = neighbor;
+            }
+        }
+        energies.push(min_energy);
+        min_points.push(min_point);
+    }
+
+    let order = mc::boltzmann_choices(&energies, Some(energies.len()));      
+    if order.len() > 0 {
+        for order_idx in order.into_iter() {
+            if mc::boltzmann_acceptance_rejection(&energies[order_idx], 
+                &BOLTZMANN_ENERGY_CUTOFF, 
+                &TEMPERATURE, 
+            &BOLTZMANN_K) {
+                if !decisions.contains(min_points[order_idx]) {
+                    decisions.push(min_points[order_idx].clone());
+                }
+            }
+        }
+    }
+    decisions
+}
+
 /// General approach for the search
 /// 1 -  Get all the energies for the anchor points
 /// 2 -  MC sampling of the points to pick the starting one
@@ -108,109 +143,24 @@ pub fn test_anchor_points(grid: &mut Grid3D, receptor_points: &mut Vec<Atom>, an
 /// 10 - Update points in the receptor's map
 /// 11 - Update the new anchor points
 pub fn sample(grid: &mut Grid3D, receptor_points: &mut Vec<Atom>, anchor_points: &mut Vec<[f64; 3]>, water_configurations: &Vec<[f64; 6]>) -> bool {
-    // Retrieve energies for the anchor points
-    // println!("# anchor points: {}", anchor_points.len());
-    let mut new_receptor_points = Vec::new();
-    let mut placement = false;
-    let mut ap_energies = Vec::new();
-    let mut ap_on_the_grid = Vec::new();
-    let mut new_water = WaterMolecule::new([0., 0., 0.], [0., 0., 0.], [0., 0., 0.]);
-    // let ap_iter = anchor_points.clone();
-    let mut new_anchor_points = Vec::new();
-
-    while !anchor_points.is_empty() {
-        // To begin we select the closest grid points to the anchor points
-        for ap in anchor_points.iter() {
-            let p = grid.get_nearest_neighbor(&ap);
-            if p.is_some() {
-                ap_energies.push(p.unwrap().energy);
-                ap_on_the_grid.push(p.unwrap().clone());
-            }
-        }
-
-        let mc_index = mc::boltzmann_sampling(&ap_energies);
-        if mc_index.is_some() {
-            let ap = &ap_on_the_grid[mc_index.unwrap()];
-            let mut neighbors_energies = Vec::new();
-            // let neighbors = grid.get_neighbors_within_distance(&anchor_points[mc_index.unwrap()]);
-            let neighbors = grid.get_neighbors_within_distance(&ap.coords, 1.5, 0.0);
-            // println!("{}\n\n", neighbors.len());
-            for neighbor in neighbors.iter() {
-                neighbors_energies.push(neighbor.energy);
-            }
-            let neigh_mc_index = mc::boltzmann_sampling(&neighbors_energies);
-            // let neigh_mc_index: Option<usize> = None;
-            if neigh_mc_index.is_some() {
-                let point_to_sample = neighbors[neigh_mc_index.unwrap()].clone();
-                if mc::boltzmann_acceptance_rejection(&point_to_sample.energy, &BOLTZMANN_ENERGY_CUTOFF, &TEMPERATURE, &BOLTZMANN_K) {
-                    (placement, new_water) = sample_real_waters(&point_to_sample, water_configurations, receptor_points, &mut new_receptor_points);
-                    if placement {
-                        anchor_points.remove(mc_index.unwrap());
-                        // anchor_points.push(point_to_sample.coords);
-                        // grid.update_grid_energies(receptor_points);
-                        let new_aps = grid.guess_new_hydrogen_bonds(&new_water);
-                        if new_aps.len() > 0 {
-                            let v = new_water.as_vec();
-                            let o_c = v[0].coords();
-                            let h1_c = v[1].coords();
-                            let h2_c = v[2].coords();
-                            println!("\nO {} {} {}\nH {} {} {}\nH {} {} {}", o_c[0], o_c[1], o_c[2],
-                                                                            h1_c[0], h1_c[1], h1_c[2],
-                                                                        h2_c[0], h2_c[1], h2_c[2]);
-                            // for ap in new_aps.iter() {
-                            //     println!("H {} {} {}", ap[0], ap[1], ap[2]);
-                            // }
-                            let chosen = new_aps.choose(&mut rand::thread_rng()).unwrap();
-                            // // for new_ap in new_aps {
-                            // //     new_anchor_points.push(new_ap);
-                            // // }
-                            // grid.update_grid_energies(receptor_points);
-
-                        }
-                    }
-                }
-            }
-            else {
-                let point_to_sample = ap;
-                // let point_to_sample = &ap;
-                // let point_to_sample = GridPoint {index: 1, coords: [-4.742, 8.555, 35.23], energy: 0.0, updated: false};
-                if mc::boltzmann_acceptance_rejection(&point_to_sample.energy, &BOLTZMANN_ENERGY_CUTOFF, &TEMPERATURE, &BOLTZMANN_K) {
-                    // println!("No favorable neighbor found, using the original anchor point!");
-                    (placement, new_water) = sample_real_waters(&point_to_sample, water_configurations, receptor_points, &mut new_receptor_points);
-                    if placement {
-                        // anchor_points.remove(mc_index.unwrap());
-                        // anchor_points.push(ap_on_the_grid[mc_index.unwrap()].coords);
-                        // grid.update_grid_energies(receptor_points);
-                        let new_aps = grid.guess_new_hydrogen_bonds(&new_water);
-                        if new_aps.len() > 0 {
-                            let chosen = new_aps.choose(&mut rand::thread_rng()).unwrap();
-                            // // for new_ap in new_aps {
-                            // //     new_anchor_points.push(new_ap);
-                            // // }
-                                new_anchor_points.push(chosen.clone());
-                                grid.update_grid_energies(receptor_points);
-
-                        }
-                    }
-                }
-            }
-        }
-        else {
-            // No favorable starting points, we bail out!
-            anchor_points.clear();
+    let placement: bool = false;
+    let mut receptor_points_on_the_grid = Vec::new();
+    // Find the closest grid points to the anchor vectors
+    for point in anchor_points.iter() {
+        let p = grid.get_nearest_neighbor(&point);
+        if p.is_some() {
+            receptor_points_on_the_grid.push(p.unwrap().clone());
         }
     }
+    // Sample with Boltzmann the neighbors and the actual point and based on Metropolis 
+    // acceptance criteria then these are the starting anchor points
+    let decisions = optimize_placement_order_grid(grid, &receptor_points_on_the_grid);
+    for (idx, decision) in decisions.iter().enumerate() {
+        println!("H {} {} {}", decision.coords[0], decision.coords[1], decision.coords[2]);
+    }
 
-    // anchor_points.clear();
-    // for p in new_anchor_points {
-    //     anchor_points.push(p);
-    // }
-    // for new_point in new_receptor_points {
-    //     println!("New Point: {:?}", new_point);
-    //     receptor_points.push(new_point);
-    // }
-    println!("Placed: {}", placement);
-    // grid.update_grid_energies(receptor_points);
+    anchor_points.clear();
+
     placement
 }
 
@@ -370,8 +320,8 @@ pub fn sampling_order_for_anchor_points(anchor_points: &Vec<[f64; 3]>, grid: &mu
             aps_from_grid.push(p.unwrap().clone());
         }
     }
-
-    let order = mc::order_boltzmann_sampling(&aps_from_grid.iter().map(|x| x.energy).collect());
+    let energies: &Vec<f64> = &aps_from_grid.iter().map(|x| x.energy).collect();
+    let order = mc::boltzmann_choices(energies, Some(energies.len()));
     (order, aps_from_grid)
 }
 

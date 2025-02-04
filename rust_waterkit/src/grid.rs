@@ -244,13 +244,6 @@ impl Grid3D {
         let h1 = water_atoms[1].clone();
         let h2 = water_atoms[2].clone();
 
-        // Calculate lone pair directions
-        // let lone_pair_1 = geometry::normalize(&[
-        //     (h1.coords()[0] + h2.coords()[0]) / 2.0 - oxygen_atom.coords()[0],
-        //     (h1.coords()[1] + h2.coords()[1]) / 2.0 - oxygen_atom.coords()[1],
-        //     (h1.coords()[2] + h2.coords()[2]) / 2.0 - oxygen_atom.coords()[2],
-        // ]);
-        // let lone_pair_2 = [-lone_pair_1[0], -lone_pair_1[1], -lone_pair_1[2]];
         
         let mut hb1 = Vec::new();
         let mut hb2 = Vec::new();

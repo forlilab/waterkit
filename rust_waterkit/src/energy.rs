@@ -145,8 +145,8 @@ pub fn spheric_energy(atoms_1: &Vec<Atom>, sphere_center: &[f64; 3]) -> f64 {
                 total_energy += lj_energy;
             }
 
-            let coulomb_energy = coulomb_energy(atom_1.charge(), &-0.8340, &r);
-            total_energy += coulomb_energy;
+            // let ce = coulomb_energy(atom_1.charge(), &-0.8340, &r).abs();
+            // total_energy += -ce;
         }
     }
     total_energy

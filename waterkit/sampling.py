@@ -357,6 +357,9 @@ class WaterSampler():
         """
         for i in water_orders:
             water = waters[i]
+            if opt_disordered:
+                coords = water.coordinates()
+                print(f"H {coords[0][0]} {coords[0][1]} {coords[0][2]}")
 
             energy_position = self._optimize_position_grid(water, add_noise, from_edges=1.)
 
