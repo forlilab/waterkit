@@ -1,3 +1,5 @@
+use itertools::izip;
+use rand::seq::SliceRandom;
 use rayon::prelude::*;
 
 use crate::monte_carlo as mc;
@@ -94,23 +96,34 @@ pub fn test_anchor_points(grid: &mut Grid3D, receptor_points: &mut Vec<Atom>, an
 }
 
 
-fn optimize_placement_order_grid(grid: &mut Grid3D, points: &Vec<GridPoint>) -> Vec<GridPoint> {
+fn optimize_placement_order_grid(grid: &mut Grid3D, points: &Vec<[f64; 3]>) -> Vec<GridPoint> {
     let mut energies = Vec::new();
     let mut min_points = Vec::new();
     let mut decisions = Vec::new();
 
     for point in points.iter() {
-        let mut min_energy = point.energy;
-        let mut min_point = point;
-        let neighbors = grid.get_neighbors_within_distance(&point.coords, 1.5, 0.0);
-        for neighbor in neighbors {
+        let mut min_energy = 100.0;
+        let mut min_point = &GridPoint { index: 0, coords: [0., 0., 0.], energy: 100.0, updated: false};
+        let neighbors = grid.get_neighbors_within_distance(&point, 1.1, 0.0);
+        let mut found = false;
+        for neighbor in neighbors.iter() {
             if neighbor.energy < min_energy {
                 min_energy = neighbor.energy;
+                found = true;
                 min_point = neighbor;
             }
         }
+        if !found {
+            let element = neighbors.last().unwrap().clone();
+            min_points.push(element);
+        } else {
+            min_points.push(min_point);
+        }
         energies.push(min_energy);
-        min_points.push(min_point);
+        
+    }
+    for (energy, point) in izip!(&energies, &min_points) {
+        println!("{} {}, {}, {}", energy, point.coords[0], point.coords[1], point.coords[2]);
     }
 
     let order = mc::boltzmann_choices(&energies, Some(energies.len()));      
@@ -147,16 +160,19 @@ pub fn sample(grid: &mut Grid3D, receptor_points: &mut Vec<Atom>, anchor_points:
     let mut receptor_points_on_the_grid = Vec::new();
     // Find the closest grid points to the anchor vectors
     for point in anchor_points.iter() {
-        let p = grid.get_nearest_neighbor(&point);
-        if p.is_some() {
-            receptor_points_on_the_grid.push(p.unwrap().clone());
+        // let p = grid.get_nearest_neighbor(&point);
+        // if p.is_some() {
+        if grid.in_box(point){
+            receptor_points_on_the_grid.push(point.clone());
         }
     }
+    println!("# of points in grid: {}", receptor_points_on_the_grid.len());
     // Sample with Boltzmann the neighbors and the actual point and based on Metropolis 
     // acceptance criteria then these are the starting anchor points
     let decisions = optimize_placement_order_grid(grid, &receptor_points_on_the_grid);
+    println!("{}", decisions.len());
     for (idx, decision) in decisions.iter().enumerate() {
-        println!("H {} {} {}", decision.coords[0], decision.coords[1], decision.coords[2]);
+        // println!("H {} {} {}", decision.coords[0], decision.coords[1], decision.coords[2]);
     }
 
     anchor_points.clear();

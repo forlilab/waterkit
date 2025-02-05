@@ -294,7 +294,6 @@ class WaterBox():
                     
                     waters.append(w)
                     data.append((i, row.atom_i, len(waters) - 1, None))
-
         # Convert list of tuples into dataframe
         columns = ["molecule_i", "atom_i", "molecule_j", "atom_j"]
         connections = pd.DataFrame(data, columns=columns)
@@ -318,7 +317,6 @@ class WaterBox():
         # generate different random numbers
         rand = int.from_bytes(os.urandom(4), sys.byteorder)
         np.random.seed(rand)
-
         waters, connections = self._place_optimal_spherical_waters(molecules, sw_type, partial_charge)
 
         # Only the receptor contains disordered hydrogens

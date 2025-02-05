@@ -190,7 +190,7 @@ class WaterSampler():
 
     def _optimize_placement_order_grid(self, waters, from_edges=None):
         energies = []
-
+        coords = []
         for water in waters:
             _, energy_sphere = self._neighbor_points_grid(water, from_edges)
 
@@ -199,9 +199,10 @@ class WaterSampler():
                 energies.append(np.min(energy_sphere))
             else:
                 energies.append(np.inf)
-
+            print(energies[-1], f"{water.coordinates()[0][0]}, {water.coordinates()[0][1]} {water.coordinates()[0][2]}")
+        
         energies = np.array(energies)
-
+        
         # Pick order based on Boltzmann choices
         order = utils.boltzmann_choices(energies, self._temperature, len(energies))
 
@@ -348,6 +349,8 @@ class WaterSampler():
         are definitively not that favorable, likely they are all outside the box.
         """
         water_orders = self._optimize_placement_order_grid(waters, from_edges=1.)
+        if opt_disordered:
+            print(len(water_orders))
         unfavorable_water_indices.extend(set(np.arange(len(waters))) - set(water_orders))
 
         """ And now we sample the position of all the water individually. The
@@ -357,9 +360,9 @@ class WaterSampler():
         """
         for i in water_orders:
             water = waters[i]
-            if opt_disordered:
-                coords = water.coordinates()
-                print(f"H {coords[0][0]} {coords[0][1]} {coords[0][2]}")
+            # if opt_disordered:
+            #     coords = water.coordinates()
+            #     print(f"H {coords[0][0]} {coords[0][1]} {coords[0][2]}")
 
             energy_position = self._optimize_position_grid(water, add_noise, from_edges=1.)
 

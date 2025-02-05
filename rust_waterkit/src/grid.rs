@@ -168,18 +168,22 @@ impl Grid3D {
     }
 
     pub fn get_nearest_neighbor(&mut self, query_point: &[f64; 3]) -> Option<&GridPoint> {
-        let nearest = self.kdtree
-            .nearest(query_point, 
-                1,
-            &squared_euclidean::<f64>,
-        ).unwrap();
-        if let Some((distance, &index)) = nearest.first() {
-            let nearest_point = &self.data[index];
-            Some(nearest_point)
-        }
-        else {
+        if self.in_box(query_point) {
+            let nearest = self.kdtree
+                .nearest(query_point, 
+                    1,
+                &squared_euclidean::<f64>,
+            ).unwrap();
+            if let Some((distance, &index)) = nearest.first() {
+                let nearest_point = &self.data[index];
+                Some(nearest_point)
+            }
+            else {
+                None
+            } 
+        } else {
             None
-        } 
+        }
     }
 
     pub fn get_neighbors_within_distance(&self, query_point:&[f64; 3], max: f64, min: f64) -> Vec<&GridPoint> {
@@ -234,61 +238,35 @@ impl Grid3D {
     ) -> Vec<[f64; 3]> {
 
         let mut hydrogen_bond_points = Vec::new();
-    
-        // Hydrogen bond distance range (1.5–2.5 Å)
-        let min_distance = 1.5;
-        let max_distance = 2.5;
+        let angle_lp: f64 = 109.47;
+        let hb_length = 2.8;
         
         let water_atoms = water.as_vec();
         let oxygen_atom = water_atoms[0].clone();
+        let oxygen_xyz = oxygen_atom.coords();
         let h1 = water_atoms[1].clone();
+        let h1_xyz = h1.coords();
         let h2 = water_atoms[2].clone();
+        let h2_xyz = h2.coords();
 
-        
-        let mut hb1 = Vec::new();
-        let mut hb2 = Vec::new();
-        // let mut lp = Vec::new();
+        let angle_lp1 = (angle_lp / 2.0).to_radians();
+        let angle_lp2 = -angle_lp1;
 
-        // get grid points within 1.5 and 2.5 Å
-        let points_within = self.get_neighbors_within_distance(&oxygen_atom.coords(), max_distance, min_distance);
-        // Iterate over the grid points
-        for point in points_within {
+        let v = geometry::atoms_to_move(&oxygen_xyz, &[h1_xyz, h2_xyz]);
+        let r = geometry::sum_points(&oxygen_xyz, &geometry::normalize(&geometry::vector(&h1_xyz, &h2_xyz)));
+        let lp1_xyz = geometry::rotate_point(&v, &oxygen_xyz, &r, angle_lp1);
+        let lp1_resized = geometry::resize_vector(&lp1_xyz, &hb_length, &oxygen_xyz);
+        let lp2_xyz = geometry::rotate_point(&v, &oxygen_xyz, &r, angle_lp2);
+        let lp2_resized = geometry::resize_vector(&lp2_xyz, &hb_length, &oxygen_xyz);
 
-            // Skip the central oxygen point
-            if point.coords == oxygen_atom.coords() {
-                continue;
-            }
-    
-            // Check if the grid point is along the direction of a hydrogen bond
-            for (idx, hydrogen) in [h1.clone(), h2.clone()].iter().enumerate() {
-                let angle = geometry::calculate_angle(&hydrogen.coords(), &oxygen_atom.coords(), &point.coords);
-                if (angle - std::f64::consts::PI).abs() < 0.2 { // Allow a small deviation from 180°
-                    // hydrogen_bond_points.push(point.coords);
-                    if idx == 0 {
-                        hb1.push(point.coords);
-                    }
-                    else {
-                        hb2.push(point.coords);
-                    }
-                }
-            }
-        }
-        
-        if hb1.len() > 0 {
-            let  hbc = hb1.choose(&mut rand::thread_rng()).unwrap();
-            // println!("H {} {} {}", hbc[0], hbc[1], hbc[2]);
-            hydrogen_bond_points.push(hbc.clone());
-        }
-        if hb2.len() > 0 {
-            let  hbc = hb2.choose(&mut rand::thread_rng()).unwrap();
-            // println!("H {} {} {}", hbc[0], hbc[1], hbc[2]);
-            hydrogen_bond_points.push(hbc.clone());
-        }
+        println!("H {} {} {}", lp1_resized[0], lp1_resized[1], lp1_resized[2]);
+        println!("H {} {} {}", lp2_resized[0], lp2_resized[1], lp2_resized[2]);
         let r_h1 = geometry::resize_vector(&h1.coords(), &2.8, &oxygen_atom.coords());
-        // println!("H {} {} {}", r_h1[0], r_h1[1], r_h1[2]);
-
+        println!("H {} {} {}", r_h1[0], r_h1[1], r_h1[2]);
         let r_h2 = geometry::resize_vector(&h2.coords(), &2.8, &oxygen_atom.coords());
-        // println!("H {} {} {}", r_h2[0], r_h2[1], r_h2[2]);
+        println!("H {} {} {}", r_h2[0], r_h2[1], r_h2[2]);
+        hydrogen_bond_points.push(lp1_resized);
+        hydrogen_bond_points.push(lp2_resized);
         hydrogen_bond_points.push(r_h1);
         hydrogen_bond_points.push(r_h2);
         hydrogen_bond_points
