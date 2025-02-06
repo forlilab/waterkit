@@ -73,7 +73,7 @@ impl Atom {
     }
 
     pub fn is_heavy_atom(&self) -> bool {
-        !self.atom_type.contains("H") 
+        !self.atom_type.starts_with("H") 
     }
 
     pub fn is_vina_donor(&self) -> bool {

@@ -37,7 +37,7 @@ def to_xyz_water(traj, fname):
         # fo.write(f"O {traj[-1][0]} {traj[-1][1]} {traj[-1][2]}\n")
     return 
 
-def get_data_form_meeko(wanted_residues, pdb_file, save=False):
+def get_data_form_meeko(wanted_residues, pdb_file, save=True):
     surface_atoms = list()
     with open(pdb_file) as fi:
         pdbstring = fi.read()
@@ -90,6 +90,9 @@ def get_data_form_meeko(wanted_residues, pdb_file, save=False):
     min_box_boundaries = [np.min(box_boundaries[:, 0]), np.min(box_boundaries[:, 1]), np.min(box_boundaries[:, 2])]
     max_box_boundaries = [np.max(box_boundaries[:, 0]), np.max(box_boundaries[:, 1]), np.max(box_boundaries[:, 2])]
     return surface_atoms, min_box_boundaries, max_box_boundaries
+
+def load_data_from_pdb(pdb_file):
+    return
 
 def to_pdb(pdb_file, w_map):
     ag = prody.AtomGroup('Surface')

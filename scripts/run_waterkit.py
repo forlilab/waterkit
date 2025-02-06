@@ -81,7 +81,7 @@ def main():
             # Generate Vina maps for the spherical maps
             v = Vina(verbosity=0)
             v.set_receptor('receptor_ad.pdbqt')
-            v.compute_vina_maps(box_center, box_size, force_even_voxels=True)
+            v.compute_vina_maps(box_center, box_size, force_even_voxels=False)
             v.write_maps('vina')
             sw_map = Map('vina.O_DA.map', 'SW')
         else:
