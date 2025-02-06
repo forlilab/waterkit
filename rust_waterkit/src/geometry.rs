@@ -50,7 +50,7 @@ pub fn resize_vector(v1: &[f64; 3], length: &f64, origin: &[f64; 3]) -> [f64; 3]
 pub fn calculate_angle(a: &[f64; 3], b: &[f64; 3], c: &[f64; 3 ]) -> f64 {
     let ba = [a[0] - b[0], a[1] - b[1], a[2] - b[2]]; // Vector BA
     let bc = [c[0] - b[0], c[1] - b[1], c[2] - b[2]]; // Vector BC
-    let dot_product = ba[0] * bc[0] + ba[1] * bc[1] + ba[2] * bc[2];
+    let dot_product = dot(&ba, &bc);
     let magnitude_ba = (ba[0] * ba[0] + ba[1] * ba[1] + ba[2] * ba[2]).sqrt();
     let magnitude_bc = (bc[0] * bc[0] + bc[1] * bc[1] + bc[2] * bc[2]).sqrt();
     (dot_product / (magnitude_ba * magnitude_bc)).acos()

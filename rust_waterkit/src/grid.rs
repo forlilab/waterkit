@@ -1,3 +1,4 @@
+use core::f64;
 use std::num::NonZeroUsize;
 
 use pyo3::ffi::PyBUF_MAX_NDIM;
@@ -18,7 +19,6 @@ pub struct GridPoint {
     pub index: usize,
     pub coords: [f64; 3],
     pub energy: f64,
-    pub updated: bool,
 }
 
 impl PartialEq for GridPoint {
@@ -91,8 +91,7 @@ impl Grid3D {
                     data.push(GridPoint {
                         index: index,
                         coords,
-                        energy: 0.0,
-                        updated: false,
+                        energy: f64::INFINITY,
                     });
                     // println!("H {} {} {}", x, y, z);
                     index += 1;
@@ -119,19 +118,6 @@ impl Grid3D {
         }
     }
 
-    // pub fn update_grid_energies(
-    //     &mut self,
-    //     new_point_placed: &[f64; 3],
-    //     receptor_points: &Vec<Atom>) {
-        
-    //     let indices = self.get_neigbors_within_distance_mut(new_point_placed, ELECTROSTATICS_CUTOFF, 0.);
-    //     for &index in &indices {
-    //         let point = &mut self.data[index];
-    //         let energy = spheric_energy(receptor_points, &point.coords);
-    //         point.energy = energy;
-    //     }
-    // }
-
     pub fn update_grid_energies(
         &mut self,
         receptor_points: &Vec<Atom>) {
@@ -140,7 +126,15 @@ impl Grid3D {
             .for_each(|point| {
                 let energy = vina_energy(receptor_points, &point.coords);
                 point.energy = energy;
-                point.updated = false;
+            });
+    }
+
+    pub fn update_energies(&mut self, new_points: &Vec<Atom>) {
+        self.all_points_mut()
+            .par_iter_mut()
+            .for_each(|point| {
+                let energy = vina_energy(new_points, &point.coords);
+                point.energy += energy;
             });
     }
 
@@ -206,50 +200,36 @@ impl Grid3D {
         
         let mut neighbor_points = Vec::new();
         for (distance, &index) in in_range {
-            // if geometry::get_angle_for_neighbors(a, b, c, degree)
             neighbor_points.push(&self.data[index]);
         }
         // println!("# Neighbors found: {}", neighbor_points.len());
         neighbor_points
     }
 
-    pub fn guess_new_hydrogen_bonds(
-        &self,
-        water: &WaterMolecule,
-    ) -> Vec<[f64; 3]> {
+    pub fn get_neighbors_within_distance_and_angle(&self, anchor_xyz: &[f64; 3], vector_xyz: &[f64; 3], max: f64, min: f64) -> Vec<&GridPoint> {
+        let min_distance: f64 = min.powf(2.0); // Minimum distance in angstroms
+        let max_distance: f64 = max.powf(2.0); // Maximum distance in angstroms
 
-        let mut hydrogen_bond_points = Vec::new();
-        let angle_lp: f64 = 109.47;
-        let hb_length = 2.8;
+        // Query all points within the maximum distance (3.6 Å)
+        let within_max_distance = self.kdtree
+            .within(anchor_xyz, max_distance, &squared_euclidean)
+            .unwrap();
+        // println!("Points found: {}", within_max_distance.len());
+
+        // Filter out points that are closer than the minimum distance (2.5 Å)
+        let in_range: Vec<_> = within_max_distance
+            .into_iter()
+            .filter(|&(distance, _)| distance >= min_distance) // Compare squared distances
+            .collect();
+        // println!("Points found: {}", in_range.len());
         
-        let water_atoms = water.as_vec();
-        let oxygen_atom = water_atoms[0].clone();
-        let oxygen_xyz = oxygen_atom.coords();
-        let h1 = water_atoms[1].clone();
-        let h1_xyz = h1.coords();
-        let h2 = water_atoms[2].clone();
-        let h2_xyz = h2.coords();
-
-        let angle_lp1 = (angle_lp / 2.0).to_radians();
-        let angle_lp2 = -angle_lp1;
-
-        let v = geometry::atoms_to_move(&oxygen_xyz, &[h1_xyz, h2_xyz]);
-        let r = geometry::sum_points(&oxygen_xyz, &geometry::normalize(&geometry::vector(&h1_xyz, &h2_xyz)));
-        let lp1_xyz = geometry::rotate_point(&v, &oxygen_xyz, &r, angle_lp1);
-        let lp1_resized = geometry::resize_vector(&lp1_xyz, &hb_length, &oxygen_xyz);
-        let lp2_xyz = geometry::rotate_point(&v, &oxygen_xyz, &r, angle_lp2);
-        let lp2_resized = geometry::resize_vector(&lp2_xyz, &hb_length, &oxygen_xyz);
-
-        println!("H {} {} {}", lp1_resized[0], lp1_resized[1], lp1_resized[2]);
-        println!("H {} {} {}", lp2_resized[0], lp2_resized[1], lp2_resized[2]);
-        let r_h1 = geometry::resize_vector(&h1.coords(), &2.8, &oxygen_atom.coords());
-        println!("H {} {} {}", r_h1[0], r_h1[1], r_h1[2]);
-        let r_h2 = geometry::resize_vector(&h2.coords(), &2.8, &oxygen_atom.coords());
-        println!("H {} {} {}", r_h2[0], r_h2[1], r_h2[2]);
-        hydrogen_bond_points.push(lp1_resized);
-        hydrogen_bond_points.push(lp2_resized);
-        hydrogen_bond_points.push(r_h1);
-        hydrogen_bond_points.push(r_h2);
-        hydrogen_bond_points
+        let mut neighbor_points = Vec::new();
+        for (distance, &index) in in_range {
+            if geometry::calculate_angle(&self.data[index].coords, anchor_xyz, vector_xyz).to_degrees() >= 90.0 {
+                neighbor_points.push(&self.data[index]);
+            }
+        }
+        // println!("# Neighbors found: {}", neighbor_points.len());
+        neighbor_points
     }
 }

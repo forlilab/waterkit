@@ -320,6 +320,8 @@ class WaterBox():
         rand = int.from_bytes(os.urandom(4), sys.byteorder)
         np.random.seed(rand)
         waters, connections = self._place_optimal_spherical_waters(molecules, sw_type, partial_charge)
+        # for water in waters:
+        #     print(f"{0.0} {water.coordinates()[0][0]}, {water.coordinates()[0][1]}, {water.coordinates()[0][2]}")
 
         # Only the receptor contains disordered hydrogens
         if shell_id == 0:

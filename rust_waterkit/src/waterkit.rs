@@ -315,7 +315,7 @@ fn run_single_waterkit(receptor_points: &Vec<Atom>,
         let mut mutable_anchor_points = anchor_points.clone();
         grid.build_kdtree();
 
-        while !mutable_anchor_points.is_empty() {
+        for _ in 0..4 {
             sample(&mut grid, &mut receptor_map, &mut mutable_anchor_points, &water_configurations);
         }
         let elapsed_time = start_time.elapsed();
@@ -335,27 +335,19 @@ pub fn run_waterkit(receptor_points: Vec<Atom>,
     epochs: usize) -> Vec<Vec<Atom>> {
     let start_time = Instant::now();
     let grid = roll_sphere_and_compute_energies_grid(&receptor_points, x_size, y_size, z_size, spacing, center);
-    for point in grid.all_points() {
-        println!("{} {} {} {}", point.energy, point.coords[0], point.coords[1], point.coords[2]);
-    }
     let results: Vec<Vec<Atom>> = (0..epochs)
         .into_par_iter()
         .map(|_| {
             run_single_waterkit(
-                &receptor_points,
-                &water_configurations,
-                &anchor_points,
+                &receptor_points.clone(),
+                &water_configurations.clone(),
+                &anchor_points.clone(),
                 grid.clone()
             )
         })
         .collect();
-    // let mut results = Vec::new();
-    // for _ in 0..epochs {
-    //     results.push(run_single_waterkit(&receptor_points, &water_configurations, &anchor_points, x_size, y_size, z_size, spacing, center));
-    // }
     let elapsed_time = start_time.elapsed();
     println!("Time taken for {} maps: {:?}", epochs, elapsed_time);
-    // println!("{:?}", results);
     results
 }
 

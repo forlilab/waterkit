@@ -1,17 +1,18 @@
 use pyo3::prelude::*;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
+
 #[pyclass]
 pub struct AnchorPoint {
     hb_type: String,
     anchor_xyz: [f64; 3],
-    vector_xyz: Vec<[f64; 3]>
+    vector_xyz: [f64; 3]
 }
 
 #[pymethods]
 impl AnchorPoint {
     #[new]
-    pub fn new(hb_type: String, anchor_xyz: [f64; 3], vector_xyz: Vec<[f64; 3]>) -> AnchorPoint {
+    pub fn new(hb_type: String, anchor_xyz: [f64; 3], vector_xyz: [f64; 3]) -> AnchorPoint {
         Self {
             hb_type: hb_type.clone(),
             anchor_xyz: anchor_xyz.clone(),
@@ -19,7 +20,7 @@ impl AnchorPoint {
         }
     }
 
-    pub fn anchor_vectors(&self) -> &Vec<[f64; 3]> {
+    pub fn anchor_vectors(&self) -> &[f64; 3] {
         &self.vector_xyz
     }
 
