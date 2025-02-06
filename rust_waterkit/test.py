@@ -5,14 +5,18 @@ import meeko
 import rust_waterkit
 
 def load_anchor_points(filename):
-    ap_coords = list()
+    anchor_points = list()
     with open(filename) as fi:
         lines = fi.readlines()
 
     for line in lines:
-        line = line.strip().split(",")
-        ap_coords.append(np.array([float(line[0]), float(line[1]), float(line[2])]))
-    return ap_coords
+        line = line.strip().split(" ")
+        anchor_xyz = [float(line[0]), float(line[1]), float(line[2])]
+        vector_xyz = [float(line[3]), float(line[4]), float(line[5])]
+        hb_type = line[-1]
+        ap = rust_waterkit.AnchorPoint(hb_type, anchor_xyz, [vector_xyz])
+        anchor_points.append(ap)
+    return anchor_points
 
 def to_xyz(traj, step_size, fname):
     with open(f"{fname}.xyz", 'w') as fo:
@@ -33,13 +37,13 @@ def to_xyz_water(traj, fname):
         # fo.write(f"O {traj[-1][0]} {traj[-1][1]} {traj[-1][2]}\n")
     return 
 
-def get_data_form_meeko(wanted_residues, pdb_file):
+def get_data_form_meeko(wanted_residues, pdb_file, save=False):
     surface_atoms = list()
     with open(pdb_file) as fi:
         pdbstring = fi.read()
     mk_prep = meeko.MoleculePreparation(
         merge_these_atom_types=[],
-        load_atom_params=["openff"],
+        load_atom_params=["vina_params", "openff"],
         charge_model="gasteiger",
     )
     box_boundaries = list()
@@ -49,6 +53,11 @@ def get_data_form_meeko(wanted_residues, pdb_file):
                                             mk_prep=mk_prep, 
                                             allow_bad_res=True, 
                                             default_altloc="A")
+    if save:
+        pdb_f = polymer.to_pdb()
+        with open("meeko.pdb", "w") as fo:
+            fo.write(pdb_f)
+
     for res_id, monomer in polymer.get_valid_monomers().items():
         unique_id = f"{res_id.split(':')[0]}:{monomer.input_resname}:{res_id.split(':')[-1]}"
         for atom in monomer.molsetup.atoms:
@@ -56,6 +65,13 @@ def get_data_form_meeko(wanted_residues, pdb_file):
                 continue
             rmin_half = monomer.molsetup.atom_params["rmin_half"][atom.index]
             epsilon = monomer.molsetup.atom_params["epsilon"][atom.index]
+            vina_rij = monomer.molsetup.atom_params["vina_ri"][atom.index]
+            vina_donor = monomer.molsetup.atom_params["vina_donor"][atom.index]
+            vina_acceptor = monomer.molsetup.atom_params["vina_acceptor"][atom.index]
+            if vina_rij is None:
+                vina_rij = 0.0
+                vina_donor = False
+                vina_acceptor = False
             charge = atom.charge
             atom_type = atom.pdbinfo.name
             new_atom = rust_waterkit.Atom(atom_type=atom_type, 
@@ -63,7 +79,10 @@ def get_data_form_meeko(wanted_residues, pdb_file):
                         coords_point=atom.coord, 
                         rmin_half=rmin_half, 
                         epsilon=epsilon, 
-                        charge=charge)
+                        charge=charge,
+                        vina_rij=vina_rij,
+                        vina_donor=vina_donor,
+                        vina_acceptor=vina_acceptor)
             surface_atoms.append(new_atom)
             if unique_id in wanted_residues:
                 box_boundaries.append(atom.coord)
@@ -158,7 +177,7 @@ if __name__ == "__main__":
     parametrized_atoms, min_box_boundaries, max_box_boundaries = get_data_form_meeko(wanted_residues, "/data/phd/waterkit/example/1uyg_no_ligand.pdb")
     # parametrized_atoms = get_data_form_meeko(wanted_residues, "/home/niccolo/phd/waterkit/example/1uyg.pdb")
     waters = load_waters_orientations()
-    anchor_points = load_anchor_points("/data/phd/waterkit/rust_waterkit/anchor_points_hsp90.txt")
+    anchor_points = load_anchor_points("/data/phd/waterkit/rust_waterkit/anchor_points.txt")
     spacing = 0.375
     center = [2.7, 11.45, 24.80]
     # center = [2.699591, 11.453864, 24.802502]

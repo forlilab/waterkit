@@ -3,11 +3,12 @@ use std::time::Instant;
 use pyo3::prelude::*;
 use rayon::prelude::*;
 
+use crate::anchor_point::{self, AnchorPoint};
 use crate::atom::Atom;
 use crate::energy::energy_for_real_water;
 use crate::grid::{Grid3D, GridPoint};
 use crate::sampling::{roll_sphere_and_compute_energies_grid, sampling_order_for_anchor_points, save_shell_and_energies, sample, test_anchor_points};
-use crate::utils::{BOLTZMANN_ENERGY_CUTOFF, BOLTZMANN_K, TEMPERATURE};
+use crate::consts::{BOLTZMANN_ENERGY_CUTOFF, BOLTZMANN_K, TEMPERATURE};
 use crate::water::{self, WaterMolecule};
 
 
@@ -194,7 +195,7 @@ pub fn run_waterkit_simple(receptor_points: Vec<Atom>,
     grid.build_kdtree();
     // for i in 0..3 {
     while mutable_anchor_points.len() > 0 {
-        sample(&mut grid, &mut receptor_map, &mut mutable_anchor_points, &water_configurations);
+        // sample(&mut grid, &mut receptor_map, &mut mutable_anchor_points, &water_configurations);
         // grid.update_grid_energies(&receptor_points);
     }
     // }
@@ -306,7 +307,7 @@ pub fn test_new_aps(receptor_points: Vec<Atom>,
 
 fn run_single_waterkit(receptor_points: &Vec<Atom>, 
     water_configurations: &Vec<[f64; 6]>, 
-    anchor_points: &Vec<[f64; 3]>, 
+    anchor_points: &Vec<AnchorPoint>, 
     mut grid: Grid3D) -> Vec<Atom> {
         let start_time = Instant::now();
         let mut receptor_map = receptor_points.clone();
@@ -325,7 +326,7 @@ fn run_single_waterkit(receptor_points: &Vec<Atom>,
 #[pyfunction]
 pub fn run_waterkit(receptor_points: Vec<Atom>, 
     water_configurations: Vec<[f64; 6]>, 
-    anchor_points: Vec<[f64; 3]>, 
+    anchor_points: Vec<AnchorPoint>, 
     x_size: f64, 
     y_size: f64, 
     z_size: f64, 
@@ -334,6 +335,9 @@ pub fn run_waterkit(receptor_points: Vec<Atom>,
     epochs: usize) -> Vec<Vec<Atom>> {
     let start_time = Instant::now();
     let grid = roll_sphere_and_compute_energies_grid(&receptor_points, x_size, y_size, z_size, spacing, center);
+    for point in grid.all_points() {
+        println!("{} {} {} {}", point.energy, point.coords[0], point.coords[1], point.coords[2]);
+    }
     let results: Vec<Vec<Atom>> = (0..epochs)
         .into_par_iter()
         .map(|_| {

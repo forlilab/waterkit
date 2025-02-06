@@ -1,5 +1,5 @@
-use pyo3::prelude::*;
-use crate::{atom::Atom, grid::GridPoint, utils::RMIN_HALF_WATER};
+use crate::atom::Atom;
+use crate::consts::RMIN_HALF_WATER;
 
 #[derive(Clone, Debug)]
 // #[pyclass]
@@ -24,6 +24,10 @@ impl WaterMolecule {
                 RMIN_HALF_WATER,
                 0.6364,
                 -0.8340,
+                1.7,
+                true,
+                true
+
             );
             let hydrogen_1 = Atom::new("HW".to_string(),
                 "1".to_string(),
@@ -31,6 +35,9 @@ impl WaterMolecule {
                 0.0,
                 0.0,
                 0.4170,
+                0.0,
+                false,
+                false
             );
             let hydrogen_2 = Atom::new("HW".to_string(),
                 "2".to_string(),
@@ -38,6 +45,9 @@ impl WaterMolecule {
                 0.0,
                 0.0,
                 0.4170,
+                0.0,
+                false,
+                false
             );
             WaterMolecule {
                 oxygen: oxygen,

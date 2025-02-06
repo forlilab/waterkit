@@ -1,7 +1,7 @@
 use ndarray::Array1;
 use rand::prelude::*;
 use rand::distributions::WeightedIndex;
-use crate::utils::{BOLTZMANN_K, TEMPERATURE};
+use crate::consts::{BOLTZMANN_K, TEMPERATURE};
 
 fn boltzmann_probabilities(energies: &[f64]) -> Vec<f64> {
     // Compute the Boltzmann factor for each energy

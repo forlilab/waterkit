@@ -87,6 +87,7 @@ def main():
         else:
             # The first spherical map is for the receptor
             sw_map = Map(spherical_water_maps[0], 'SW')
+        sw_map.to_pdb("grid_wk.pdb", "SW", 1000)
 
         ad_map.add_map('SW', sw_map._maps['SW'])
 

@@ -207,7 +207,6 @@ class Map():
         X, Y, Z = np.meshgrid(x, y, z)
         xyz = np.stack((X.ravel(), Y.ravel(), Z.ravel()), axis=-1)
         kdtree = spatial.cKDTree(xyz)
-
         return kdtree, edges
 
     def _index_to_cartesian(self, idx):
@@ -682,18 +681,28 @@ class Map():
         idx = np.array(np.where(self._maps[map_type] <= max_energy)).T
 
         i = 0
-        line = "ATOM  %5d  D   DUM Z%4d    %8.3f%8.3f%8.3f  1.00%6.2f           D\n"
+        line = "ATOM  %5d  D DUM Z%4d    %8.3f%8.3f%8.3f  1.00%6.2f           D\n"
 
         with open(fname, "w") as w:
             for j in range(idx.shape[0]):
 
-                v = self._maps[atom_type][idx[j][0], idx[j][1], idx[j][2]]
+                v = self._maps[map_type][idx[j][0], idx[j][1], idx[j][2]]
 
                 if v > 999.99:
                     v = 999.99
 
-                w.write(line % (i, i, self._edges[0][idx[j][0]], self._edges[1][idx[j][1]], self._edges[2][idx[j][2]], v))
+                w.write(f"{v} {self._edges[0][idx[j][0]]} {self._edges[1][idx[j][1]]} {self._edges[2][idx[j][2]]}\n")
                 i += 1
+        # with open(fname, "w") as w:
+        #     for j in range(idx.shape[0]):
+
+        #         v = self._maps[map_type][idx[j][0], idx[j][1], idx[j][2]]
+
+        #         if v > 999.99:
+        #             v = 999.99
+
+        #         w.write(line % (i, i, self._edges[0][idx[j][0]], self._edges[1][idx[j][1]], self._edges[2][idx[j][2]], v))
+        #         i += 1
 
     def to_map(self, map_types=None, prefix=None, grid_parameter_file="grid.gpf",
                grid_data_file="maps.fld", macromolecule="molecule.pdbqt"):

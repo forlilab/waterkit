@@ -7,9 +7,10 @@ use kdtree::distance::squared_euclidean;
 use kdtree::KdTree;
 
 use crate::atom::Atom;
-use crate::energy::spheric_energy;
+// use crate::energy::spheric_energy;
 use crate::geometry::{self, resize_vector};
-use crate::utils::ELECTROSTATICS_CUTOFF;
+use crate::consts::ELECTROSTATICS_CUTOFF;
+use crate::vina_ff::vina_energy;
 use crate::water::WaterMolecule;
 
 #[derive(Clone, Debug)]
@@ -93,6 +94,7 @@ impl Grid3D {
                         energy: 0.0,
                         updated: false,
                     });
+                    // println!("H {} {} {}", x, y, z);
                     index += 1;
                 }
             }
@@ -136,7 +138,7 @@ impl Grid3D {
         self.all_points_mut()
             .par_iter_mut()
             .for_each(|point| {
-                let energy = spheric_energy(receptor_points, &point.coords);
+                let energy = vina_energy(receptor_points, &point.coords);
                 point.energy = energy;
                 point.updated = false;
             });
@@ -154,7 +156,6 @@ impl Grid3D {
         (self.x_min <= point[0] && point[0] <= self.x_max) && 
         (self.y_min <= point[1] && point[1] <= self.y_max) && 
         (self.z_min <= point[2] && point[2] <= self.z_max) 
-
     }
 
     pub fn build_kdtree(&mut self) {
@@ -210,26 +211,6 @@ impl Grid3D {
         }
         // println!("# Neighbors found: {}", neighbor_points.len());
         neighbor_points
-    }
-
-    // This function returns indices to points that then can be borrowed as mutables
-    pub fn get_neigbors_within_distance_mut(&mut self, query_point:&[f64; 3], max: f64, min: f64) -> Vec<usize> {
-        let min_distance: f64 = min.powf(2.0); // Minimum distance in angstroms
-        let max_distance: f64 = max.powf(2.0); // Maximum distance in angstroms
-
-        // Query all points within the maximum distance (3.6 Å)
-        let within_max_distance = self.kdtree
-            .within(query_point, max_distance, &squared_euclidean)
-            .unwrap();
-        // println!("Points found: {}", within_max_distance.len());
-
-        // Filter out points that are closer than the minimum distance (2.5 Å)
-        let in_range: Vec<_> = within_max_distance
-            .into_iter()
-            .filter(|&(distance, _)| distance >= min_distance) // Compare squared distances
-            .map(|(_, &index)| index)
-            .collect();
-        in_range
     }
 
     pub fn guess_new_hydrogen_bonds(

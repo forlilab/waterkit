@@ -2,12 +2,14 @@ use itertools::izip;
 use rand::seq::SliceRandom;
 use rayon::prelude::*;
 
+use crate::anchor_point::AnchorPoint;
 use crate::monte_carlo as mc;
 use crate::grid::{Grid3D, GridPoint};
-use crate::utils::*;
+use crate::consts::*;
 use crate::atom::Atom;
+use crate::vina_ff::vina_energy;
 use crate::water::WaterMolecule;
-use crate::energy::{energy_for_real_water, spheric_energy};
+use crate::energy::{energy_for_real_water};
 
 pub fn test_anchor_points(grid: &mut Grid3D, receptor_points: &mut Vec<Atom>, anchor_points: &mut Vec<[f64; 3]>, water_configurations: &Vec<[f64; 6]>) -> Vec<[f64; 3]> {
     let mut ap_energies = Vec::new();
@@ -96,35 +98,34 @@ pub fn test_anchor_points(grid: &mut Grid3D, receptor_points: &mut Vec<Atom>, an
 }
 
 
-fn optimize_placement_order_grid(grid: &mut Grid3D, points: &Vec<[f64; 3]>) -> Vec<GridPoint> {
+fn optimize_placement_order_grid(grid: &mut Grid3D, points: &Vec<AnchorPoint>) -> Vec<GridPoint> {
     let mut energies = Vec::new();
     let mut min_points = Vec::new();
     let mut decisions = Vec::new();
 
     for point in points.iter() {
-        let mut min_energy = 100.0;
-        let mut min_point = &GridPoint { index: 0, coords: [0., 0., 0.], energy: 100.0, updated: false};
-        let neighbors = grid.get_neighbors_within_distance(&point, 1.1, 0.0);
-        let mut found = false;
-        for neighbor in neighbors.iter() {
-            if neighbor.energy < min_energy {
-                min_energy = neighbor.energy;
-                found = true;
-                min_point = neighbor;
+        for v in point.anchor_vectors() {
+            let mut min = 2.5;
+            let mut max = 3.6;
+            if point.hb_type() == "donor" {
+                min -= 1.0;
+                max -= 1.0;
             }
+            let neighbors = grid.get_neighbors_within_distance(point.anchor_point(), max, min);
+            // println!("He {} {} {}", point_coords[0], point_coords[1], point_coords[2]);
+            // for neighbor in neighbors.iter() {
+            //     println!("H {} {} {}", neighbor.coords[0], neighbor.coords[1], neighbor.coords[2]);
+            // }
+            // println!("\n");
+            let min_point = neighbors.into_iter().min_by(|a, b| a.energy.partial_cmp(&b.energy).unwrap()).unwrap();
+            energies.push(min_point.energy.clone());
+            min_points.push(min_point.clone());
         }
-        if !found {
-            let element = neighbors.last().unwrap().clone();
-            min_points.push(element);
-        } else {
-            min_points.push(min_point);
-        }
-        energies.push(min_energy);
         
     }
-    for (energy, point) in izip!(&energies, &min_points) {
-        println!("{} {}, {}, {}", energy, point.coords[0], point.coords[1], point.coords[2]);
-    }
+    // for (energy, point) in izip!(&energies, &min_points) {
+    //     println!("{} {}, {}, {}", energy, point.coords[0], point.coords[1], point.coords[2]);
+    // }
 
     let order = mc::boltzmann_choices(&energies, Some(energies.len()));      
     if order.len() > 0 {
@@ -133,7 +134,7 @@ fn optimize_placement_order_grid(grid: &mut Grid3D, points: &Vec<[f64; 3]>) -> V
                 &BOLTZMANN_ENERGY_CUTOFF, 
                 &TEMPERATURE, 
             &BOLTZMANN_K) {
-                if !decisions.contains(min_points[order_idx]) {
+                if !decisions.contains(&min_points[order_idx]) {
                     decisions.push(min_points[order_idx].clone());
                 }
             }
@@ -155,22 +156,19 @@ fn optimize_placement_order_grid(grid: &mut Grid3D, points: &Vec<[f64; 3]>) -> V
 /// 9 -  Update grid's energies
 /// 10 - Update points in the receptor's map
 /// 11 - Update the new anchor points
-pub fn sample(grid: &mut Grid3D, receptor_points: &mut Vec<Atom>, anchor_points: &mut Vec<[f64; 3]>, water_configurations: &Vec<[f64; 6]>) -> bool {
+pub fn sample(grid: &mut Grid3D, receptor_points: &mut Vec<Atom>, anchor_points: &mut Vec<AnchorPoint>, water_configurations: &Vec<[f64; 6]>) -> bool {
     let placement: bool = false;
     let mut receptor_points_on_the_grid = Vec::new();
-    // Find the closest grid points to the anchor vectors
     for point in anchor_points.iter() {
-        // let p = grid.get_nearest_neighbor(&point);
-        // if p.is_some() {
-        if grid.in_box(point){
+        if grid.in_box(point.anchor_point()){
             receptor_points_on_the_grid.push(point.clone());
         }
     }
-    println!("# of points in grid: {}", receptor_points_on_the_grid.len());
+    // println!("# of points in grid: {}", receptor_points_on_the_grid.len());
     // Sample with Boltzmann the neighbors and the actual point and based on Metropolis 
     // acceptance criteria then these are the starting anchor points
     let decisions = optimize_placement_order_grid(grid, &receptor_points_on_the_grid);
-    println!("{}", decisions.len());
+    // println!("{}", decisions.len());
     for (idx, decision) in decisions.iter().enumerate() {
         // println!("H {} {} {}", decision.coords[0], decision.coords[1], decision.coords[2]);
     }
@@ -206,7 +204,7 @@ pub fn roll_sphere_and_compute_energies_grid(
     grid.all_points_mut()
         .par_iter_mut()
         .for_each(|point| {
-            let energy = spheric_energy(receptor_points, &point.coords);
+            let energy = vina_energy(receptor_points, &point.coords);
             point.energy =  energy;
             point.updated = true;
         });

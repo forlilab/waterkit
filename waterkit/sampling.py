@@ -183,7 +183,7 @@ class WaterSampler():
         hb_vector = water.hb_anchor + utils.normalize(utils.vector(water.hb_vector, water.hb_anchor))
         angle_sphere = utils.get_angle(coord_sphere, water.hb_anchor, hb_vector)
 
-        coord_sphere = coord_sphere[angle_sphere >= self._angle]
+        # coord_sphere = coord_sphere[angle_sphere >= self._angle]
         energy_sphere = ad_map.energy_coordinates(coord_sphere, atom_type=oxygen_type)
 
         return coord_sphere, energy_sphere
@@ -192,15 +192,18 @@ class WaterSampler():
         energies = []
         coords = []
         for water in waters:
+            # print(f"He {water.coordinates()[0][0]} {water.coordinates()[0][1]} {water.coordinates()[0][2]}")
             _, energy_sphere = self._neighbor_points_grid(water, from_edges)
+            # for n in _:
+                # print(f"H {n[0]} {n[1]} {n[2]}")
 
             if energy_sphere.size:
                 energy_sphere[energy_sphere == 0.] = np.inf
                 energies.append(np.min(energy_sphere))
             else:
                 energies.append(np.inf)
+            # print("\n")
             print(energies[-1], f"{water.coordinates()[0][0]}, {water.coordinates()[0][1]} {water.coordinates()[0][2]}")
-        
         energies = np.array(energies)
         
         # Pick order based on Boltzmann choices
