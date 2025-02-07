@@ -44,7 +44,7 @@ def get_data_form_meeko(wanted_residues, pdb_file, save=False):
     mk_prep = meeko.MoleculePreparation(
         merge_these_atom_types=[],
         load_atom_params=["vina_params", "openff"],
-        charge_model="espaloma",
+        charge_model="gasteiger",
     )
     box_boundaries = list()
     templates = meeko.ResidueChemTemplates.create_from_defaults()
@@ -215,7 +215,7 @@ if __name__ == "__main__":
     start = time.time()
     # aps = [[-5.15488359,  9.00213151, 34.99793656]]
     aps = anchor_points
-    wk_map = rust_waterkit.run_waterkit(parametrized_atoms, waters, aps, x_size, y_size, z_size, spacing, center, epochs=1000)
+    wk_map = rust_waterkit.run_waterkit(parametrized_atoms, waters, aps, x_size, y_size, z_size, spacing, center, epochs=1, use_grids=True)
     for (idx, m) in enumerate(wk_map):
         waters_map = [x for x in m if x.atom_type() == "HW" or x.atom_type() == "OW"]
         # print(f"Time to grid: {time.time() - start}")

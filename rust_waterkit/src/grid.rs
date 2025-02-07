@@ -1,18 +1,12 @@
 use core::f64;
-use std::num::NonZeroUsize;
-
-use pyo3::ffi::PyBUF_MAX_NDIM;
-use rand::seq::SliceRandom;
 use rayon::prelude::*;
 use kdtree::distance::squared_euclidean;
 use kdtree::KdTree;
 
 use crate::atom::Atom;
-// use crate::energy::spheric_energy;
-use crate::geometry::{self, resize_vector};
-use crate::consts::ELECTROSTATICS_CUTOFF;
-use crate::vina_ff::{self, vina_energy};
-use crate::water::WaterMolecule;
+use crate::energy;
+use crate::geometry;
+use crate::vina_ff;
 
 #[derive(Clone, Debug)]
 pub struct GridPoint {
@@ -117,23 +111,28 @@ impl Grid3D {
         }
     }
 
-    pub fn update_grid_energies(
-        &mut self,
-        receptor_points: &Vec<Atom>) {
+
+    pub fn update_energies_oda(&mut self, new_points: &Vec<Atom>) {
         self.all_points_mut()
             .par_iter_mut()
             .for_each(|point| {
-                let energy = vina_energy(receptor_points, &point.coords);
-                point.energy = energy;
+                point.energy += vina_ff::vina_energy(new_points, &point.coords);
             });
     }
 
-    pub fn update_energies(&mut self, new_points: &Vec<Atom>) {
+    pub fn update_energies_ow(&mut self, new_points: &Vec<Atom>) {
         self.all_points_mut()
             .par_iter_mut()
             .for_each(|point| {
-                let energy = vina_energy(new_points, &point.coords);
-                point.energy += energy;
+                point.energy +=  energy::get_ow_energy(new_points, &point.coords);
+            });
+    }
+
+    pub fn update_energies_elec(&mut self, new_points: &Vec<Atom>) {
+        self.all_points_mut()
+            .par_iter_mut()
+            .for_each(|point| {
+                point.energy +=  energy::get_q_energy(new_points, &point.coords);
             });
     }
 
@@ -161,7 +160,7 @@ impl Grid3D {
         self.kdtree = tree;
     }
 
-    pub fn get_nearest_neighbor(&mut self, query_point: &[f64; 3]) -> Option<&GridPoint> {
+    pub fn get_nearest_neighbor(&self, query_point: &[f64; 3]) -> Option<&GridPoint> {
         if self.in_box(query_point) {
             let nearest = self.kdtree
                 .nearest(query_point, 
@@ -184,24 +183,19 @@ impl Grid3D {
         let min_distance: f64 = min.powf(2.0); // Minimum distance in angstroms
         let max_distance: f64 = max.powf(2.0); // Maximum distance in angstroms
 
-        // Query all points within the maximum distance (3.6 Å)
         let within_max_distance = self.kdtree
             .within(query_point, max_distance, &squared_euclidean)
             .unwrap();
-        // println!("Points found: {}", within_max_distance.len());
 
-        // Filter out points that are closer than the minimum distance (2.5 Å)
         let in_range: Vec<_> = within_max_distance
             .into_iter()
             .filter(|&(distance, _)| distance >= min_distance) // Compare squared distances
             .collect();
-        // println!("Points found: {}", in_range.len());
         
         let mut neighbor_points = Vec::new();
         for (distance, &index) in in_range {
             neighbor_points.push(&self.data[index]);
         }
-        // println!("# Neighbors found: {}", neighbor_points.len());
         neighbor_points
     }
 
@@ -209,18 +203,14 @@ impl Grid3D {
         let min_distance: f64 = min.powf(2.0); // Minimum distance in angstroms
         let max_distance: f64 = max.powf(2.0); // Maximum distance in angstroms
 
-        // Query all points within the maximum distance (3.6 Å)
         let within_max_distance = self.kdtree
             .within(anchor_xyz, max_distance, &squared_euclidean)
             .unwrap();
-        // println!("Points found: {}", within_max_distance.len());
 
-        // Filter out points that are closer than the minimum distance (2.5 Å)
         let in_range: Vec<_> = within_max_distance
             .into_iter()
             .filter(|&(distance, _)| distance >= min_distance) // Compare squared distances
             .collect();
-        // println!("Points found: {}", in_range.len());
         
         let mut neighbor_points = Vec::new();
         for (distance, &index) in in_range {
@@ -228,9 +218,9 @@ impl Grid3D {
                 neighbor_points.push(&self.data[index]);
             }
         }
-        // println!("# Neighbors found: {}", neighbor_points.len());
         neighbor_points
     }
+
 
     pub fn trilinear_interpolation(
         &self,
@@ -245,9 +235,9 @@ impl Grid3D {
         let nz = self.z_size as usize;
 
         // Ensure the point is within the grid bounds
-        assert!(x >= 0.0 && x <= (nx - 1) as f64);
-        assert!(y >= 0.0 && y <= (ny - 1) as f64);
-        assert!(z >= 0.0 && z <= (nz - 1) as f64);
+        // assert!(x >= 0.0 && x <= (nx - 1) as f64);
+        // assert!(y >= 0.0 && y <= (ny - 1) as f64);
+        // assert!(z >= 0.0 && z <= (nz - 1) as f64);
     
         // Find the lower corner of the cell containing (x, y, z)
         let x0 = x.floor() as usize;
@@ -280,4 +270,26 @@ impl Grid3D {
         // Interpolate along the z-axis
         c0 * (1.0 - zd) + c1 * zd
     }
+
+    pub fn to_pdb(&self) {
+        for point in self.all_points() {
+            // let line = format!(
+            //     "{:<6}{:>5} {:^4} {:>3} {:1}{:>4}    {:>8.3}{:>8.3}{:>8.3}{:>6.2}{:>6.2}          {:>2}",
+            //     "ATOM",
+            //     point.index,
+            //     "H",
+            //     "HOH",
+            //     "A",
+            //     1,
+            //     point.coords[0],
+            //     point.coords[1],
+            //     point.coords[2],
+            //     0.0,
+            //     point.energy,
+            //     "H"
+            // );
+            println!("{} {}, {}, {}", point.energy, point.coords[0], point.coords[1], point.coords[2]);
+        }
+    }
+
 }

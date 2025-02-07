@@ -1,53 +1,11 @@
 use crate::atom::Atom;
-use crate::consts::ELECTROSTATICS_CUTOFF;
 use crate::grid::Grid3D;
 use crate::vina_ff;
-use crate::geometry;
-use crate::consts;
 use crate::energy;
+
 use rayon::prelude::*;
 
-fn get_ow_energy(atoms_1: &Vec<Atom>, sphere_center: &[f64; 3]) -> f64{
-    let mut total_energy = 0.0;
-    for atom_1 in atoms_1.iter() {
-        let atom_1_coords = atom_1.coords();
 
-        // Calculate distance avoiding division by 0
-        let distance = f64::max(geometry::euclidean_distance(&atom_1_coords,
-            sphere_center), 1e-8_f64);
-
-        if distance < ELECTROSTATICS_CUTOFF {
-
-            if atom_1.atom_type() != &"HW" {
-                let lj_energy = energy::lennard_jones_rmin_half(atom_1.epsilon(),
-                &consts::TIP3P_EPSILON, 
-                &distance,
-                atom_1.rmin_half(), 
-                &consts::RMIN_HALF_WATER);
-                total_energy += lj_energy;
-            }
-        }
-    }
-    total_energy
-}
-
-fn get_q_energy(atoms_1: &Vec<Atom>, sphere_center: &[f64; 3]) -> f64 {
-    let mut total_energy = 0.0;
-    for atom_1 in atoms_1.iter() {
-        let atom_1_coords = atom_1.coords();
-
-        // Calculate distance avoiding division by 0
-        let distance = f64::max(geometry::euclidean_distance(&atom_1_coords,
-            sphere_center), 1e-8_f64);
-
-        if distance < ELECTROSTATICS_CUTOFF {
-
-            let electrostatics = energy::coulomb_energy(atom_1.charge(), &1.0, &distance);
-            total_energy += electrostatics;
-        }
-    }
-    total_energy
-}
 
 /// In the setup we pre-compute the 3 grid necessary
 /// to compute the eneregies:
@@ -99,8 +57,10 @@ pub fn setup_ow_grid(
     grid.all_points_mut()
     .par_iter_mut()
     .for_each(|point| {
-        point.energy =  get_ow_energy(receptor_points, &point.coords);
+        point.energy =  energy::get_ow_energy(receptor_points, &point.coords);
     });
+
+    grid.build_kdtree();
     grid
 }
 
@@ -116,7 +76,9 @@ pub fn setup_q_grid(
     grid.all_points_mut()
     .par_iter_mut()
     .for_each(|point| {
-        point.energy =  get_q_energy(receptor_points, &point.coords);
+        point.energy =  energy::get_q_energy(receptor_points, &point.coords);
     });
+
+    grid.build_kdtree();
     grid
 }

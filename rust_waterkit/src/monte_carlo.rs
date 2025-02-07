@@ -55,58 +55,62 @@ pub fn boltzmann_choices(energies: &[f64], num_samples: Option<usize>) -> Vec<us
         let probabilities = boltzmann_probabilities(&energies);
     
         // Create a weighted distribution using the probabilities
-        let dist = WeightedIndex::new(&probabilities).unwrap();
+        let dist = WeightedIndex::new(&probabilities);
 
-        // Sample an index from the remaining indices
-        let sampled_index = dist.sample(&mut rng);
-        vec![sampled_index]
+        if dist.is_ok() {
+            // Sample an index from the remaining indices
+            let sampled_index = dist.unwrap().sample(&mut rng);
+            vec![sampled_index]
+        } else {
+            return vec![];
+        }
     }
 }
 
 
-/// This function returns the index of a randomly sampled energy based
-/// on the Boltzmann probability distribution
-pub fn boltzmann_sampling(energies: &Vec<f64>) -> Option<usize> {
-    // println!("{:?}",energies);
-    let probability_distribution = boltzmann_probabilities(energies);
-    let sum: f64 = probability_distribution.iter().sum();
-    if sum == 0. || probability_distribution.len() == 0 || probability_distribution.iter().any(|x| x < &0.) {
-        return None;
-    }
-    let mut rng = thread_rng();
-    let dist = WeightedIndex::new(&probability_distribution);
-    if dist.is_ok() {
-        return Some(dist.unwrap().sample(&mut rng));
-    }
-    None
-}
+// /// This function returns the index of a randomly sampled energy based
+// /// on the Boltzmann probability distribution
+// pub fn boltzmann_sampling(energies: &Vec<f64>) -> Option<usize> {
+//     // println!("{:?}",energies);
+//     let probability_distribution = boltzmann_probabilities(energies);
+//     let sum: f64 = probability_distribution.iter().sum();
+//     if sum == 0. || probability_distribution.len() == 0 || probability_distribution.iter().any(|x| x < &0.) {
+//         return None;
+//     }
+//     let mut rng = thread_rng();
+//     let dist = WeightedIndex::new(&probability_distribution);
+//     if dist.is_ok() {
+//         return Some(dist.unwrap().sample(&mut rng));
+//     }
+//     None
+// }
 
-pub fn boltzmann_sampling_order(energies: &[f64], num_samples: usize) -> Vec<usize> {
-    let mut rng = thread_rng();
-    let mut sampled_indices = Vec::with_capacity(num_samples);
-    let mut remaining_indices: Vec<usize> = (0..energies.len()).collect();
-    let mut remaining_energies: Vec<f64> = energies.to_vec();
+// pub fn boltzmann_sampling_order(energies: &[f64], num_samples: usize) -> Vec<usize> {
+//     let mut rng = thread_rng();
+//     let mut sampled_indices = Vec::with_capacity(num_samples);
+//     let mut remaining_indices: Vec<usize> = (0..energies.len()).collect();
+//     let mut remaining_energies: Vec<f64> = energies.to_vec();
 
-    for _ in 0..num_samples {
-        // Compute the Boltzmann probabilities for the remaining energies
-        let probabilities = boltzmann_probabilities(&remaining_energies);
+//     for _ in 0..num_samples {
+//         // Compute the Boltzmann probabilities for the remaining energies
+//         let probabilities = boltzmann_probabilities(&remaining_energies);
 
-        // Create a weighted distribution using the probabilities
-        let dist = WeightedIndex::new(&probabilities).unwrap();
+//         // Create a weighted distribution using the probabilities
+//         let dist = WeightedIndex::new(&probabilities).unwrap();
 
-        // Sample an index from the remaining indices
-        let sampled_index = dist.sample(&mut rng);
+//         // Sample an index from the remaining indices
+//         let sampled_index = dist.sample(&mut rng);
 
-        // Add the corresponding original index to the result
-        sampled_indices.push(remaining_indices[sampled_index]);
+//         // Add the corresponding original index to the result
+//         sampled_indices.push(remaining_indices[sampled_index]);
 
-        // Remove the sampled energy and index from the remaining lists
-        remaining_indices.remove(sampled_index);
-        remaining_energies.remove(sampled_index);
-    }
+//         // Remove the sampled energy and index from the remaining lists
+//         remaining_indices.remove(sampled_index);
+//         remaining_energies.remove(sampled_index);
+//     }
 
-    sampled_indices
-}
+//     sampled_indices
+// }
 
 pub fn boltzmann_acceptance_rejection(
     new_energies: &f64,
@@ -144,82 +148,82 @@ pub fn boltzmann_acceptance_rejection(
 }
 
 
-pub fn monte_carlo_sampling(energies: &Vec<f64>) -> usize {
-    let mut rng = rand::thread_rng();
+// pub fn monte_carlo_sampling(energies: &Vec<f64>) -> usize {
+//     let mut rng = rand::thread_rng();
 
-    // Step 1: Calculate Boltzmann weights
-    let boltzmann_weights: Vec<f64> = energies
-        .iter()
-        .map(|&e| (-e / (BOLTZMANN_K * TEMPERATURE)).exp())
-        .collect();
+//     // Step 1: Calculate Boltzmann weights
+//     let boltzmann_weights: Vec<f64> = energies
+//         .iter()
+//         .map(|&e| (-e / (BOLTZMANN_K * TEMPERATURE)).exp())
+//         .collect();
 
-    // Step 2: Normalize weights to probabilities
-    let weight_sum: f64 = boltzmann_weights.iter().sum();
-    let probabilities: Vec<f64> = boltzmann_weights.iter().map(|&w| w / weight_sum).collect();
+//     // Step 2: Normalize weights to probabilities
+//     let weight_sum: f64 = boltzmann_weights.iter().sum();
+//     let probabilities: Vec<f64> = boltzmann_weights.iter().map(|&w| w / weight_sum).collect();
 
-    // Step 3: Build cumulative distribution
-    let mut cdf: Vec<f64> = Vec::with_capacity(probabilities.len());
-    let mut cumulative = 0.0;
-    for &p in &probabilities {
-        cumulative += p;
-        cdf.push(cumulative);
-    }
+//     // Step 3: Build cumulative distribution
+//     let mut cdf: Vec<f64> = Vec::with_capacity(probabilities.len());
+//     let mut cumulative = 0.0;
+//     for &p in &probabilities {
+//         cumulative += p;
+//         cdf.push(cumulative);
+//     }
 
-    // // Step 4: Sample states based on CDF
-    // let mut samples = Vec::with_capacity(num_samples);
-    // for _ in 0..num_samples {
-    let mut chosen_index = 0;
-    let random_value = rng.gen::<f64>(); // Random value between 0 and 1
-    if let Some((index, _)) = cdf.iter().enumerate().find(|&(_, &v)| v >= random_value) {
-        // samples.push(index);
-        chosen_index = index;
-    }
-    chosen_index
-}
+//     // // Step 4: Sample states based on CDF
+//     // let mut samples = Vec::with_capacity(num_samples);
+//     // for _ in 0..num_samples {
+//     let mut chosen_index = 0;
+//     let random_value = rng.gen::<f64>(); // Random value between 0 and 1
+//     if let Some((index, _)) = cdf.iter().enumerate().find(|&(_, &v)| v >= random_value) {
+//         // samples.push(index);
+//         chosen_index = index;
+//     }
+//     chosen_index
+// }
 
 
-fn monte_carlo_sampling_without_replacement(
-    energies: &[f64],
-    temperature: f64,
-    num_samples: usize,
-) -> Vec<usize> {
-    let k_boltzmann = 1.0; // Set Boltzmann constant to 1.0 for simplicity (adjust as needed)
-    let mut rng = rand::thread_rng();
+// fn monte_carlo_sampling_without_replacement(
+//     energies: &[f64],
+//     temperature: f64,
+//     num_samples: usize,
+// ) -> Vec<usize> {
+//     let k_boltzmann = 1.0; // Set Boltzmann constant to 1.0 for simplicity (adjust as needed)
+//     let mut rng = rand::thread_rng();
 
-    // Step 1: Calculate Boltzmann weights
-    let mut boltzmann_weights: Vec<f64> = energies
-        .iter()
-        .map(|&e| (-e / (k_boltzmann * temperature)).exp())
-        .collect();
+//     // Step 1: Calculate Boltzmann weights
+//     let mut boltzmann_weights: Vec<f64> = energies
+//         .iter()
+//         .map(|&e| (-e / (k_boltzmann * temperature)).exp())
+//         .collect();
 
-    // Ensure we don't request more samples than available states
-    let total_states = boltzmann_weights.len();
-    let num_samples = num_samples.min(total_states);
+//     // Ensure we don't request more samples than available states
+//     let total_states = boltzmann_weights.len();
+//     let num_samples = num_samples.min(total_states);
 
-    let mut samples = Vec::with_capacity(num_samples);
+//     let mut samples = Vec::with_capacity(num_samples);
 
-    for _ in 0..num_samples {
-        // Step 2: Normalize weights to probabilities
-        let weight_sum: f64 = boltzmann_weights.iter().sum();
-        let probabilities: Vec<f64> = boltzmann_weights.iter().map(|&w| w / weight_sum).collect();
+//     for _ in 0..num_samples {
+//         // Step 2: Normalize weights to probabilities
+//         let weight_sum: f64 = boltzmann_weights.iter().sum();
+//         let probabilities: Vec<f64> = boltzmann_weights.iter().map(|&w| w / weight_sum).collect();
 
-        // Step 3: Build cumulative distribution
-        let mut cdf: Vec<f64> = Vec::with_capacity(probabilities.len());
-        let mut cumulative = 0.0;
-        for &p in &probabilities {
-            cumulative += p;
-            cdf.push(cumulative);
-        }
+//         // Step 3: Build cumulative distribution
+//         let mut cdf: Vec<f64> = Vec::with_capacity(probabilities.len());
+//         let mut cumulative = 0.0;
+//         for &p in &probabilities {
+//             cumulative += p;
+//             cdf.push(cumulative);
+//         }
 
-        // Step 4: Sample a state based on the CDF
-        let random_value = rng.gen::<f64>(); // Random value between 0 and 1
-        if let Some((index, _)) = cdf.iter().enumerate().find(|&(_, &v)| v >= random_value) {
-            samples.push(index);
+//         // Step 4: Sample a state based on the CDF
+//         let random_value = rng.gen::<f64>(); // Random value between 0 and 1
+//         if let Some((index, _)) = cdf.iter().enumerate().find(|&(_, &v)| v >= random_value) {
+//             samples.push(index);
 
-            // Step 5: Remove the selected state
-            boltzmann_weights[index] = 0.0; // Set weight to 0 to exclude from future selections
-        }
-    }
+//             // Step 5: Remove the selected state
+//             boltzmann_weights[index] = 0.0; // Set weight to 0 to exclude from future selections
+//         }
+//     }
 
-    samples
-}
+//     samples
+// }

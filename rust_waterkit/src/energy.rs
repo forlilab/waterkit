@@ -1,7 +1,7 @@
 use pyo3::prelude::*;
 use crate::atom::Atom;
-use crate::geometry::euclidean_distance;
-use crate::consts::{ELECTROSTATICS_CUTOFF, EPSILON_WATER, RMIN_HALF_WATER};
+use crate::geometry;
+use crate::consts;
 
 
 /// Calculate the Lennard-Jones interaction energy
@@ -55,10 +55,10 @@ pub fn energy(atoms_1: &Vec<Atom>, atoms_2: &Vec<Atom>) -> f64 {
             let atom_2_coords = atom_2.coords();
 
             // Calculate distance avoiding division by 0
-            let r = f64::max(euclidean_distance(&atom_1_coords,
+            let r = f64::max(geometry::euclidean_distance(&atom_1_coords,
                 &atom_2_coords), 1e-8_f64.sqrt());
 
-            if r < ELECTROSTATICS_CUTOFF {
+            if r < consts::ELECTROSTATICS_CUTOFF {
                 let mut lj_energy = 0.0;
 
                 if atom_1.atom_type() != &"HW".to_string() && atom_2.atom_type() != &"HW".to_string() {
@@ -87,7 +87,7 @@ pub fn energy_for_real_water(atoms_1: &Vec<Atom>, atoms_2: &Vec<Atom>) -> f64 {
         for atom_2 in atoms_2.iter() {
             let atom_2_coords = atom_2.coords().clone();
             // Calculate distance avoiding division by 0
-            let r = f64::max(euclidean_distance(&atom_1_coords,
+            let r = f64::max(geometry::euclidean_distance(&atom_1_coords,
                 &atom_2_coords), 1e-8_f64);
 
             // if r < ELECTROSTATICS_CUTOFF {
@@ -106,14 +106,50 @@ pub fn energy_for_real_water(atoms_1: &Vec<Atom>, atoms_2: &Vec<Atom>) -> f64 {
 
                 // Add to total energy
                 total_energy += lj_energy + coulomb_energy;
-                // c_e += coulomb_energy;
-                // l_e += lj_energy;
-            // }
         }
     }
-    // if total_energy > 1000.0 {
-    //     println!("total energy messed up: {} -> {} {}", total_energy, coulomb, lj);
-    // }
-    // println!("{} - LJ: {}, C: {}", total_energy, l_e, c_e);
+    total_energy
+}
+
+
+/// Grids region
+pub fn get_ow_energy(atoms_1: &Vec<Atom>, sphere_center: &[f64; 3]) -> f64{
+    let mut total_energy = 0.0;
+    for atom_1 in atoms_1.iter() {
+        let atom_1_coords = atom_1.coords();
+
+        // Calculate distance avoiding division by 0
+        let distance = f64::max(geometry::euclidean_distance(&atom_1_coords,
+            sphere_center), 1e-8_f64);
+
+        if distance < consts::ELECTROSTATICS_CUTOFF {
+
+            if atom_1.atom_type() != &"HW" {
+                let lj_energy = lennard_jones_rmin_half(atom_1.epsilon(),
+                &consts::TIP3P_EPSILON, 
+                &distance,
+                atom_1.rmin_half(), 
+                &consts::RMIN_HALF_WATER);
+                total_energy += lj_energy;
+            }
+        }
+    }
+    total_energy
+}
+
+pub fn get_q_energy(atoms_1: &Vec<Atom>, sphere_center: &[f64; 3]) -> f64 {
+    let mut total_energy = 0.0;
+    for atom_1 in atoms_1.iter() {
+        let atom_1_coords = atom_1.coords();
+
+        // Calculate distance avoiding division by 0
+        let distance = f64::max(geometry::euclidean_distance(&atom_1_coords,
+            sphere_center), 1e-8_f64);
+
+        if distance < consts::ELECTROSTATICS_CUTOFF {
+            let electrostatics = coulomb_energy(atom_1.charge(), &1.0, &distance);
+            total_energy += electrostatics;
+        }
+    }
     total_energy
 }

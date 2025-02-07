@@ -6,7 +6,7 @@ use rayon::prelude::*;
 use crate::anchor_point::AnchorPoint;
 use crate::atom::Atom;
 use crate::grid::Grid3D;
-use crate::sampling::sample;
+use crate::sampling::{sample, sample_using_grids, sample_waters_with_grids};
 use crate::setup::setup_system;
 
 
@@ -14,19 +14,42 @@ fn run_single_waterkit(receptor_points: &Vec<Atom>,
     water_configurations: &Vec<[f64; 6]>, 
     anchor_points: &Vec<AnchorPoint>, 
     mut grid: Grid3D) -> Vec<Atom> {
-        let start_time = Instant::now();
+        // let start_time = Instant::now();
         let mut receptor_map = receptor_points.clone();
         
         let mut mutable_anchor_points = anchor_points.clone();
-        grid.build_kdtree();
 
         for _ in 0..4 {
             sample(&mut grid, &mut receptor_map, &mut mutable_anchor_points, &water_configurations);
         }
-        let elapsed_time = start_time.elapsed();
-        println!("Time taken for one map: {:?}", elapsed_time);
+        // let elapsed_time = start_time.elapsed();
+        // println!("Time taken for one map: {:?}", elapsed_time);
         receptor_map
-    }
+}
+
+fn run_single_waterkit_with_grids(receptor_points: &Vec<Atom>, 
+    water_configurations: &Vec<[f64; 6]>, 
+    anchor_points: &Vec<AnchorPoint>, 
+    mut grid_oda: Grid3D,
+    mut grid_ow: Grid3D,
+    mut grid_elec: Grid3D) -> Vec<Atom> {
+        // let start_time = Instant::now();
+        let mut receptor_map = receptor_points.clone();
+        
+        let mut mutable_anchor_points = anchor_points.clone();
+
+        for _ in 0..3 {
+            sample_using_grids(&mut grid_oda,
+                &mut grid_ow,
+                &mut grid_elec,
+                 &mut receptor_map,
+                  &mut mutable_anchor_points,
+                   &water_configurations);
+        }
+        // let elapsed_time = start_time.elapsed();
+        // println!("Time taken for one map: {:?}", elapsed_time);
+        receptor_map
+}
 
 #[pyfunction]
 pub fn run_waterkit(receptor_points: Vec<Atom>, 
@@ -65,11 +88,13 @@ pub fn run_waterkit(receptor_points: Vec<Atom>,
         let results: Vec<Vec<Atom>> = (0..epochs)
             .into_par_iter()
             .map(|_| {
-                run_single_waterkit(
+                run_single_waterkit_with_grids(
                     &receptor_points.clone(),
                     &water_configurations.clone(),
                     &anchor_points.clone(),
-                    grid_oda.clone()
+                    grid_oda.clone(),
+                    grid_ow.clone(),
+                    grid_elec.clone(),
                 )
             })
             .collect();
