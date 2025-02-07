@@ -18,15 +18,52 @@ mod tests {
     use super::*;
     use rayon::prelude::*;
     #[test]
-    fn test_interpolation() {
-        let mut grid = grid::Grid3D::new((2.0, 2.0, 2.0), 1.0, [4.0, 4.0, 4.0]);
-        let mut e = 1.0;
-        for point in grid.all_points_mut() {
-            point.energy = e;
-            e += 1.; 
-        }
-        let interpolated = grid.trilinear_interpolation(&[0.5, 0.5, 0.5]);
-        assert_eq!(interpolated, 4.5);
+    fn test_trilinear_interpolation() {
+        let spacing = 1.0;
+        let size = (3.0, 3.0, 3.0);
+        let center = [1.5, 1.5, 1.5];
+        
+        let mut grid = grid::Grid3D::new(size, spacing, center);
+    
+        // Manually assign energy values to a small 2x2x2 cube for easy validation
+        let test_indices = [
+            (0, 0, 0, 1.0),  // c000
+            (0, 0, 1, 2.0),  // c001
+            (0, 1, 0, 3.0),  // c010
+            (0, 1, 1, 4.0),  // c011
+            (1, 0, 0, 5.0),  // c100
+            (1, 0, 1, 6.0),  // c101
+            (1, 1, 0, 7.0),  // c110
+            (1, 1, 1, 8.0),  // c111
+        ];
 
+        for data in grid.data.iter() {
+            println!("Point at index: {} - {:?} - {}", data.index, data.coords, data.energy);
+        }
+    
+        for &(i, j, k, energy) in &test_indices {
+            let index = i + 4 * (j + 4 * k); // Manually mapping indices
+            println!("Fetching energy at i={}, j={}, k={} -> index {}", i, j, k, index);
+            grid.data[index].energy = energy;
+        }
+        
+        // Test a point in the middle of the cell (should return the average energy)
+        let test_point = [0.5, 0.5, 0.5];  // Midpoint of (0,0,0) and (1,1,1)
+        let interpolated_value = grid.trilinear_interpolation(test_point).unwrap();
+    
+        // Compute expected value manually
+        let expected_value = (1.0 + 2.0 + 3.0 + 4.0 + 5.0 + 6.0 + 7.0 + 8.0) / 8.0;
+    
+        println!(
+            "Interpolated value: {:.3}, Expected value: {:.3}",
+            interpolated_value, expected_value
+        );
+    
+        assert!(
+            (interpolated_value - expected_value).abs() < 1e-6,
+            "Interpolation is incorrect!"
+        );
+    
+        println!("Trilinear interpolation test passed!");
     }
 }

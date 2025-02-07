@@ -90,7 +90,7 @@ pub fn energy_for_real_water(atoms_1: &Vec<Atom>, atoms_2: &Vec<Atom>) -> f64 {
             let r = f64::max(geometry::euclidean_distance(&atom_1_coords,
                 &atom_2_coords), 1e-8_f64);
 
-            // if r < ELECTROSTATICS_CUTOFF {
+            if r < consts::ELECTROSTATICS_CUTOFF {
                 cnt += 1;
                 // println!("{} Atom {}: {}", cnt, atom_2.atom_type(), atom_2.charge());
                 let mut lj_energy = 0.0;
@@ -106,6 +106,7 @@ pub fn energy_for_real_water(atoms_1: &Vec<Atom>, atoms_2: &Vec<Atom>) -> f64 {
 
                 // Add to total energy
                 total_energy += lj_energy + coulomb_energy;
+            }
         }
     }
     total_energy
@@ -122,8 +123,7 @@ pub fn get_ow_energy(atoms_1: &Vec<Atom>, sphere_center: &[f64; 3]) -> f64{
         let distance = f64::max(geometry::euclidean_distance(&atom_1_coords,
             sphere_center), 1e-8_f64);
 
-        if distance < consts::ELECTROSTATICS_CUTOFF {
-
+        // if distance < consts::ELECTROSTATICS_CUTOFF {
             if atom_1.atom_type() != &"HW" {
                 let lj_energy = lennard_jones_rmin_half(atom_1.epsilon(),
                 &consts::TIP3P_EPSILON, 
@@ -132,7 +132,7 @@ pub fn get_ow_energy(atoms_1: &Vec<Atom>, sphere_center: &[f64; 3]) -> f64{
                 &consts::RMIN_HALF_WATER);
                 total_energy += lj_energy;
             }
-        }
+        // }
     }
     total_energy
 }
@@ -146,10 +146,10 @@ pub fn get_q_energy(atoms_1: &Vec<Atom>, sphere_center: &[f64; 3]) -> f64 {
         let distance = f64::max(geometry::euclidean_distance(&atom_1_coords,
             sphere_center), 1e-8_f64);
 
-        if distance < consts::ELECTROSTATICS_CUTOFF {
+        // if distance < consts::ELECTROSTATICS_CUTOFF {
             let electrostatics = coulomb_energy(atom_1.charge(), &1.0, &distance);
             total_energy += electrostatics;
-        }
+        // }
     }
     total_energy
 }

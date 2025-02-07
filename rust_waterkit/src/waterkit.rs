@@ -19,7 +19,8 @@ fn run_single_waterkit(receptor_points: &Vec<Atom>,
         
         let mut mutable_anchor_points = anchor_points.clone();
 
-        for _ in 0..4 {
+        while mutable_anchor_points.len() > 0 {
+        // for _ in 0..1 {
             sample(&mut grid, &mut receptor_map, &mut mutable_anchor_points, &water_configurations);
         }
         // let elapsed_time = start_time.elapsed();
@@ -38,7 +39,8 @@ fn run_single_waterkit_with_grids(receptor_points: &Vec<Atom>,
         
         let mut mutable_anchor_points = anchor_points.clone();
 
-        for _ in 0..3 {
+        while mutable_anchor_points.len() > 0 {
+        // for _ in 0..1 {
             sample_using_grids(&mut grid_oda,
                 &mut grid_ow,
                 &mut grid_elec,
@@ -68,38 +70,23 @@ pub fn run_waterkit(receptor_points: Vec<Atom>,
     let grid_oda = grids[0].clone();
     let grid_ow = grids[1].clone();
     let grid_elec = grids[2].clone();
-
-    if !use_grids {
-        let results: Vec<Vec<Atom>> = (0..epochs)
-            .into_par_iter()
-            .map(|_| {
-                run_single_waterkit(
-                    &receptor_points.clone(),
-                    &water_configurations.clone(),
-                    &anchor_points.clone(),
-                    grid_oda.clone()
-                )
-            })
-            .collect();
-        let elapsed_time = start_time.elapsed();
-        println!("Time taken for {} maps: {:?}", epochs, elapsed_time);
-        return results;
-    } else {
-        let results: Vec<Vec<Atom>> = (0..epochs)
-            .into_par_iter()
-            .map(|_| {
-                run_single_waterkit_with_grids(
-                    &receptor_points.clone(),
-                    &water_configurations.clone(),
-                    &anchor_points.clone(),
-                    grid_oda.clone(),
-                    grid_ow.clone(),
-                    grid_elec.clone(),
-                )
-            })
-            .collect();
-        let elapsed_time = start_time.elapsed();
-        println!("Time taken for {} maps: {:?}", epochs, elapsed_time);
-        return results;
+    let mut results = Vec::new();
+    
+    for _ in 0..epochs {
+        if !use_grids {
+            results.push(run_single_waterkit(&receptor_points.clone(), &water_configurations.clone(), &anchor_points.clone(), grid_oda.clone()));
+        } else {
+            results.push(run_single_waterkit_with_grids(
+                &receptor_points.clone(),
+                &water_configurations.clone(),
+                &anchor_points.clone(),
+                grid_oda.clone(),
+                grid_ow.clone(),
+                grid_elec.clone(),
+            ));
+        }
     }
+    let elapsed_time = start_time.elapsed();
+    println!("Time taken for {} maps: {:?}", epochs, elapsed_time);
+    return results;
 }

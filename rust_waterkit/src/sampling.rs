@@ -1,7 +1,8 @@
+use pyo3::buffer::ElementType;
 use rayon::prelude::*;
 
 use crate::anchor_point::AnchorPoint;
-use crate::monte_carlo as mc;
+use crate::{energy, monte_carlo as mc};
 use crate::grid::{Grid3D, GridPoint};
 use crate::consts::*;
 use crate::atom::Atom;
@@ -86,10 +87,11 @@ fn optimize_poistion_grid(grid: &mut Grid3D, point: &AnchorPoint, add_noise: boo
 /// 10 - Update points in the receptor's map
 /// 11 - Update the new anchor points
 pub fn sample(grid: &mut Grid3D, receptor_points: &mut Vec<Atom>, anchor_points: &mut Vec<AnchorPoint>, water_configurations: &Vec<[f64; 6]>) -> bool {
+    
     let mut new_anchor_points = Vec::new();
     let placement: bool = false;
     let mut receptor_points_on_the_grid = Vec::new();
-    for point in anchor_points.iter() {
+    for point in anchor_points.into_iter() {
         if grid.in_box(point.anchor_point()){
             receptor_points_on_the_grid.push(point.clone());
         }
@@ -98,20 +100,13 @@ pub fn sample(grid: &mut Grid3D, receptor_points: &mut Vec<Atom>, anchor_points:
     // acceptance criteria then these are the starting anchor points
     // let start_time = Instant::now();
     let decisions = optimize_placement_order_grid(grid, &receptor_points_on_the_grid);
-    // println!("Time taken to optimize placement: {:?}", start_time.elapsed());
-
+    // println!("Decisions: {}",decisions.len());
     for (idx, decision) in decisions.iter().enumerate() {
-        
-        // let start_time = Instant::now();
         let new_point = optimize_poistion_grid(grid, decision, false);
-        // println!("Time taken to optimize position_grid: {:?}", start_time.elapsed());
-        
         if mc::boltzmann_acceptance_rejection(&new_point.energy, &BOLTZMANN_ENERGY_CUTOFF, &TEMPERATURE, &BOLTZMANN_K) {
             // Now we build explicit water
-            // let start_time = Instant::now();
+            // println!("Sampling real waters");
             let (placed, mut water) = sample_real_waters(&new_point, water_configurations, receptor_points);
-            // println!("Time taken to sample real waters: {:?}", start_time.elapsed());
-
             if placed {
                 water.guess_new_hydrogen_bonds();
                 for hb in water.hydrogen_bonds().into_iter() {
@@ -120,10 +115,9 @@ pub fn sample(grid: &mut Grid3D, receptor_points: &mut Vec<Atom>, anchor_points:
                 grid.update_energies_oda(&water.as_vec());
             }
         }
-        // println!("\n");
     }
-
-    // println!("New Anchor points: {}", new_anchor_points.len());
+    println!("Waters added: {}", new_anchor_points.len()/4);
+    println!("New anchor points found: {}\n", new_anchor_points.len());
     anchor_points.clear();
     for p in new_anchor_points.into_iter() {
         anchor_points.push(p);
@@ -141,7 +135,7 @@ pub fn sample_using_grids(grid_oda: &mut Grid3D,
     let mut new_anchor_points = Vec::new();
     let placement: bool = false;
     let mut receptor_points_on_the_grid = Vec::new();
-    for point in anchor_points.iter() {
+    for point in anchor_points.into_iter() {
         if grid_oda.in_box(point.anchor_point()){
             receptor_points_on_the_grid.push(point.clone());
         }
@@ -149,26 +143,22 @@ pub fn sample_using_grids(grid_oda: &mut Grid3D,
     // Sample with Boltzmann the neighbors and the actual point and based on Metropolis 
     // acceptance criteria then these are the starting anchor points
     let decisions = optimize_placement_order_grid(grid_oda, &receptor_points_on_the_grid);
-    let mut cnt = 0;
+    // println!("Decisions: {}",decisions.len());
     for (idx, decision) in decisions.iter().enumerate() {
-        
         let new_point = optimize_poistion_grid(grid_oda, decision, false);
-        
+        if idx == 1 {
+            println!("{:?}", new_point);
+        }
         if mc::boltzmann_acceptance_rejection(&new_point.energy, &BOLTZMANN_ENERGY_CUTOFF, &TEMPERATURE, &BOLTZMANN_K) {
             // Now we build explicit water
+            // println!("Sampling real waters");
             let (placed, mut water) = sample_waters_with_grids(&new_point, water_configurations, receptor_points, grid_ow, grid_elec);
 
             if placed {
-
-                // if idx > 5 {
-                //     break
-                // }
-
                 water.guess_new_hydrogen_bonds();
                 for hb in water.hydrogen_bonds().into_iter() {
                     new_anchor_points.push(hb);
                 }
-                cnt += 1;
                 let atoms_to_update = water.as_vec();
                 grid_oda.update_energies_oda(&atoms_to_update);
                 grid_ow.update_energies_ow(&atoms_to_update);
@@ -176,13 +166,12 @@ pub fn sample_using_grids(grid_oda: &mut Grid3D,
             }
         }
     }
-
+    println!("Waters added: {}", new_anchor_points.len()/4);
+    println!("New anchor points found: {}\n", new_anchor_points.len());
     anchor_points.clear();
     for p in new_anchor_points.into_iter() {
         anchor_points.push(p);
     }
-    // println!("Points placed: {}", cnt);
-    // println!("New anchor points found: {}", anchor_points.len());
     placement
 }
 
@@ -216,6 +205,12 @@ pub fn sample_real_waters(oxygen_atom: &GridPoint,
             (water, energy_value)
         })
         .collect();
+    
+    // Debug
+    // for (water, energy) in possible_results.iter() {
+    //     println!("{:?}", energy);
+    // }
+    //
 
     let possible_waters_energies: Vec<f64> = possible_results.iter().map(|(_, e)| *e).collect();
 
@@ -250,8 +245,13 @@ pub fn sample_waters_with_grids(oxygen_atom: &GridPoint,
     let oxygen_position = oxygen_atom.coords;
 
     // This should work since the grids have the same points it should return the exact point
-    let lj_value = grid_ow.get_nearest_neighbor(&oxygen_position).unwrap().energy;
-    let electrostatics_oxygen = grid_elec.get_nearest_neighbor(&oxygen_position).unwrap().energy;
+    let oxygen_ow = grid_ow.get_nearest_neighbor(&oxygen_position).unwrap();
+    let oxygen_elec = grid_elec.get_nearest_neighbor(&oxygen_position).unwrap();
+    // println!("Oxygen Positions: {:?}", oxygen_atom);
+    // println!("Oxygen OW: {:?}", oxygen_ow);
+    // println!("Oxygen ELEC: {:?}\n", oxygen_elec);
+    let lj_oxygen = oxygen_ow.energy;
+    let electrostatics_oxygen = oxygen_elec.energy;
     
     let possible_results: Vec<(WaterMolecule, f64)> = water_configurations
         .par_iter()
@@ -274,17 +274,26 @@ pub fn sample_waters_with_grids(oxygen_atom: &GridPoint,
 
             // Compute energy
             // Interpolation baby!
-            let electrostatics_h1 = grid_elec.trilinear_interpolation(&h1_coords);
+            let electrostatics_h1 = grid_elec.trilinear_interpolation(h1_coords);
             // let nearest_h1 = grid_elec.get_nearest_neighbor(&h1_coords).unwrap().energy;
             // println!("H1 - Interpolated: {}, Nearest: {}", electrostatics_h1, nearest_h1);
-            let electrostatics_h2 = grid_elec.trilinear_interpolation(&h2_coords);
+            let electrostatics_h2 = grid_elec.trilinear_interpolation(h2_coords);
             // let nearest_h2 = grid_elec.get_nearest_neighbor(&h2_coords).unwrap().energy;
             // println!("H2 - Interpolated: {}, Nearest: {}", electrostatics_h2, nearest_h2);
-
-            let energy_value = lj_value + (electrostatics_oxygen * -0.8340) + (electrostatics_h1  * 0.4170) + (electrostatics_h2 * 0.4170);
-            (water, energy_value)
+            if electrostatics_h1.is_some() && electrostatics_h2.is_some() {
+                let energy_value = lj_oxygen + (electrostatics_oxygen * OXYGEN_W_Q) + (electrostatics_h1.unwrap()  * HYDROGEN_W_Q) + (electrostatics_h2.unwrap() * HYDROGEN_W_Q);
+                (water, energy_value)
+            } else {
+                (water, f64::INFINITY)
+            }
         })
         .collect();
+
+    // Debug
+    // for (water, energy) in possible_results.iter() {
+    //     println!("{:?}", energy);
+    // }
+    //
 
     let possible_waters_energies: Vec<f64> = possible_results.iter().map(|(_, e)| *e).collect();
 

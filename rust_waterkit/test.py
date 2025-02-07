@@ -99,14 +99,20 @@ def to_pdb(pdb_file, w_map):
     coords = []
     names = []
     resnames = []
-    for atom in w_map:
+    resnums = []
+    cnt = 0
+    for (idx, atom) in enumerate(w_map):
         coords.append(atom.coords())
         names.append(atom.atom_type())
         resnames.append("HOH")
+        if idx % 3 == 0:
+            cnt += 1
+        resnums.append(cnt)
+            
     ag.setCoords(coords)
     ag.setNames(names)
     ag.setResnames(resnames)
-    ag.setResnums([1 for _ in w_map])
+    ag.setResnums(resnums)
     # ag.setBetas(capped_energies)
     prody.writePDB(pdb_file, ag)
     return
@@ -215,11 +221,14 @@ if __name__ == "__main__":
     start = time.time()
     # aps = [[-5.15488359,  9.00213151, 34.99793656]]
     aps = anchor_points
-    wk_map = rust_waterkit.run_waterkit(parametrized_atoms, waters, aps, x_size, y_size, z_size, spacing, center, epochs=1, use_grids=True)
+    use_grids = True
+    wk_map = rust_waterkit.run_waterkit(parametrized_atoms, waters, aps, x_size, y_size, z_size, spacing, center, epochs=1, use_grids=use_grids)
     for (idx, m) in enumerate(wk_map):
-        waters_map = [x for x in m if x.atom_type() == "HW" or x.atom_type() == "OW"]
-        # print(f"Time to grid: {time.time() - start}")
-        to_pdb(f"test/waterkit_{idx}.pdb", waters_map)
+        waters_map = [x for x in m if x.atom_type() == "HW" or x.atom_type() == "OW"] 
+        if use_grids:
+            fname = f"test/waterkit_{idx}_grids.pdb"
+        else: fname = f"test/waterkit_{idx}_no_grids.pdb"
+        to_pdb(fname, waters_map)
     
     
     # Test ordered

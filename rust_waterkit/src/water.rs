@@ -1,7 +1,7 @@
 use crate::anchor_point::AnchorPoint;
 use crate::atom::Atom;
 use crate::geometry;
-use crate::consts::RMIN_HALF_WATER;
+use crate::consts;
 
 #[derive(Clone, Debug)]
 // #[pyclass]
@@ -24,9 +24,9 @@ impl WaterMolecule {
             let oxygen = Atom::new("OW".to_string(),
                 "0".to_string(),
                 oxygen_coords,
-                RMIN_HALF_WATER,
-                0.6364,
-                -0.8340,
+                consts::RMIN_HALF_WATER,
+                consts::TIP3P_EPSILON,
+                consts::OXYGEN_W_Q,
                 1.7,
                 true,
                 true

@@ -25,7 +25,7 @@ impl Eq for GridPoint { }
 
 #[derive(Clone, Debug)]
 pub struct Grid3D {
-    data: Vec<GridPoint>,
+    pub data: Vec<GridPoint>,
     x_size: f64,
     y_size: f64,
     z_size: f64,
@@ -222,73 +222,76 @@ impl Grid3D {
     }
 
 
-    pub fn trilinear_interpolation(
-        &self,
-        point: &[f64; 3],
-    ) -> f64 {
-        let x = point[0];
-        let y = point[1];
-        let z = point[2];
-        
-        let nx = self.x_size as usize;
-        let ny = self.y_size as usize;
-        let nz = self.z_size as usize;
+    /// Perform trilinear interpolation at a point (x, y, z)
+    pub fn trilinear_interpolation(&self, point: [f64; 3]) -> Option<f64> {
+        let (x, y, z) = (point[0], point[1], point[2]);
 
-        // Ensure the point is within the grid bounds
-        // assert!(x >= 0.0 && x <= (nx - 1) as f64);
-        // assert!(y >= 0.0 && y <= (ny - 1) as f64);
-        // assert!(z >= 0.0 && z <= (nz - 1) as f64);
-    
-        // Find the lower corner of the cell containing (x, y, z)
-        let x0 = x.floor() as usize;
-        let y0 = y.floor() as usize;
-        let z0 = z.floor() as usize;
-    
-        // Ensure we don't go out of bounds
-        let x1 = (x0 + 1).min(nx - 1);
-        let y1 = (y0 + 1).min(ny - 1);
-        let z1 = (z0 + 1).min(nz - 1);
-    
-        // Fractional parts for interpolation
-        let xd = x - x0 as f64;
-        let yd = y - y0 as f64;
-        let zd = z - z0 as f64;
-    
-        // Helper function to get the value at (i, j, k) in the grid
-        let get_value = |i: usize, j: usize, k: usize| self.data[i + j * nx + k * nx * ny].energy;
-    
-        // Interpolate along the x-axis
-        let c00 = get_value(x0, y0, z0) * (1.0 - xd) + get_value(x1, y0, z0) * xd;
-        let c01 = get_value(x0, y0, z1) * (1.0 - xd) + get_value(x1, y0, z1) * xd;
-        let c10 = get_value(x0, y1, z0) * (1.0 - xd) + get_value(x1, y1, z0) * xd;
-        let c11 = get_value(x0, y1, z1) * (1.0 - xd) + get_value(x1, y1, z1) * xd;
-    
-        // Interpolate along the y-axis
+        // Check if the point is within the grid boundaries
+        if !self.in_box(&[x, y, z]) {
+            return None; // Point is outside the grid
+        }
+
+        // Find the indices of the grid cell containing the point
+        let i = ((x - self.x_min) / self.spacing).floor() as usize;
+        let j = ((y - self.y_min) / self.spacing).floor() as usize;
+        let k = ((z - self.z_min) / self.spacing).floor() as usize;
+
+        // Get the coordinates of the cell's corners
+        let x0 = self.x_min + i as f64 * self.spacing;
+        let x1 = x0 + self.spacing;
+        let y0 = self.y_min + j as f64 * self.spacing;
+        let y1 = y0 + self.spacing;
+        let z0 = self.z_min + k as f64 * self.spacing;
+        let z1 = z0 + self.spacing;
+
+        // Get the values at the 8 corners of the cell
+        let c000 = self.get_energy_at(i, j, k)?;
+        let c001 = self.get_energy_at(i, j, k + 1)?;
+        let c010 = self.get_energy_at(i, j + 1, k)?;
+        let c011 = self.get_energy_at(i, j + 1, k + 1)?;
+        let c100 = self.get_energy_at(i + 1, j, k)?;
+        let c101 = self.get_energy_at(i + 1, j, k + 1)?;
+        let c110 = self.get_energy_at(i + 1, j + 1, k)?;
+        let c111 = self.get_energy_at(i + 1, j + 1, k + 1)?;
+
+        // Compute the weights
+        let xd = (x - x0) / self.spacing;
+        let yd = (y - y0) / self.spacing;
+        let zd = (z - z0) / self.spacing;
+
+        // Interpolate along x
+        let c00 = c000 * (1.0 - xd) + c100 * xd;
+        let c01 = c001 * (1.0 - xd) + c101 * xd;
+        let c10 = c010 * (1.0 - xd) + c110 * xd;
+        let c11 = c011 * (1.0 - xd) + c111 * xd;
+
+        // Interpolate along y
         let c0 = c00 * (1.0 - yd) + c10 * yd;
         let c1 = c01 * (1.0 - yd) + c11 * yd;
-    
-        // Interpolate along the z-axis
-        c0 * (1.0 - zd) + c1 * zd
+
+        // Interpolate along z
+        let c = c0 * (1.0 - zd) + c1 * zd;
+
+        Some(c)
     }
 
-    pub fn to_pdb(&self) {
-        for point in self.all_points() {
-            // let line = format!(
-            //     "{:<6}{:>5} {:^4} {:>3} {:1}{:>4}    {:>8.3}{:>8.3}{:>8.3}{:>6.2}{:>6.2}          {:>2}",
-            //     "ATOM",
-            //     point.index,
-            //     "H",
-            //     "HOH",
-            //     "A",
-            //     1,
-            //     point.coords[0],
-            //     point.coords[1],
-            //     point.coords[2],
-            //     0.0,
-            //     point.energy,
-            //     "H"
-            // );
-            println!("{} {}, {}, {}", point.energy, point.coords[0], point.coords[1], point.coords[2]);
+    /// Helper function to get the energy at a specific grid point (i, j, k)
+    fn get_energy_at(&self, i: usize, j: usize, k: usize) -> Option<f64> {
+        let x_points = ((self.x_max - self.x_min) / self.spacing).ceil() as usize + 1;
+        let y_points = ((self.y_max - self.y_min) / self.spacing).ceil() as usize + 1;
+        let z_points = ((self.z_max - self.z_min) / self.spacing).ceil() as usize + 1;
+    
+        // Ensure indices are within valid range
+        if i >= x_points || j >= y_points || k >= z_points {
+            return None;
+        }
+        // Compute correct 1D index
+        // let index = i * (y_points * z_points) + j * z_points + k;
+        let index = i + x_points * (j + y_points * k);
+        if index < self.data.len() {
+            Some(self.data[index].energy)
+        } else {
+            None
         }
     }
 
