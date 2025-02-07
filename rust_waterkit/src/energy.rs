@@ -31,13 +31,6 @@ pub fn lennard_jones_rmin_half(epsilon_1: &f64, epsilon_2: &f64, dist: &f64, rmi
     lj
 }
 
-// pub fn lj(epsilon_1: &f64, epsilon_2: &f64, dist: &f64, rmin_half1: &f64, rmin_half2: &f64) -> f64 {
-//     let epsilon_combined = (epsilon_1 * epsilon_2).sqrt();
-//     let sigma_combined = rmin_half1 + rmin_half2;
-//     let energy = 4.0 * epsilon_combined * ((sigma_combined / dist).powi(12) - (sigma_combined / dist).powi(6));
-//     energy
-// }
-
 /// Calculate the Coulomb interaction energy.
 /// Parameters:
 ///     q1 (&f64): Charge of the first atom (in e).
@@ -124,30 +117,3 @@ pub fn energy_for_real_water(atoms_1: &Vec<Atom>, atoms_2: &Vec<Atom>) -> f64 {
     // println!("{} - LJ: {}, C: {}", total_energy, l_e, c_e);
     total_energy
 }
-
-// pub fn spheric_energy(atoms_1: &Vec<Atom>, sphere_center: &[f64; 3]) -> f64 {
-//     let mut total_energy = 0.0;
-//     for atom_1 in atoms_1.iter() {
-//         let atom_1_coords = atom_1.coords();
-
-//         // Calculate distance avoiding division by 0
-//         let r = f64::max(euclidean_distance(&atom_1_coords,
-//             sphere_center), 1e-8_f64);
-
-//         if r < ELECTROSTATICS_CUTOFF {
-
-//             if atom_1.atom_type() != &"HW" {
-//                 let lj_energy = lennard_jones_rmin_half(atom_1.epsilon(),
-//                 &EPSILON_WATER, 
-//                 &r,
-//                 atom_1.rmin_half(), 
-//                 &RMIN_HALF_WATER);
-//                 total_energy += lj_energy;
-//             }
-
-//             // let ce = coulomb_energy(atom_1.charge(), &-0.8340, &r).abs();
-//             // total_energy += -ce;
-//         }
-//     }
-//     total_energy
-// }

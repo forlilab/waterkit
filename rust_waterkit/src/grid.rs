@@ -11,7 +11,7 @@ use crate::atom::Atom;
 // use crate::energy::spheric_energy;
 use crate::geometry::{self, resize_vector};
 use crate::consts::ELECTROSTATICS_CUTOFF;
-use crate::vina_ff::vina_energy;
+use crate::vina_ff::{self, vina_energy};
 use crate::water::WaterMolecule;
 
 #[derive(Clone, Debug)]
@@ -93,7 +93,6 @@ impl Grid3D {
                         coords,
                         energy: f64::INFINITY,
                     });
-                    // println!("H {} {} {}", x, y, z);
                     index += 1;
                 }
             }
@@ -231,5 +230,54 @@ impl Grid3D {
         }
         // println!("# Neighbors found: {}", neighbor_points.len());
         neighbor_points
+    }
+
+    pub fn trilinear_interpolation(
+        &self,
+        point: &[f64; 3],
+    ) -> f64 {
+        let x = point[0];
+        let y = point[1];
+        let z = point[2];
+        
+        let nx = self.x_size as usize;
+        let ny = self.y_size as usize;
+        let nz = self.z_size as usize;
+
+        // Ensure the point is within the grid bounds
+        assert!(x >= 0.0 && x <= (nx - 1) as f64);
+        assert!(y >= 0.0 && y <= (ny - 1) as f64);
+        assert!(z >= 0.0 && z <= (nz - 1) as f64);
+    
+        // Find the lower corner of the cell containing (x, y, z)
+        let x0 = x.floor() as usize;
+        let y0 = y.floor() as usize;
+        let z0 = z.floor() as usize;
+    
+        // Ensure we don't go out of bounds
+        let x1 = (x0 + 1).min(nx - 1);
+        let y1 = (y0 + 1).min(ny - 1);
+        let z1 = (z0 + 1).min(nz - 1);
+    
+        // Fractional parts for interpolation
+        let xd = x - x0 as f64;
+        let yd = y - y0 as f64;
+        let zd = z - z0 as f64;
+    
+        // Helper function to get the value at (i, j, k) in the grid
+        let get_value = |i: usize, j: usize, k: usize| self.data[i + j * nx + k * nx * ny].energy;
+    
+        // Interpolate along the x-axis
+        let c00 = get_value(x0, y0, z0) * (1.0 - xd) + get_value(x1, y0, z0) * xd;
+        let c01 = get_value(x0, y0, z1) * (1.0 - xd) + get_value(x1, y0, z1) * xd;
+        let c10 = get_value(x0, y1, z0) * (1.0 - xd) + get_value(x1, y1, z0) * xd;
+        let c11 = get_value(x0, y1, z1) * (1.0 - xd) + get_value(x1, y1, z1) * xd;
+    
+        // Interpolate along the y-axis
+        let c0 = c00 * (1.0 - yd) + c10 * yd;
+        let c1 = c01 * (1.0 - yd) + c11 * yd;
+    
+        // Interpolate along the z-axis
+        c0 * (1.0 - zd) + c1 * zd
     }
 }
