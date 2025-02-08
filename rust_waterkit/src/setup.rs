@@ -3,6 +3,7 @@ use crate::grid::Grid3D;
 use crate::vina_ff;
 use crate::energy;
 
+use pyo3::pyfunction;
 use rayon::prelude::*;
 
 
@@ -12,17 +13,18 @@ use rayon::prelude::*;
 ///     - O_DA grid for spherical Oxygen
 ///     - OW grid for TIP3P Oxygen (LJ only)
 ///     - Q grid for electrostatics (Probe with partial charge of +1)
-pub fn setup_system(receptor: &Vec<Atom>,
+#[pyfunction]
+pub fn setup_system(receptor: Vec<Atom>,
     x_size: f64, 
     y_size: f64, 
     z_size: f64, 
     spacing: f64, 
-    center: [f64; 3],) -> Vec<Grid3D> {
-    let oda_grid = setup_oda_grid(receptor, x_size, y_size, z_size, spacing, center);
-    let ow_grid = setup_ow_grid(receptor, x_size, y_size, z_size, spacing, center);
-    let elec_grid = setup_q_grid(receptor, x_size, y_size, z_size, spacing, center);
+    center: [f64; 3],) -> [Grid3D; 3] {
+    let oda_grid = setup_oda_grid(&receptor, x_size, y_size, z_size, spacing, center);
+    let ow_grid = setup_ow_grid(&receptor, x_size, y_size, z_size, spacing, center);
+    let elec_grid = setup_q_grid(&receptor, x_size, y_size, z_size, spacing, center);
 
-    vec![oda_grid, ow_grid, elec_grid]
+    [oda_grid, ow_grid, elec_grid]
 }
 
 pub fn setup_oda_grid(

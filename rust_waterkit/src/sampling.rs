@@ -9,7 +9,7 @@ use crate::atom::Atom;
 use crate::water::WaterMolecule;
 use crate::energy::energy_for_real_water;
 
-fn optimize_placement_order_grid(grid: &mut Grid3D, points: &Vec<AnchorPoint>) -> Vec<AnchorPoint> {
+fn optimize_placement_order_grid(grid: &Grid3D, points: &Vec<AnchorPoint>) -> Vec<AnchorPoint> {
     let mut energies = Vec::new();
     let mut min_points = Vec::new();
     let mut decisions = Vec::new();
@@ -58,7 +58,7 @@ fn optimize_placement_order_grid(grid: &mut Grid3D, points: &Vec<AnchorPoint>) -
     decisions
 }
 
-fn optimize_poistion_grid(grid: &mut Grid3D, point: &AnchorPoint, add_noise: bool) -> GridPoint {
+fn optimize_poistion_grid(grid: &Grid3D, point: &AnchorPoint, add_noise: bool) -> GridPoint {
     let mut min = 2.5;
     let mut max = 3.6;
     if point.hb_type() == "donor" {

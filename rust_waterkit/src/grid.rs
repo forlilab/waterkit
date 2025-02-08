@@ -1,4 +1,5 @@
 use core::f64;
+use pyo3::prelude::*;
 use rayon::prelude::*;
 use kdtree::distance::squared_euclidean;
 use kdtree::KdTree;
@@ -9,6 +10,7 @@ use crate::geometry;
 use crate::vina_ff;
 
 #[derive(Clone, Debug)]
+#[pyclass]
 pub struct GridPoint {
     pub index: usize,
     pub coords: [f64; 3],
@@ -24,6 +26,7 @@ impl PartialEq for GridPoint {
 impl Eq for GridPoint { }
 
 #[derive(Clone, Debug)]
+#[pyclass]
 pub struct Grid3D {
     pub data: Vec<GridPoint>,
     x_size: f64,
@@ -51,7 +54,9 @@ pub struct Grid3D {
     // updated: bool,
 }
 
+#[pymethods]
 impl Grid3D {
+    #[new]
     pub fn new(size: (f64, f64, f64), spacing: f64, center: [f64; 3]) -> Self {
         let (width, height, depth) = size;
         let cx = center[0];
@@ -110,8 +115,9 @@ impl Grid3D {
             kdtree,
         }
     }
+}
 
-
+impl Grid3D {
     pub fn update_energies_oda(&mut self, new_points: &Vec<Atom>) {
         self.all_points_mut()
             .par_iter_mut()

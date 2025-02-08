@@ -49,7 +49,7 @@ def get_data_form_meeko(wanted_residues, pdb_file, save=False):
     mk_prep = meeko.MoleculePreparation(
         merge_these_atom_types=[],
         load_atom_params=["vina_params", "openff"],
-        charge_model="gasteiger",
+        charge_model="espaloma",
     )
     box_boundaries = list()
     templates = meeko.ResidueChemTemplates.create_from_defaults()
@@ -177,13 +177,13 @@ def load_waters_orientations(orientations="/data/phd/waterkit/waterkit/data/wate
 def split_list_in_chunks(size, n):
     return [(l[0], l[-1]) for l in np.array_split(range(size), n)]
 
-def fire_waterkit(parametrized_atoms, waters, aps, x_size, y_size, z_size, spacing, center, use_grids, start=0, stop=1, position=0):
+def fire_waterkit(parametrized_atoms, waters, aps, grids, use_grids, start=0, stop=1, position=0):
     progress = tqdm(total=stop - start, position=position,
                     desc='job %02d' % (position + 1),
                     bar_format='{l_bar}{bar:50}{r_bar}{bar:-10b}')
 
     for frame_id in range(start, stop + 1):
-        rust_waterkit.run_waterkit(parametrized_atoms, waters, aps, x_size, y_size, z_size, spacing, center, frame_id, use_grids)
+        rust_waterkit.run_waterkit(parametrized_atoms, waters, aps, grids, frame_id, use_grids)
         progress.update(1)
     progress.close()
     return
@@ -212,17 +212,19 @@ if __name__ == "__main__":
     start = time.time()
     aps = anchor_points
     use_grids = True
-    n_frames = 1000
+    n_frames = 100
     n_jobs = mp.cpu_count()
 
     jobs = []
     chunks = split_list_in_chunks(n_frames, n_jobs)
 
+    # Setup grids at the beginning
+    grids = rust_waterkit.setup_system(parametrized_atoms, x_size, y_size, z_size, spacing, center)
+
     for i, chunk in enumerate(chunks):
-        job = mp.Process(target=fire_waterkit, args=(parametrized_atoms, waters, aps, x_size, y_size, z_size, spacing, center, use_grids, chunk[0], chunk[1]))
+        job = mp.Process(target=fire_waterkit, args=(parametrized_atoms, waters, aps, grids, use_grids, chunk[0], chunk[1], i))
         job.start()
         jobs.append(job)
-        # rust_waterkit.run_waterkit(parametrized_atoms, waters, aps, x_size, y_size, z_size, spacing, center, epochs=n_frames, use_grids=use_grids)
     
     for job in jobs:
         job.join()
