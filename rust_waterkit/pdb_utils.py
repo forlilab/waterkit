@@ -40,20 +40,28 @@ def print_differences_in_energies(f1, f2):
     pdb_with_temp(f"energies_difference.pdb", coords, energies)
     return
 
-def f_to_pdb(f):
+def f_to_pdb(f, energy=False):
     energies = list()
     coords = list()
     with open(f) as fi:
         lines = fi.readlines()
 
-    for line in lines:
-        line = line.strip()
-        l = line.split(" ")
-        e = float(l[0])
-        c = [float(l[1].split(',')[0]), float(l[2].split(',')[0]), float(l[3].split(',')[0])]
-        energies.append(e)
-        coords.append(c)
-    pdb_with_temp(f"{f.split('.')[0]}.pdb", coords, energies)
+    if energy: 
+        for line in lines:
+            line = line.strip()
+            l = line.split(" ")
+            e = float(l[0])
+            c = [float(l[1].split(',')[0]), float(l[2].split(',')[0]), float(l[3].split(',')[0])]
+            energies.append(e)
+            coords.append(c)
+        pdb_with_temp(f"{f.split('.')[0]}.pdb", coords, energies)
+    else: 
+        for line in lines:
+            line = line.strip()
+            l = line.split(",")
+            c = [float(l[0]), float(l[1]), float(l[2])]
+            coords.append(c)
+        pdb(f"{f.split('.')[0]}.pdb", coords)
     return
 
 def pdb_with_temp(pdb_file, traj, energies, atom_type="He"):
@@ -72,9 +80,18 @@ def pdb_with_temp(pdb_file, traj, energies, atom_type="He"):
     prody.writePDB(pdb_file, ag)
     return
 
+def pdb(pdb_file, traj, atom_type="He"):
+    ag = prody.AtomGroup('Surface')
+    ag.setCoords(traj)
+    ag.setNames([atom_type for _ in traj])
+    ag.setResnames(["MOL" for _ in traj])
+    ag.setResnums([x for x in range(len(traj))])
+    prody.writePDB(pdb_file, ag)
+    return
+
 if __name__ == "__main__":
     if len(sys.argv) < 3 or sys.argv[1] == "--pdb":
-        f_to_pdb(sys.argv[2])
+        f_to_pdb(sys.argv[2], True)
 
     elif sys.argv[1] == "--diff":
         print_differences_in_energies(sys.argv[2], sys.argv[3]) 

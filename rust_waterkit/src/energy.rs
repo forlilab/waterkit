@@ -42,7 +42,7 @@ pub fn lennard_jones_rmin_half(epsilon_1: &f64, epsilon_2: &f64, dist: &f64, rmi
 pub fn coulomb_energy(q1: &f64, q2: &f64, r: &f64) -> f64 {
     let k_e = 332.0636; // Electrostatic constant in kcal·Å/(mol·e^2)
     let dielectric = 1.0; // Dielectric constant of the medium (default: 1.0)
-    let coulomb = k_e * (q1 * q2) / r;
+    let coulomb = k_e * ((q1 * q2) / r);
     coulomb
 }
 
@@ -122,8 +122,7 @@ pub fn get_ow_energy(atoms_1: &Vec<Atom>, sphere_center: &[f64; 3]) -> f64{
         // Calculate distance avoiding division by 0
         let distance = f64::max(geometry::euclidean_distance(&atom_1_coords,
             sphere_center), 1e-8_f64);
-
-        // if distance < consts::ELECTROSTATICS_CUTOFF {
+        if distance < consts::ELECTROSTATICS_CUTOFF {
             if atom_1.atom_type() != &"HW" {
                 let lj_energy = lennard_jones_rmin_half(atom_1.epsilon(),
                 &consts::TIP3P_EPSILON, 
@@ -132,7 +131,7 @@ pub fn get_ow_energy(atoms_1: &Vec<Atom>, sphere_center: &[f64; 3]) -> f64{
                 &consts::RMIN_HALF_WATER);
                 total_energy += lj_energy;
             }
-        // }
+        }
     }
     total_energy
 }
@@ -146,10 +145,10 @@ pub fn get_q_energy(atoms_1: &Vec<Atom>, sphere_center: &[f64; 3]) -> f64 {
         let distance = f64::max(geometry::euclidean_distance(&atom_1_coords,
             sphere_center), 1e-8_f64);
 
-        // if distance < consts::ELECTROSTATICS_CUTOFF {
+        if distance < consts::ELECTROSTATICS_CUTOFF {
             let electrostatics = coulomb_energy(atom_1.charge(), &1.0, &distance);
             total_energy += electrostatics;
-        // }
+        }
     }
     total_energy
 }

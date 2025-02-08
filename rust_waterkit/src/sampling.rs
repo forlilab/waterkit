@@ -15,13 +15,16 @@ fn optimize_placement_order_grid(grid: &mut Grid3D, points: &Vec<AnchorPoint>) -
     let mut decisions = Vec::new();
 
     for point in points.iter() {
+        // println!("{:?}", point);
         let mut min = 2.5;
         let mut max = 3.6;
         if point.hb_type() == "donor" {
             min -= 1.0;
             max -= 1.0;
         }
-        let neighbors = grid.get_neighbors_within_distance_and_angle(point.anchor_point(), point.anchor_vectors(), max, min);
+        // let neighbors = grid.get_neighbors_within_distance_and_angle(point.anchor_point(), point.anchor_vectors(), max, min);
+        let neighbors = grid.get_neighbors_within_distance(point.anchor_point(), max, min);
+        // println!("Neighbors: {:?}", neighbors.len());
         if neighbors.len() > 0 {
             let mut min_point = neighbors.first().unwrap().clone();
             for neigh in neighbors.into_iter() {
@@ -37,6 +40,7 @@ fn optimize_placement_order_grid(grid: &mut Grid3D, points: &Vec<AnchorPoint>) -
         }
         
     }
+    println!("Energies: {:?}", energies);
 
     let order = mc::boltzmann_choices(&energies, Some(energies.len()));      
     if order.len() > 0 {
@@ -61,7 +65,8 @@ fn optimize_poistion_grid(grid: &mut Grid3D, point: &AnchorPoint, add_noise: boo
         min -= 1.0;
         max -= 1.0;
     }
-    let neighbors = grid.get_neighbors_within_distance_and_angle(point.anchor_point(), point.anchor_vectors(), max, min);
+    // let neighbors = grid.get_neighbors_within_distance_and_angle(point.anchor_point(), point.anchor_vectors(), max, min);
+    let neighbors = grid.get_neighbors_within_distance(point.anchor_point(), max, min);
     let energies: Vec<f64> = neighbors.iter().map(|x| x.energy).collect();
     let choice = mc::boltzmann_choices(&energies, None);
     if choice.len() > 0 {
@@ -116,8 +121,8 @@ pub fn sample(grid: &mut Grid3D, receptor_points: &mut Vec<Atom>, anchor_points:
             }
         }
     }
-    println!("Waters added: {}", new_anchor_points.len()/4);
-    println!("New anchor points found: {}\n", new_anchor_points.len());
+    // println!("Waters added: {}", new_anchor_points.len()/4);
+    // println!("New anchor points found: {}\n", new_anchor_points.len());
     anchor_points.clear();
     for p in new_anchor_points.into_iter() {
         anchor_points.push(p);
@@ -143,15 +148,16 @@ pub fn sample_using_grids(grid_oda: &mut Grid3D,
     // Sample with Boltzmann the neighbors and the actual point and based on Metropolis 
     // acceptance criteria then these are the starting anchor points
     let decisions = optimize_placement_order_grid(grid_oda, &receptor_points_on_the_grid);
-    // println!("Decisions: {}",decisions.len());
+    println!("Decisions: {}",decisions.len());
     for (idx, decision) in decisions.iter().enumerate() {
         let new_point = optimize_poistion_grid(grid_oda, decision, false);
-        if idx == 1 {
-            println!("{:?}", new_point);
-        }
+        println!("{}", new_point.energy);
+        // if idx == 1 {
+        //     println!("{:?}", new_point);
+        // }
         if mc::boltzmann_acceptance_rejection(&new_point.energy, &BOLTZMANN_ENERGY_CUTOFF, &TEMPERATURE, &BOLTZMANN_K) {
             // Now we build explicit water
-            // println!("Sampling real waters");
+            println!("Sampling real waters");
             let (placed, mut water) = sample_waters_with_grids(&new_point, water_configurations, receptor_points, grid_ow, grid_elec);
 
             if placed {
@@ -166,8 +172,8 @@ pub fn sample_using_grids(grid_oda: &mut Grid3D,
             }
         }
     }
-    println!("Waters added: {}", new_anchor_points.len()/4);
-    println!("New anchor points found: {}\n", new_anchor_points.len());
+    // println!("Waters added: {}", new_anchor_points.len()/4);
+    // println!("New anchor points found: {}\n", new_anchor_points.len());
     anchor_points.clear();
     for p in new_anchor_points.into_iter() {
         anchor_points.push(p);
@@ -281,14 +287,16 @@ pub fn sample_waters_with_grids(oxygen_atom: &GridPoint,
             // let nearest_h2 = grid_elec.get_nearest_neighbor(&h2_coords).unwrap().energy;
             // println!("H2 - Interpolated: {}, Nearest: {}", electrostatics_h2, nearest_h2);
             if electrostatics_h1.is_some() && electrostatics_h2.is_some() {
+                // println!("LJ: {}, E_O: {}, E_H1: {}, E_H2: {}", lj_oxygen, (electrostatics_oxygen * OXYGEN_W_Q), (electrostatics_h1.unwrap()  * HYDROGEN_W_Q), (electrostatics_h2.unwrap() * HYDROGEN_W_Q));
                 let energy_value = lj_oxygen + (electrostatics_oxygen * OXYGEN_W_Q) + (electrostatics_h1.unwrap()  * HYDROGEN_W_Q) + (electrostatics_h2.unwrap() * HYDROGEN_W_Q);
+                // println!("Total energy: {}", energy_value);
                 (water, energy_value)
             } else {
                 (water, f64::INFINITY)
             }
         })
         .collect();
-
+    // println!("\n");
     // Debug
     // for (water, energy) in possible_results.iter() {
     //     println!("{:?}", energy);

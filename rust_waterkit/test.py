@@ -9,13 +9,15 @@ def load_anchor_points(filename):
     with open(filename) as fi:
         lines = fi.readlines()
 
-    for line in lines:
+    for (idx, line) in enumerate(lines):
         line = line.strip().split(" ")
         anchor_xyz = [float(line[0]), float(line[1]), float(line[2])]
-        vector_xyz = [float(line[3]), float(line[4]), float(line[5])]
-        hb_type = line[-1]
-        ap = rust_waterkit.AnchorPoint(hb_type, anchor_xyz, vector_xyz)
-        anchor_points.append(ap)
+        if idx == 669:
+            print(f"{anchor_xyz[0]}, {anchor_xyz[1]}, {anchor_xyz[2]}")
+            vector_xyz = [float(line[3]), float(line[4]), float(line[5])]
+            hb_type = line[-1]
+            ap = rust_waterkit.AnchorPoint(hb_type, anchor_xyz, vector_xyz)
+            anchor_points.append(ap)
     return anchor_points
 
 def to_xyz(traj, step_size, fname):
@@ -223,12 +225,12 @@ if __name__ == "__main__":
     aps = anchor_points
     use_grids = True
     wk_map = rust_waterkit.run_waterkit(parametrized_atoms, waters, aps, x_size, y_size, z_size, spacing, center, epochs=1, use_grids=use_grids)
-    for (idx, m) in enumerate(wk_map):
-        waters_map = [x for x in m if x.atom_type() == "HW" or x.atom_type() == "OW"] 
-        if use_grids:
-            fname = f"test/waterkit_{idx}_grids.pdb"
-        else: fname = f"test/waterkit_{idx}_no_grids.pdb"
-        to_pdb(fname, waters_map)
+    # for (idx, m) in enumerate(wk_map):
+    #     waters_map = [x for x in m if x.atom_type() == "HW" or x.atom_type() == "OW"] 
+    #     if use_grids:
+    #         fname = f"test/waterkit_{idx}_grids.pdb"
+    #     else: fname = f"test/waterkit_{idx}_no_grids.pdb"
+    #     to_pdb(fname, waters_map)
     
     
     # Test ordered

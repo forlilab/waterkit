@@ -218,6 +218,7 @@ def main():
     for fname in os.listdir(water_directory):
         if re.match(r"water_[0-9]{6}.pdb", fname):
             water_filenames.append(os.path.join(water_directory, fname))
+        else: water_filenames.append(os.path.join(water_directory, fname))
 
     """ Add water molecules to the dry receptor and write pdb wet receptor
     We are taking the water coordinates from the frame that have the

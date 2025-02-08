@@ -120,3 +120,4 @@ autodocksuite-*/*
 rust_waterkit/amber/*
 rust_waterkit/single_anchor_point/*
 rust_waterkit/waterkit_data/*
+rust_waterkit/comparison/*
