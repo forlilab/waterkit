@@ -132,35 +132,31 @@ pub fn run_waterkit(receptor_points: Vec<Atom>,
     center: [f64; 3],
     epochs: usize,
     use_grids: bool) -> Vec<Vec<Atom>> {
-    let start_time = Instant::now();
+    // let start_time = Instant::now();
     
     let grids = setup_system(&receptor_points, x_size, y_size, z_size, spacing, center);
     let grid_oda = grids[0].clone();
     let grid_ow = grids[1].clone();
     let grid_elec = grids[2].clone();
     let mut results = Vec::new();
-    
-    for point in grid_ow.all_points() {
-        println!("{} {}, {}, {}", point.energy, point.coords[0], point.coords[1], point.coords[2]);
-    }
 
-    for epoch in 0..epochs {
-        if epoch % 100 == 0 {println!("Creating map {}", epoch)};
-        if !use_grids {
-            results.push(run_single_waterkit(&receptor_points.clone(), &water_configurations.clone(), &anchor_points.clone(), grid_oda.clone()));
-        } else {
-            results.push(run_single_waterkit_with_grids(
-                &receptor_points.clone(),
-                &water_configurations.clone(),
-                &anchor_points.clone(),
-                grid_oda.clone(),
-                grid_ow.clone(),
-                grid_elec.clone(),
-                epoch
-            ));
-        }
+    // for epoch in 0..epochs {
+    // if epoch % 100 == 0 {println!("Creating map {}", epoch)};
+    if !use_grids {
+        results.push(run_single_waterkit(&receptor_points.clone(), &water_configurations.clone(), &anchor_points.clone(), grid_oda.clone()));
+    } else {
+        results.push(run_single_waterkit_with_grids(
+            &receptor_points.clone(),
+            &water_configurations.clone(),
+            &anchor_points.clone(),
+            grid_oda.clone(),
+            grid_ow.clone(),
+            grid_elec.clone(),
+            epochs
+        ));
     }
-    let elapsed_time = start_time.elapsed();
-    println!("Time taken for {} maps: {:?}", epochs, elapsed_time);
+    // }
+    // let elapsed_time = start_time.elapsed();
+    // println!("Time taken for {} maps: {:?}", epochs, elapsed_time);
     return results;
 }

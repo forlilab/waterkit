@@ -286,8 +286,8 @@ impl Grid3D {
             return None;
         }
         // Compute correct 1D index
-        // let index = i * (y_points * z_points) + j * z_points + k;
-        let index = i + x_points * (j + y_points * k);
+        let index = i * (y_points * z_points) + j * z_points + k;
+        // let index = i + x_points * (j + y_points * k);
         if index < self.data.len() {
             Some(self.data[index].energy)
         } else {

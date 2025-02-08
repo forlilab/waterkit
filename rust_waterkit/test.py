@@ -1,5 +1,8 @@
 import numpy as np
 import prody
+import multiprocessing as mp
+from tqdm import tqdm
+import gc
 
 import meeko
 import rust_waterkit
@@ -12,12 +15,12 @@ def load_anchor_points(filename):
     for (idx, line) in enumerate(lines):
         line = line.strip().split(" ")
         anchor_xyz = [float(line[0]), float(line[1]), float(line[2])]
-        if idx == 669:
-            print(f"{anchor_xyz[0]}, {anchor_xyz[1]}, {anchor_xyz[2]}")
-            vector_xyz = [float(line[3]), float(line[4]), float(line[5])]
-            hb_type = line[-1]
-            ap = rust_waterkit.AnchorPoint(hb_type, anchor_xyz, vector_xyz)
-            anchor_points.append(ap)
+        # if idx == 669:
+        #     print(f"{anchor_xyz[0]}, {anchor_xyz[1]}, {anchor_xyz[2]}")
+        vector_xyz = [float(line[3]), float(line[4]), float(line[5])]
+        hb_type = line[-1]
+        ap = rust_waterkit.AnchorPoint(hb_type, anchor_xyz, vector_xyz)
+        anchor_points.append(ap)
     return anchor_points
 
 def to_xyz(traj, step_size, fname):
@@ -169,9 +172,21 @@ def pdb_corners(pdb_file, traj, atom_type="He"):
 def load_waters_orientations(orientations="/data/phd/waterkit/waterkit/data/water_orientations.txt"):
     usecols = [0, 1, 2, 3, 4, 5]
     water_orientations = np.loadtxt(orientations, usecols=usecols)
-    # shape = (water_orientations.shape[0], 2, 3)
-    # water_orientations_reshaped = water_orientations.reshape(shape)
     return water_orientations
+
+def split_list_in_chunks(size, n):
+    return [(l[0], l[-1]) for l in np.array_split(range(size), n)]
+
+def fire_waterkit(parametrized_atoms, waters, aps, x_size, y_size, z_size, spacing, center, use_grids, start=0, stop=1, position=0):
+    progress = tqdm(total=stop - start, position=position,
+                    desc='job %02d' % (position + 1),
+                    bar_format='{l_bar}{bar:50}{r_bar}{bar:-10b}')
+
+    for frame_id in range(start, stop + 1):
+        rust_waterkit.run_waterkit(parametrized_atoms, waters, aps, x_size, y_size, z_size, spacing, center, frame_id, use_grids)
+        progress.update(1)
+    progress.close()
+    return
 
 if __name__ == "__main__":
     # select as, i. 111+107+103+162+150+98+97+184+96+93+55+52+51+138+139+136+135
@@ -186,70 +201,28 @@ if __name__ == "__main__":
                        "A:TRP:162", "A:THR:184"]
     # wanted_residues = list()
     parametrized_atoms, min_box_boundaries, max_box_boundaries = get_data_form_meeko(wanted_residues, "/data/phd/waterkit/example/1uyg_no_ligand.pdb")
-    # parametrized_atoms = get_data_form_meeko(wanted_residues, "/home/niccolo/phd/waterkit/example/1uyg.pdb")
     waters = load_waters_orientations()
     anchor_points = load_anchor_points("/data/phd/waterkit/rust_waterkit/anchor_points.txt")
     spacing = 0.375
     center = [2.7, 11.45, 24.80]
-    # center = [2.699591, 11.453864, 24.802502]
     x_size, y_size, z_size = 24.0, 24.0, 24.0
-    # print("Starting waterkit!")
-    # start = time.time()
-    # energies, waters_map = rust_waterkit.get_map(parametrized_atoms, waters, x_size, y_size, z_size, spacing, center)
-    # # trajectories, energies = rust_waterkit.run_waterkit(parametrized_atoms, waters, step_size)
-    # # energies, trajectories = rust_waterkit.roll_sphere_and_compute_energies(parametrized_atoms, step_size)
-    # print(f"Time to grid: {time.time() - start}")
-    # # to_xyz(trajectories, step_size, "trajectory")
-    # pdb_with_temp(f"map.pdb", energies=energies, traj=waters_map)
-    # # pdb_corners(f"box.pdb", traj=waters_map)
 
-    # Allowed points
-    # start = time.time()
-    # energies, waters_map = rust_waterkit.test_allowed_points(parametrized_atoms, x_size, y_size, z_size, spacing, center)
-    # # trajectories, energies = rust_waterkit.run_waterkit(parametrized_atoms, waters, step_size)
-    # # energies, trajectories = rust_waterkit.roll_sphere_and_compute_energies(parametrized_atoms, step_size)
-    # print(f"Time to grid: {time.time() - start}")
-    # # to_xyz(trajectories, step_size, "trajectory")
-    # pdb_with_temp(f"map_allowed.pdb", energies=energies, traj=waters_map)
-
-
-    # Shell related stuff
-    # start = time.time()
-    # (e, map) = rust_waterkit.save_shell_points_with_energies(parametrized_atoms, waters, anchor_points, x_size, y_size, z_size, spacing, center, shells=1)
-    # print(f"Time to grid: {time.time() - start}")
-    # pdb_with_temp("shell.pdb", map, e)
 
     print("Starting waterkit!")
     start = time.time()
-    # aps = [[-5.15488359,  9.00213151, 34.99793656]]
     aps = anchor_points
     use_grids = True
-    wk_map = rust_waterkit.run_waterkit(parametrized_atoms, waters, aps, x_size, y_size, z_size, spacing, center, epochs=1, use_grids=use_grids)
-    # for (idx, m) in enumerate(wk_map):
-    #     waters_map = [x for x in m if x.atom_type() == "HW" or x.atom_type() == "OW"] 
-    #     if use_grids:
-    #         fname = f"test/waterkit_{idx}_grids.pdb"
-    #     else: fname = f"test/waterkit_{idx}_no_grids.pdb"
-    #     to_pdb(fname, waters_map)
-    
-    
-    # Test ordered
-    # start = time.time()
-    # (e, map) = rust_waterkit.order_ap(parametrized_atoms, waters, anchor_points, x_size, y_size, z_size, spacing, center, shells=1)
-    # print(f"Time to grid: {time.time() - start}")
-    # for idx, v in enumerate(e):
-    #     pdb_with_temp(f"ap_{idx}.pdb", [map[idx]], [v])
-    
-    # Test new anchor points
-    # start = time.time()
-    # ap = rust_waterkit.test_new_aps(parametrized_atoms, waters, anchor_points, x_size, y_size, z_size, spacing, center, shells=1)
-    # print(f"Time to grid: {time.time() - start}")
-    # to_xyz_water(ap, "new_aps.xyz")
+    n_frames = 1000
+    n_jobs = mp.cpu_count()
 
+    jobs = []
+    chunks = split_list_in_chunks(n_frames, n_jobs)
 
-    # print("Starting waterkit!")
-    # start = time.time()
-    # (j_wat, n_wat) = rust_waterkit.get_energy_for_water(parametrized_atoms)
-    # to_xyz_water(j_wat, "jerome_wat")
-    # to_xyz_water(n_wat, "nico_wat")
+    for i, chunk in enumerate(chunks):
+        job = mp.Process(target=fire_waterkit, args=(parametrized_atoms, waters, aps, x_size, y_size, z_size, spacing, center, use_grids, chunk[0], chunk[1]))
+        job.start()
+        jobs.append(job)
+        # rust_waterkit.run_waterkit(parametrized_atoms, waters, aps, x_size, y_size, z_size, spacing, center, epochs=n_frames, use_grids=use_grids)
     
+    for job in jobs:
+        job.join()
