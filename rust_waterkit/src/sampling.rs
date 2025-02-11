@@ -22,19 +22,19 @@ fn optimize_placement_order_grid(grid: &Grid3D, points: &Vec<AnchorPoint>) -> Ve
             min -= 1.0;
             max -= 1.0;
         }
-        // let neighbors = grid.get_neighbors_within_distance_and_angle(point.anchor_point(), point.anchor_vectors(), max, min);
-        let neighbors = grid.get_neighbors_within_distance(point.anchor_point(), max, min);
+        let neighbors = grid.get_neighbors_within_distance_and_angle(point.anchor_point(), point.anchor_vectors(), max, min);
+        // let neighbors = grid.get_neighbors_within_distance(point.anchor_point(), max, min);
         // println!("Neighbors: {:?}", neighbors.len());
         if neighbors.len() > 0 {
             let mut min_point = neighbors.first().unwrap().clone();
             for neigh in neighbors.into_iter() {
-                if neigh.energy < min_point.energy {
+                if neigh.energy_oda < min_point.energy_oda {
                     min_point = neigh;
                 }
             }
             let energy;
-            if min_point.energy == 0. { energy = f64::INFINITY; }
-            else { energy = min_point.energy;}
+            if min_point.energy_oda == 0. { energy = f64::INFINITY; }
+            else { energy = min_point.energy_oda;}
             energies.push(energy);
             min_points.push(point);
         }
@@ -65,9 +65,9 @@ fn optimize_poistion_grid(grid: &Grid3D, point: &AnchorPoint, add_noise: bool) -
         min -= 1.0;
         max -= 1.0;
     }
-    // let neighbors = grid.get_neighbors_within_distance_and_angle(point.anchor_point(), point.anchor_vectors(), max, min);
-    let neighbors = grid.get_neighbors_within_distance(point.anchor_point(), max, min);
-    let energies: Vec<f64> = neighbors.iter().map(|x| x.energy).collect();
+    let neighbors = grid.get_neighbors_within_distance_and_angle(point.anchor_point(), point.anchor_vectors(), max, min);
+    // let neighbors = grid.get_neighbors_within_distance(point.anchor_point(), max, min);
+    let energies: Vec<f64> = neighbors.iter().map(|x| x.energy_oda).collect();
     let choice = mc::boltzmann_choices(&energies, None);
     if choice.len() > 0 {
         let idx = choice.first().unwrap().clone();
@@ -108,7 +108,7 @@ pub fn sample(grid: &mut Grid3D, receptor_points: &mut Vec<Atom>, anchor_points:
     // println!("Decisions: {}",decisions.len());
     for (idx, decision) in decisions.iter().enumerate() {
         let new_point = optimize_poistion_grid(grid, decision, false);
-        if mc::boltzmann_acceptance_rejection(&new_point.energy, &BOLTZMANN_ENERGY_CUTOFF, &TEMPERATURE, &BOLTZMANN_K) {
+        if mc::boltzmann_acceptance_rejection(&new_point.energy_oda, &BOLTZMANN_ENERGY_CUTOFF, &TEMPERATURE, &BOLTZMANN_K) {
             // Now we build explicit water
             // println!("Sampling real waters");
             let (placed, mut water) = sample_real_waters(&new_point, water_configurations, receptor_points);
@@ -117,7 +117,7 @@ pub fn sample(grid: &mut Grid3D, receptor_points: &mut Vec<Atom>, anchor_points:
                 for hb in water.hydrogen_bonds().into_iter() {
                     new_anchor_points.push(hb);
                 }
-                grid.update_energies_oda(&water.as_vec());
+                grid.update_energies(&water.as_vec());
             }
         }
     }
@@ -128,9 +128,7 @@ pub fn sample(grid: &mut Grid3D, receptor_points: &mut Vec<Atom>, anchor_points:
     placement
 }
 
-pub fn sample_using_grids(grid_oda: &mut Grid3D, 
-        grid_ow: &mut Grid3D, 
-        grid_elec: &mut Grid3D, 
+pub fn sample_using_grids(grid: &mut Grid3D,  
         receptor_points: &mut Vec<Atom>, 
         anchor_points: &mut Vec<AnchorPoint>, 
         water_configurations: &Vec<[f64; 6]>) -> bool {
@@ -139,30 +137,32 @@ pub fn sample_using_grids(grid_oda: &mut Grid3D,
     let placement: bool = false;
     let mut receptor_points_on_the_grid = Vec::new();
     for point in anchor_points.into_iter() {
-        if grid_oda.in_box(point.anchor_point()){
+        if grid.in_box(point.anchor_point()){
             receptor_points_on_the_grid.push(point.clone());
         }
     }
     // Sample with Boltzmann the neighbors and the actual point and based on Metropolis 
     // acceptance criteria then these are the starting anchor points
-    let decisions = optimize_placement_order_grid(grid_oda, &receptor_points_on_the_grid);
+    let decisions = optimize_placement_order_grid(grid, &receptor_points_on_the_grid);
     for (idx, decision) in decisions.iter().enumerate() {
-        let new_point = optimize_poistion_grid(grid_oda, decision, false);
+        let new_point = optimize_poistion_grid(grid, decision, false);
         // println!("{}", new_point.energy);
-        if mc::boltzmann_acceptance_rejection(&new_point.energy, &BOLTZMANN_ENERGY_CUTOFF, &TEMPERATURE, &BOLTZMANN_K) {
+        if mc::boltzmann_acceptance_rejection(&new_point.energy_oda, &BOLTZMANN_ENERGY_CUTOFF, &TEMPERATURE, &BOLTZMANN_K) {
             // Now we build explicit water
             // println!("Sampling real waters");
-            let (placed, mut water) = sample_waters_with_grids(&new_point, water_configurations, receptor_points, grid_ow,  grid_elec);
+            let (placed, mut water) = sample_waters_with_grids(&new_point, water_configurations, receptor_points, grid);
 
             if placed {
                 water.guess_new_hydrogen_bonds();
                 for hb in water.hydrogen_bonds().into_iter() {
                     new_anchor_points.push(hb);
                 }
+                // println!("Updating water maps...");
                 let atoms_to_update = water.as_vec();
-                grid_oda.update_energies_oda(&atoms_to_update);
-                grid_ow.update_energies_ow(&atoms_to_update);
-                grid_elec.update_energies_elec(&atoms_to_update);
+                grid.update_energies(&atoms_to_update);
+                // grid_oda.update_energies_oda(&atoms_to_update);
+                // grid_ow.update_energies_ow(&atoms_to_update);
+                // grid_elec.update_energies_elec(&atoms_to_update);
             }
         }
     }
@@ -230,20 +230,47 @@ pub fn sample_real_waters(oxygen_atom: &GridPoint,
 pub fn sample_waters_with_grids(oxygen_atom: &GridPoint,
     water_configurations: &Vec<[f64; 6]>,
     receptor_points: &mut Vec<Atom>,
-    grid_ow: &Grid3D,
-    grid_elec: &Grid3D) -> (bool, WaterMolecule) {
+    grid: &Grid3D) -> (bool, WaterMolecule) {
 
-    // let interpolated = grid_elec.trilinear_interpolation(oxygen_atom.coords);
-    // if interpolated.is_some() {
-    //     let real = grid_elec.get_nearest_neighbor(&oxygen_atom.coords);
-    //     assert_eq!(interpolated.unwrap().round()/1000.0, real.unwrap().energy.round()/1000.0, "Different energies, interpolated");
-    // }
     // Let's parallelize
+    // let oxygen_position = oxygen_atom.coords;
+    // let lj_oxygen = grid_ow.get_nearest_neighbor(&oxygen_position).unwrap().energy;
+    // let possible_results: Vec<(WaterMolecule, f64)> = water_configurations
+    //     .par_iter()
+    //     .map(|configuration| {
+    //         // H1 in position
+    //         let h1_coords: [f64; 3] = [
+    //             configuration[0] + oxygen_position[0],
+    //             configuration[1] + oxygen_position[1],
+    //             configuration[2] + oxygen_position[2],
+    //         ];
+    //         // H2 in position
+    //         let h2_coords: [f64; 3] = [
+    //             configuration[3] + oxygen_position[0],
+    //             configuration[4] + oxygen_position[1],
+    //             configuration[5] + oxygen_position[2],
+    //         ];
+
+    //         // Create water molecule
+    //         let water = WaterMolecule::new(oxygen_position.clone(), h1_coords, h2_coords);
+
+    //         // Compute energy
+    //         // Interpolation baby!
+    //         let electrostatics_h1 = grid_elec.trilinear_interpolation(h1_coords);
+    //         let electrostatics_h2 = grid_elec.trilinear_interpolation(h2_coords);
+    //         let electrostatics_oxygen = grid_elec.trilinear_interpolation(oxygen_position);
+    //         if electrostatics_h1.is_some() && electrostatics_h2.is_some() && electrostatics_oxygen.is_some() {
+    //             let energy_value = lj_oxygen + (electrostatics_oxygen.unwrap() * OXYGEN_W_Q) + (electrostatics_h1.unwrap()  * HYDROGEN_W_Q) + (electrostatics_h2.unwrap() * HYDROGEN_W_Q);
+    //             (water, energy_value)
+    //         } else {
+    //             (water, f64::INFINITY)
+    //         }
+    //     })
+    //     .collect();
+    let mut possible_results: Vec<(WaterMolecule, f64)> = Vec::new();
     let oxygen_position = oxygen_atom.coords;
-    let lj_oxygen = grid_ow.get_nearest_neighbor(&oxygen_position).unwrap().energy;
-    let possible_results: Vec<(WaterMolecule, f64)> = water_configurations
-        .par_iter()
-        .map(|configuration| {
+    let lj_oxygen = grid.get_nearest_neighbor(&oxygen_position).unwrap().energy_ow;
+    for configuration in water_configurations {
             // H1 in position
             let h1_coords: [f64; 3] = [
                 configuration[0] + oxygen_position[0],
@@ -262,18 +289,16 @@ pub fn sample_waters_with_grids(oxygen_atom: &GridPoint,
 
             // Compute energy
             // Interpolation baby!
-            let electrostatics_h1 = grid_elec.trilinear_interpolation(h1_coords);
-            let electrostatics_h2 = grid_elec.trilinear_interpolation(h2_coords);
-            let electrostatics_oxygen = grid_elec.trilinear_interpolation(oxygen_position);
+            let electrostatics_h1 = grid.trilinear_interpolation(h1_coords);
+            let electrostatics_h2 = grid.trilinear_interpolation(h2_coords);
+            let electrostatics_oxygen = grid.trilinear_interpolation(oxygen_position);
             if electrostatics_h1.is_some() && electrostatics_h2.is_some() && electrostatics_oxygen.is_some() {
                 let energy_value = lj_oxygen + (electrostatics_oxygen.unwrap() * OXYGEN_W_Q) + (electrostatics_h1.unwrap()  * HYDROGEN_W_Q) + (electrostatics_h2.unwrap() * HYDROGEN_W_Q);
-                (water, energy_value)
+                possible_results.push((water, energy_value));
             } else {
-                (water, f64::INFINITY)
+                possible_results.push((water, f64::INFINITY));
             }
-        })
-        .collect();
-
+    }
     let possible_waters_energies: Vec<f64> = possible_results.iter().map(|(_, e)| *e).collect();
 
     let choice = mc::boltzmann_choices(&possible_waters_energies, None);

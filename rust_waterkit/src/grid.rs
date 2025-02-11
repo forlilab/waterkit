@@ -1,4 +1,4 @@
-use core::f64;
+
 use pyo3::prelude::*;
 use rayon::prelude::*;
 use kdtree::distance::squared_euclidean;
@@ -14,7 +14,9 @@ use crate::vina_ff;
 pub struct GridPoint {
     pub index: usize,
     pub coords: [f64; 3],
-    pub energy: f64,
+    pub energy_oda: f64,
+    pub energy_ow: f64,
+    pub energy_hw: f64,
 }
 
 impl PartialEq for GridPoint {
@@ -90,7 +92,9 @@ impl Grid3D {
                     data.push(GridPoint {
                         index: index,
                         coords,
-                        energy: f64::INFINITY,
+                        energy_oda: f64::INFINITY,
+                        energy_ow: f64::INFINITY,
+                        energy_hw: f64::INFINITY,
                     });
                     index += 1;
                 }
@@ -118,29 +122,45 @@ impl Grid3D {
 }
 
 impl Grid3D {
-    pub fn update_energies_oda(&mut self, new_points: &Vec<Atom>) {
-        self.all_points_mut()
-            .par_iter_mut()
-            .for_each(|point| {
-                point.energy += vina_ff::vina_energy(new_points, &point.coords);
-            });
+    pub fn update_energies(&mut self, new_points: &Vec<Atom>) {
+        for point in self.all_points_mut() {
+            point.energy_oda += vina_ff::vina_energy(new_points, &point.coords);
+            point.energy_ow += energy::get_ow_energy(new_points, &point.coords);
+            point.energy_hw += energy::get_q_energy(new_points, &point.coords);
+        }
     }
+    // pub fn update_energies_oda(&mut self, new_points: &Vec<Atom>) {
+    //     // self.all_points_mut()
+    //     //     .par_iter_mut()
+    //     //     .for_each(|point| {
+    //     //         point.energy += vina_ff::vina_energy(new_points, &point.coords);
+    //     //     });
+    //     for point in self.all_points_mut() {
+    //         point.energy += vina_ff::vina_energy(new_points, &point.coords);
+    //     }
+    // }
 
-    pub fn update_energies_ow(&mut self, new_points: &Vec<Atom>) {
-        self.all_points_mut()
-            .par_iter_mut()
-            .for_each(|point| {
-                point.energy +=  energy::get_ow_energy(new_points, &point.coords);
-            });
-    }
+    // pub fn update_energies_ow(&mut self, new_points: &Vec<Atom>) {
+    //     // self.all_points_mut()
+    //     //     .par_iter_mut()
+    //     //     .for_each(|point| {
+    //     //         point.energy +=  energy::get_ow_energy(new_points, &point.coords);
+    //     //     });
+    //     for point in self.all_points_mut() {
+    //         point.energy += energy::get_ow_energy(new_points, &point.coords);
+    //     }
+    // }
 
-    pub fn update_energies_elec(&mut self, new_points: &Vec<Atom>) {
-        self.all_points_mut()
-            .par_iter_mut()
-            .for_each(|point| {
-                point.energy +=  energy::get_q_energy(new_points, &point.coords);
-            });
-    }
+    // pub fn update_energies_elec(&mut self, new_points: &Vec<Atom>) {
+    //     // self.all_points_mut()
+    //     //     .par_iter_mut()
+    //     //     .for_each(|point| {
+    //     //         point.energy +=  energy::get_q_energy(new_points, &point.coords);
+    //     //     });
+    //     for point in self.all_points_mut() {
+    //         point.energy += energy::get_q_energy(new_points, &point.coords);
+    //     }
+    // }
 
     pub fn all_points(&self) -> &Vec<GridPoint> {
         &self.data
@@ -244,11 +264,8 @@ impl Grid3D {
 
         // Get the coordinates of the cell's corners
         let x0 = self.x_min + i as f64 * self.spacing;
-        let x1 = x0 + self.spacing;
         let y0 = self.y_min + j as f64 * self.spacing;
-        let y1 = y0 + self.spacing;
         let z0 = self.z_min + k as f64 * self.spacing;
-        let z1 = z0 + self.spacing;
 
         // Get the values at the 8 corners of the cell
         let c000 = self.get_energy_at(i, j, k)?;
@@ -295,7 +312,8 @@ impl Grid3D {
         let index = i * (y_points * z_points) + j * z_points + k;
         // let index = i + x_points * (j + y_points * k);
         if index < self.data.len() {
-            Some(self.data[index].energy)
+            // Interpolation is only for electrostatics
+            Some(self.data[index].energy_hw)
         } else {
             None
         }

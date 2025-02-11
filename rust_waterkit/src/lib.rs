@@ -7,6 +7,7 @@ pub mod atom;
 pub mod water;
 pub mod energy;
 pub mod monte_carlo;
+pub mod optimizer;
 pub mod setup;
 pub mod sampling;
 pub mod grid;
@@ -38,13 +39,13 @@ mod tests {
         ];
 
         for data in grid.data.iter() {
-            println!("Point at index: {} - {:?} - {}", data.index, data.coords, data.energy);
+            println!("Point at index: {} - {:?} - {}", data.index, data.coords, data.energy_oda);
         }
     
         for &(i, j, k, energy) in &test_indices {
             let index = i + 4 * (j + 4 * k); // Manually mapping indices
             println!("Fetching energy at i={}, j={}, k={} -> index {}", i, j, k, index);
-            grid.data[index].energy = energy;
+            grid.data[index].energy_oda = energy;
         }
         
         // Test a point in the middle of the cell (should return the average energy)

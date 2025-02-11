@@ -95,24 +95,17 @@ fn run_single_waterkit(receptor_points: &Vec<Atom>,
 fn run_single_waterkit_with_grids(receptor_points: &Vec<Atom>, 
     water_configurations: &Vec<[f64; 6]>, 
     anchor_points: &Vec<AnchorPoint>, 
-    mut grid_oda: Grid3D,
-    mut grid_ow: Grid3D,
-    mut grid_elec: Grid3D,
+    mut grid: Grid3D,
     epoch: usize) -> Vec<Atom> {
         // let start_time = Instant::now();
         let mut receptor_map = receptor_points.clone();
         
         let mut mutable_anchor_points = anchor_points.clone();
-
-        // while mutable_anchor_points.len() > 0 {
         for i in 0..2 {
-            sample_using_grids(&mut grid_oda, &mut grid_ow, &mut grid_elec,&mut receptor_map, &mut mutable_anchor_points, &water_configurations);
+            sample_using_grids(&mut grid,&mut receptor_map, &mut mutable_anchor_points, &water_configurations);
         }
-        // let elapsed_time = start_time.elapsed();
-        // println!("Time taken for one map: {:?}", elapsed_time);
         let waters: Vec<&Atom> = receptor_map.iter().filter(|x| x.atom_type() == "OW" || x.atom_type() == "HW").collect();
-        println!("Waters: {}", waters.len());
-        // println!("{:?}", waters);
+        // println!("Waters: {}", waters.len());
         to_pdb(&waters, &format!("test/water_{epoch}.pdb"));
         receptor_map
 }
@@ -121,22 +114,20 @@ fn run_single_waterkit_with_grids(receptor_points: &Vec<Atom>,
 pub fn run_waterkit(receptor_points: Vec<Atom>, 
     water_configurations: Vec<[f64; 6]>, 
     anchor_points: Vec<AnchorPoint>, 
-    grids: [Grid3D; 3],
+    grid: Grid3D,
     epochs: usize,
     use_grids: bool) -> Vec<Vec<Atom>> {
 
     let mut results = Vec::new();
-    println!("Starting main waterkit");
+    // println!("Starting main waterkit");
     if !use_grids {
-        results.push(run_single_waterkit(&receptor_points.clone(), &water_configurations.clone(), &anchor_points.clone(), grids[0].clone()));
+        results.push(run_single_waterkit(&receptor_points.clone(), &water_configurations.clone(), &anchor_points.clone(), grid.clone()));
     } else {
         results.push(run_single_waterkit_with_grids(
             &receptor_points.clone(),
             &water_configurations.clone(),
             &anchor_points.clone(),
-            grids[0].clone(),
-            grids[1].clone(),
-            grids[2].clone(),
+            grid.clone(),
             epochs
         ));
     }

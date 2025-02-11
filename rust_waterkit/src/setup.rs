@@ -19,15 +19,15 @@ pub fn setup_system(receptor: Vec<Atom>,
     y_size: f64, 
     z_size: f64, 
     spacing: f64, 
-    center: [f64; 3],) -> [Grid3D; 3] {
-    let oda_grid = setup_oda_grid(&receptor, x_size, y_size, z_size, spacing, center);
-    let ow_grid = setup_ow_grid(&receptor, x_size, y_size, z_size, spacing, center);
-    let elec_grid = setup_q_grid(&receptor, x_size, y_size, z_size, spacing, center);
-
-    [oda_grid, ow_grid, elec_grid]
+    center: [f64; 3],) -> Grid3D {
+    // let oda_grid = setup_oda_grid(&receptor, x_size, y_size, z_size, spacing, center);
+    // let ow_grid = setup_ow_grid(&receptor, x_size, y_size, z_size, spacing, center);
+    // let elec_grid = setup_q_grid(&receptor, x_size, y_size, z_size, spacing, center);
+    let grid = setup_grid(&receptor, x_size, y_size, z_size, spacing, center);
+    grid
 }
 
-pub fn setup_oda_grid(
+pub fn setup_grid(
     receptor_points: &Vec<Atom>,
     x_size: f64,
     y_size: f64,
@@ -39,48 +39,71 @@ pub fn setup_oda_grid(
     grid.all_points_mut()
     .par_iter_mut()
     .for_each(|point| {
-    let energy = vina_ff::vina_energy(receptor_points, &point.coords);
-        point.energy =  energy;
+        point.energy_oda = vina_ff::vina_energy(receptor_points, &point.coords);
+        point.energy_ow =  energy::get_ow_energy(receptor_points, &point.coords);
+        point.energy_hw =  energy::get_q_energy(receptor_points, &point.coords);
     });
 
     grid.build_kdtree();
     grid
 }
 
-pub fn setup_ow_grid(
-    receptor_points: &Vec<Atom>,
-    x_size: f64,
-    y_size: f64,
-    z_size: f64,
-    spacing: f64,
-    center: [f64; 3]) -> Grid3D {
+// pub fn setup_oda_grid(
+//     receptor_points: &Vec<Atom>,
+//     x_size: f64,
+//     y_size: f64,
+//     z_size: f64,
+//     spacing: f64,
+//     center: [f64; 3]) -> Grid3D {
+
+//     let mut grid = Grid3D::new((x_size, y_size, z_size), spacing, center);
+//     grid.all_points_mut()
+//     .par_iter_mut()
+//     .for_each(|point| {
+//         point.energy_oda = vina_ff::vina_energy(receptor_points, &point.coords);
+//         point.energy_ow =  energy::get_ow_energy(receptor_points, &point.coords);
+//         point.energy_hw =  energy::get_q_energy(receptor_points, &point.coords);
+        
+//     });
+
+//     grid.build_kdtree();
+//     grid
+// }
+
+// pub fn setup_ow_grid(
+//     receptor_points: &Vec<Atom>,
+//     x_size: f64,
+//     y_size: f64,
+//     z_size: f64,
+//     spacing: f64,
+//     center: [f64; 3]) -> Grid3D {
     
-    let mut grid = Grid3D::new((x_size, y_size, z_size), spacing, center);  
-    grid.all_points_mut()
-    .par_iter_mut()
-    .for_each(|point| {
-        point.energy =  energy::get_ow_energy(receptor_points, &point.coords);
-    });
+//     let mut grid = Grid3D::new((x_size, y_size, z_size), spacing, center);  
+//     grid.all_points_mut()
+//     .par_iter_mut()
+//     .for_each(|point| {
+//         point.energy =  energy::get_ow_energy(receptor_points, &point.coords);
+//     });
 
-    grid.build_kdtree();
-    grid
-}
+//     grid.build_kdtree();
+//     grid
+// }
 
-pub fn setup_q_grid(
-    receptor_points: &Vec<Atom>,
-    x_size: f64,
-    y_size: f64,
-    z_size: f64,
-    spacing: f64,
-    center: [f64; 3]) -> Grid3D {
+// pub fn setup_q_grid(
+//     receptor_points: &Vec<Atom>,
+//     x_size: f64,
+//     y_size: f64,
+//     z_size: f64,
+//     spacing: f64,
+//     center: [f64; 3]) -> Grid3D {
     
-    let mut grid = Grid3D::new((x_size, y_size, z_size), spacing, center);  
-    grid.all_points_mut()
-    .par_iter_mut()
-    .for_each(|point| {
-        point.energy =  energy::get_q_energy(receptor_points, &point.coords);
-    });
+//     let mut grid = Grid3D::new((x_size, y_size, z_size), spacing, center);  
+//     grid.all_points_mut()
+//     .par_iter_mut()
+//     .for_each(|point| {
+//         point.energy =  energy::get_q_energy(receptor_points, &point.coords);
+//     });
 
-    grid.build_kdtree();
-    grid
-}
+//     grid.build_kdtree();
+//     grid
+// }
