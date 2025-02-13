@@ -1,9 +1,8 @@
-use pyo3::buffer::ElementType;
 use rayon::prelude::*;
 
 use crate::anchor_point::AnchorPoint;
-use crate::{energy, monte_carlo as mc};
-use crate::grid::{Grid3D, GridPoint};
+use crate::monte_carlo as mc;
+use crate::grid::{Grid3D, GridPoint, ProbeType};
 use crate::consts::*;
 use crate::atom::Atom;
 use crate::water::WaterMolecule;
@@ -58,7 +57,7 @@ fn optimize_placement_order_grid(grid: &Grid3D, points: &Vec<AnchorPoint>) -> Ve
     decisions
 }
 
-fn optimize_poistion_grid(grid: &Grid3D, point: &AnchorPoint, add_noise: bool) -> GridPoint {
+fn optimize_poistion_grid(grid: &Grid3D, point: &AnchorPoint) -> GridPoint {
     let mut min = 2.5;
     let mut max = 3.6;
     if point.hb_type() == "donor" {
@@ -106,8 +105,8 @@ pub fn sample(grid: &mut Grid3D, receptor_points: &mut Vec<Atom>, anchor_points:
     // let start_time = Instant::now();
     let decisions = optimize_placement_order_grid(grid, &receptor_points_on_the_grid);
     // println!("Decisions: {}",decisions.len());
-    for (idx, decision) in decisions.iter().enumerate() {
-        let new_point = optimize_poistion_grid(grid, decision, false);
+    for (_idx, decision) in decisions.iter().enumerate() {
+        let new_point = optimize_poistion_grid(grid, decision);
         if mc::boltzmann_acceptance_rejection(&new_point.energy_oda, &BOLTZMANN_ENERGY_CUTOFF, &TEMPERATURE, &BOLTZMANN_K) {
             // Now we build explicit water
             // println!("Sampling real waters");
@@ -131,7 +130,8 @@ pub fn sample(grid: &mut Grid3D, receptor_points: &mut Vec<Atom>, anchor_points:
 pub fn sample_using_grids(grid: &mut Grid3D,  
         receptor_points: &mut Vec<Atom>, 
         anchor_points: &mut Vec<AnchorPoint>, 
-        water_configurations: &Vec<[f64; 6]>) -> bool {
+        water_configurations: &Vec<[f64; 6]>,
+        new_water_molecules: &mut Vec<WaterMolecule>) -> bool {
     
     let mut new_anchor_points = Vec::new();
     let placement: bool = false;
@@ -144,8 +144,8 @@ pub fn sample_using_grids(grid: &mut Grid3D,
     // Sample with Boltzmann the neighbors and the actual point and based on Metropolis 
     // acceptance criteria then these are the starting anchor points
     let decisions = optimize_placement_order_grid(grid, &receptor_points_on_the_grid);
-    for (idx, decision) in decisions.iter().enumerate() {
-        let new_point = optimize_poistion_grid(grid, decision, false);
+    for (_idx, decision) in decisions.iter().enumerate() {
+        let new_point = optimize_poistion_grid(grid, decision);
         // println!("{}", new_point.energy);
         if mc::boltzmann_acceptance_rejection(&new_point.energy_oda, &BOLTZMANN_ENERGY_CUTOFF, &TEMPERATURE, &BOLTZMANN_K) {
             // Now we build explicit water
@@ -157,12 +157,9 @@ pub fn sample_using_grids(grid: &mut Grid3D,
                 for hb in water.hydrogen_bonds().into_iter() {
                     new_anchor_points.push(hb);
                 }
-                // println!("Updating water maps...");
+                new_water_molecules.push(water.clone());
                 let atoms_to_update = water.as_vec();
                 grid.update_energies(&atoms_to_update);
-                // grid_oda.update_energies_oda(&atoms_to_update);
-                // grid_ow.update_energies_ow(&atoms_to_update);
-                // grid_elec.update_energies_elec(&atoms_to_update);
             }
         }
     }
@@ -289,9 +286,9 @@ pub fn sample_waters_with_grids(oxygen_atom: &GridPoint,
 
             // Compute energy
             // Interpolation baby!
-            let electrostatics_h1 = grid.trilinear_interpolation(h1_coords);
-            let electrostatics_h2 = grid.trilinear_interpolation(h2_coords);
-            let electrostatics_oxygen = grid.trilinear_interpolation(oxygen_position);
+            let electrostatics_h1 = grid.trilinear_interpolation(h1_coords, ProbeType::HW);
+            let electrostatics_h2 = grid.trilinear_interpolation(h2_coords, ProbeType::HW);
+            let electrostatics_oxygen = grid.trilinear_interpolation(oxygen_position, ProbeType::HW);
             if electrostatics_h1.is_some() && electrostatics_h2.is_some() && electrostatics_oxygen.is_some() {
                 let energy_value = lj_oxygen + (electrostatics_oxygen.unwrap() * OXYGEN_W_Q) + (electrostatics_h1.unwrap()  * HYDROGEN_W_Q) + (electrostatics_h2.unwrap() * HYDROGEN_W_Q);
                 possible_results.push((water, energy_value));

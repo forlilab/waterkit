@@ -1,6 +1,6 @@
 use pyo3::prelude::*;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 #[pyclass]
 pub struct Atom {
     // Atom type for the forcefield

@@ -1,4 +1,3 @@
-use pyo3::prelude::*;
 use crate::atom::Atom;
 use crate::geometry;
 use crate::consts;
@@ -25,7 +24,7 @@ pub fn lennard_jones_rmin_half(epsilon_1: &f64, epsilon_2: &f64, dist: &f64, rmi
     let epsilon = (epsilon_1 * epsilon_2).sqrt();
     let c12 = SCALE_VDW * epsilon * rmin.powi(12);
     // let c6 = epsilon * rmin.powi(6);
-    let c6 = 2. * epsilon * rmin.powi(6);
+    let c6 = epsilon * rmin.powi(6);
     let lj = c12 / dist.powi(12) - c6 / dist.powi(6);
     // let lj = 4.0 * epsilon * ((rmin / dist).powi(12) - (rmin / dist).powi(6));
     lj
@@ -41,7 +40,7 @@ pub fn lennard_jones_rmin_half(epsilon_1: &f64, epsilon_2: &f64, dist: &f64, rmi
 ///     f64: Coulomb energy (in kcal/mol).
 pub fn coulomb_energy(q1: &f64, q2: &f64, r: &f64) -> f64 {
     let k_e = 332.0636; // Electrostatic constant in kcal·Å/(mol·e^2)
-    let dielectric = 1.0; // Dielectric constant of the medium (default: 1.0)
+    // let dielectric = 1.0; // Dielectric constant of the medium (default: 1.0)
     let coulomb = k_e * ((q1 * q2) / r);
     coulomb
 }
@@ -82,7 +81,7 @@ pub fn energy_for_real_water(atoms_1: &Vec<Atom>, atoms_2: &Vec<Atom>) -> f64 {
     let mut total_energy = 0.0;
     for atom_1 in atoms_1.iter() {
         let atom_1_coords = atom_1.coords().clone();
-        let mut cnt = 0;
+        // let mut cnt = 0;
         // Atoms2 are the water's atoms
         for atom_2 in atoms_2.iter() {
             let atom_2_coords = atom_2.coords().clone();
@@ -91,8 +90,6 @@ pub fn energy_for_real_water(atoms_1: &Vec<Atom>, atoms_2: &Vec<Atom>) -> f64 {
                 &atom_2_coords), 1e-8_f64);
 
             if r < consts::ELECTROSTATICS_CUTOFF {
-                cnt += 1;
-                // println!("{} Atom {}: {}", cnt, atom_2.atom_type(), atom_2.charge());
                 let mut lj_energy = 0.0;
 
                 if atom_1.atom_type() != &"HW".to_string() && atom_2.atom_type() != &"HW".to_string() {
@@ -103,7 +100,6 @@ pub fn energy_for_real_water(atoms_1: &Vec<Atom>, atoms_2: &Vec<Atom>) -> f64 {
                 }
 
                 let coulomb_energy = coulomb_energy(atom_1.charge(), atom_2.charge(), &r);
-
                 // Add to total energy
                 total_energy += lj_energy + coulomb_energy;
             }

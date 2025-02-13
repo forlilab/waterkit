@@ -17,7 +17,7 @@ pub mod python_wrapper;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rayon::prelude::*;
+
     #[test]
     fn test_trilinear_interpolation() {
         let spacing = 1.0;
@@ -50,7 +50,7 @@ mod tests {
         
         // Test a point in the middle of the cell (should return the average energy)
         let test_point = [0.5, 0.5, 0.5];  // Midpoint of (0,0,0) and (1,1,1)
-        let interpolated_value = grid.trilinear_interpolation(test_point).unwrap();
+        let interpolated_value = grid.trilinear_interpolation(test_point, grid::ProbeType::HW).unwrap();
     
         // Compute expected value manually
         let expected_value = (1.0 + 2.0 + 3.0 + 4.0 + 5.0 + 6.0 + 7.0 + 8.0) / 8.0;

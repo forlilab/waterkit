@@ -20,3 +20,6 @@ rand = "0.8.5"
 rayon = "1.10.0"
 rstar = "0.12.2"
 simple-logging = "2.0.2"
+
+[features]
+extension-module = ["pyo3/extension-module"]

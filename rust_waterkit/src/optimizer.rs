@@ -1,7 +1,13 @@
+use crate::consts;
 use crate::geometry;
+use crate::atom::Atom;
 use crate::grid::Grid3D;
+use crate::grid::ProbeType;
+use crate::monte_carlo;
+use crate::energy::energy_for_real_water;
 use crate::water::WaterMolecule;
 
+use core::f64;
 use std::f64::consts::PI;
 use rand::prelude::*;
 
@@ -12,11 +18,6 @@ use rand::prelude::*;
 /// are sampled by rotating around the oxygen in every direction.
 /// The expected result is that the water would maximize the  
 /// # of H bonds between both upper and lower layers.
-
-pub enum Perturbation {
-    Translation,
-    Rotation,
-}
 
 fn translate_oxygen(oxygen_coords: [f64; 3], h1_coords: [f64; 3], h2_coords: [f64; 3], max_disp: f64) -> [[f64; 3]; 3] {
     let mut rng = rand::thread_rng();
@@ -30,10 +31,11 @@ fn translate_oxygen(oxygen_coords: [f64; 3], h1_coords: [f64; 3], h2_coords: [f6
     [new_oxygen, new_h1, new_h2]
 }
 
-fn rotate_hydrogens(oxygen_coords: [f64; 3], h1_coords: [f64; 3], h2_coords: [f64; 3], max_angle: f64) -> [[f64; 3]; 2] {
+fn rotate_hydrogens(oxygen_coords: [f64; 3], h1_coords: [f64; 3], h2_coords: [f64; 3]) -> [[f64; 3]; 2] {
     let mut rng = rand::thread_rng();
     let axis = geometry::normalize(&[rng.gen(), rng.gen(), rng.gen()]);
-    let angle = rng.gen_range(-max_angle..max_angle);
+    // let angle = rng.gen_range(-max_angle..max_angle);
+    let angle = rng.gen_range(0.0..(2.0 * PI)); // Full rotational sampling [0, 2π]
     let cos_theta = angle.cos();
     let sin_theta = angle.sin();
 
@@ -48,27 +50,62 @@ fn rotate_hydrogens(oxygen_coords: [f64; 3], h1_coords: [f64; 3], h2_coords: [f6
         geometry::sum_points(&&geometry::sum_points(&&geometry::sum_points(&term1, &term2), &term3), &oxygen_coords)
     };
 
+
     [rotate(h1_coords), rotate(h2_coords)]
 }
 
-pub fn optimize(water: &WaterMolecule, grid: &Grid3D) {
+fn get_energy(oxygen_pos: [f64; 3], h1_pos: [f64; 3], h2_pos: [f64; 3], grid: &Grid3D) -> f64 {
+    let mut energy_value = f64::INFINITY;
+    // Need to interpolate the oxygen too since we are sampling small movements for this atom too 
+    let lj_oxygen = grid.trilinear_interpolation(oxygen_pos, ProbeType::OW);
+
+    let electrostatics_h1 = grid.trilinear_interpolation(h1_pos, ProbeType::HW);
+    let electrostatics_h2 = grid.trilinear_interpolation(h2_pos, ProbeType::HW);
+    let electrostatics_oxygen = grid.trilinear_interpolation(oxygen_pos, ProbeType::HW);
+    if lj_oxygen.is_some() && electrostatics_h1.is_some() && electrostatics_h2.is_some() && electrostatics_oxygen.is_some() {
+        energy_value = lj_oxygen.unwrap() + (electrostatics_oxygen.unwrap() * consts::OXYGEN_W_Q) + (electrostatics_h1.unwrap()  * consts::HYDROGEN_W_Q) + (electrostatics_h2.unwrap() * consts::HYDROGEN_W_Q);
+    }
+    energy_value
+}
+
+pub fn optimize(water: &WaterMolecule, waters_in_system: &Vec<Atom>, grid: &mut Grid3D) -> WaterMolecule {   
     let water_atoms = water.as_vec();
-    let original_oxygen_coords = water_atoms[0].coords();
-    let original_h1_coords = water_atoms[1].coords();
-    let original_h2_coords = water_atoms[2].coords();
+    let mut original_oxygen_coords = water_atoms[0].coords();
+    let mut original_h1_coords = water_atoms[1].coords();
+    let mut original_h2_coords = water_atoms[2].coords();
     
     // Monte Carlo parameters
-    let num_steps = 1000;
-    let beta = 1.0;
-    let max_disp = 0.1;
-    let max_angle = PI / 18.0;
+    let num_steps = 500;
+    let max_disp = 0.2;
 
-    for _ in 0..num_steps {
+    for _i in 0..num_steps {
         // Propose a move
-        let new_atoms = translate_oxygen(original_oxygen_coords, original_h1_coords, original_h2_coords, max_disp);
-        let new_hydrogens = rotate_hydrogens(new_atoms[0], new_atoms[1], new_atoms[2], max_angle);
-        
+        let translation = translate_oxygen(original_oxygen_coords, original_h1_coords, original_h2_coords, max_disp);
+        let rotation = rotate_hydrogens(translation[0], translation[1], translation[2]);
+
         // Evaluate energy change
+        let old_atoms = WaterMolecule::new(original_oxygen_coords, original_h1_coords, original_h2_coords);
+        let old_energy = energy_for_real_water(waters_in_system, &old_atoms.as_vec());
+
+        // let new_energy = get_energy(new_atoms[0], new_hydrogens[0], new_hydrogens[1], grid);
+        let new_atoms = WaterMolecule::new(translation[0], rotation[0], rotation[1]);
+        let new_energy = energy_for_real_water(waters_in_system, &new_atoms.as_vec());
+
+        // Metropolis acceptance criterion
+        if monte_carlo::boltzmann_acceptance_rejection(&new_energy, &old_energy, &consts::TEMPERATURE, &consts::BOLTZMANN_K) {
+            // println!("Old energy: {}", old_energy);
+            // println!("New energy: {}", new_energy);
+            // Accept the move
+            original_oxygen_coords = translation[0];
+            // original_oxygen_coords = original_oxygen_coords;
+            original_h1_coords = rotation[0];
+            original_h2_coords = rotation[1];
+        }
     }
+
+    let optimized_water = WaterMolecule::new(original_oxygen_coords, original_h1_coords, original_h2_coords);
+    // let atoms_to_update = optimized_water.as_vec();
+    // grid.update_energies(&atoms_to_update);
+    optimized_water
 }
 

@@ -1,6 +1,7 @@
 
+use core::f64;
+
 use pyo3::prelude::*;
-use rayon::prelude::*;
 use kdtree::distance::squared_euclidean;
 use kdtree::KdTree;
 
@@ -8,6 +9,13 @@ use crate::atom::Atom;
 use crate::energy;
 use crate::geometry;
 use crate::vina_ff;
+
+pub enum ProbeType {
+    ODa,
+    OW,
+    HW,
+}
+
 
 #[derive(Clone, Debug)]
 #[pyclass]
@@ -31,14 +39,6 @@ impl Eq for GridPoint { }
 #[pyclass]
 pub struct Grid3D {
     pub data: Vec<GridPoint>,
-    x_size: f64,
-    y_size: f64,
-    z_size: f64,
-    
-    // center
-    c_x: f64,
-    c_y: f64,
-    c_z: f64,
     
     // boundaries
     x_min: f64,
@@ -103,12 +103,6 @@ impl Grid3D {
     
         Grid3D {
             data,
-            x_size: size.0,
-            y_size: size.1,
-            z_size: size.2,
-            c_x: cx,
-            c_y: cy,
-            c_z: cz,
             x_min,
             y_min,
             z_min,
@@ -129,38 +123,6 @@ impl Grid3D {
             point.energy_hw += energy::get_q_energy(new_points, &point.coords);
         }
     }
-    // pub fn update_energies_oda(&mut self, new_points: &Vec<Atom>) {
-    //     // self.all_points_mut()
-    //     //     .par_iter_mut()
-    //     //     .for_each(|point| {
-    //     //         point.energy += vina_ff::vina_energy(new_points, &point.coords);
-    //     //     });
-    //     for point in self.all_points_mut() {
-    //         point.energy += vina_ff::vina_energy(new_points, &point.coords);
-    //     }
-    // }
-
-    // pub fn update_energies_ow(&mut self, new_points: &Vec<Atom>) {
-    //     // self.all_points_mut()
-    //     //     .par_iter_mut()
-    //     //     .for_each(|point| {
-    //     //         point.energy +=  energy::get_ow_energy(new_points, &point.coords);
-    //     //     });
-    //     for point in self.all_points_mut() {
-    //         point.energy += energy::get_ow_energy(new_points, &point.coords);
-    //     }
-    // }
-
-    // pub fn update_energies_elec(&mut self, new_points: &Vec<Atom>) {
-    //     // self.all_points_mut()
-    //     //     .par_iter_mut()
-    //     //     .for_each(|point| {
-    //     //         point.energy +=  energy::get_q_energy(new_points, &point.coords);
-    //     //     });
-    //     for point in self.all_points_mut() {
-    //         point.energy += energy::get_q_energy(new_points, &point.coords);
-    //     }
-    // }
 
     pub fn all_points(&self) -> &Vec<GridPoint> {
         &self.data
@@ -193,7 +155,7 @@ impl Grid3D {
                     1,
                 &squared_euclidean::<f64>,
             ).unwrap();
-            if let Some((distance, &index)) = nearest.first() {
+            if let Some((_distance, &index)) = nearest.first() {
                 let nearest_point = &self.data[index];
                 Some(nearest_point)
             }
@@ -219,7 +181,7 @@ impl Grid3D {
             .collect();
         
         let mut neighbor_points = Vec::new();
-        for (distance, &index) in in_range {
+        for (_distance, &index) in in_range {
             neighbor_points.push(&self.data[index]);
         }
         neighbor_points
@@ -239,7 +201,7 @@ impl Grid3D {
             .collect();
         
         let mut neighbor_points = Vec::new();
-        for (distance, &index) in in_range {
+        for (_distance, &index) in in_range {
             if geometry::calculate_angle(&self.data[index].coords, anchor_xyz, vector_xyz).to_degrees() >= 90.0 {
                 neighbor_points.push(&self.data[index]);
             }
@@ -249,7 +211,7 @@ impl Grid3D {
 
 
     /// Perform trilinear interpolation at a point (x, y, z)
-    pub fn trilinear_interpolation(&self, point: [f64; 3]) -> Option<f64> {
+    pub fn trilinear_interpolation(&self, point: [f64; 3], probe_type: ProbeType) -> Option<f64> {
         let (x, y, z) = (point[0], point[1], point[2]);
 
         // Check if the point is within the grid boundaries
@@ -268,14 +230,14 @@ impl Grid3D {
         let z0 = self.z_min + k as f64 * self.spacing;
 
         // Get the values at the 8 corners of the cell
-        let c000 = self.get_energy_at(i, j, k)?;
-        let c001 = self.get_energy_at(i, j, k + 1)?;
-        let c010 = self.get_energy_at(i, j + 1, k)?;
-        let c011 = self.get_energy_at(i, j + 1, k + 1)?;
-        let c100 = self.get_energy_at(i + 1, j, k)?;
-        let c101 = self.get_energy_at(i + 1, j, k + 1)?;
-        let c110 = self.get_energy_at(i + 1, j + 1, k)?;
-        let c111 = self.get_energy_at(i + 1, j + 1, k + 1)?;
+        let c000 = self.get_energy_at(i, j, k, &probe_type)?;
+        let c001 = self.get_energy_at(i, j, k + 1, &probe_type)?;
+        let c010 = self.get_energy_at(i, j + 1, k, &probe_type)?;
+        let c011 = self.get_energy_at(i, j + 1, k + 1, &probe_type)?;
+        let c100 = self.get_energy_at(i + 1, j, k, &probe_type)?;
+        let c101 = self.get_energy_at(i + 1, j, k + 1, &probe_type)?;
+        let c110 = self.get_energy_at(i + 1, j + 1, k, &probe_type)?;
+        let c111 = self.get_energy_at(i + 1, j + 1, k + 1, &probe_type)?;
 
         // Compute the weights
         let xd = (x - x0) / self.spacing;
@@ -299,7 +261,7 @@ impl Grid3D {
     }
 
     /// Helper function to get the energy at a specific grid point (i, j, k)
-    fn get_energy_at(&self, i: usize, j: usize, k: usize) -> Option<f64> {
+    fn get_energy_at(&self, i: usize, j: usize, k: usize, probe_type: &ProbeType) -> Option<f64> {
         let x_points = ((self.x_max - self.x_min) / self.spacing).ceil() as usize + 1;
         let y_points = ((self.y_max - self.y_min) / self.spacing).ceil() as usize + 1;
         let z_points = ((self.z_max - self.z_min) / self.spacing).ceil() as usize + 1;
@@ -312,11 +274,31 @@ impl Grid3D {
         let index = i * (y_points * z_points) + j * z_points + k;
         // let index = i + x_points * (j + y_points * k);
         if index < self.data.len() {
-            // Interpolation is only for electrostatics
-            Some(self.data[index].energy_hw)
+            match probe_type {
+                ProbeType::ODa => Some(self.data[index].energy_oda),
+
+                ProbeType::OW => Some(self.data[index].energy_ow),
+                
+                // Interpolation is only for electrostatics
+                ProbeType::HW => Some(self.data[index].energy_hw)
+            }
         } else {
             None
         }
+    }
+
+    pub fn get_systems_energy(&self) {
+        let mut oda_energy = 0.0;
+        let mut ow_energy = 0.0;
+        let mut hw_energy = 0.0;
+
+        for p in self.all_points() {
+            oda_energy += p.energy_oda;
+            ow_energy += p.energy_ow;
+            hw_energy += p.energy_hw;
+        }
+
+        println!("SYSTEM's energies: \n\tODA: {} - OW: {} - HW: {}", oda_energy, ow_energy, hw_energy);
     }
 
 }

@@ -1,4 +1,3 @@
-use ndarray::Array1;
 use rand::prelude::*;
 use rand::distributions::WeightedIndex;
 use crate::consts::{BOLTZMANN_K, TEMPERATURE};
@@ -67,50 +66,59 @@ pub fn boltzmann_choices(energies: &[f64], num_samples: Option<usize>) -> Vec<us
     }
 }
 
+fn inverted_boltzmann_probabilities(energies: &[f64], e_opt: f64, sigma: f64) -> Vec<f64> {
+    energies.iter()
+        .map(|&e| (-((e_opt - e).powi(2)) / sigma.powi(2)).exp()) // Compute probability
+        .collect()
+}
 
-// /// This function returns the index of a randomly sampled energy based
-// /// on the Boltzmann probability distribution
-// pub fn boltzmann_sampling(energies: &Vec<f64>) -> Option<usize> {
-//     // println!("{:?}",energies);
-//     let probability_distribution = boltzmann_probabilities(energies);
-//     let sum: f64 = probability_distribution.iter().sum();
-//     if sum == 0. || probability_distribution.len() == 0 || probability_distribution.iter().any(|x| x < &0.) {
-//         return None;
-//     }
-//     let mut rng = thread_rng();
-//     let dist = WeightedIndex::new(&probability_distribution);
-//     if dist.is_ok() {
-//         return Some(dist.unwrap().sample(&mut rng));
-//     }
-//     None
-// }
 
-// pub fn boltzmann_sampling_order(energies: &[f64], num_samples: usize) -> Vec<usize> {
-//     let mut rng = thread_rng();
-//     let mut sampled_indices = Vec::with_capacity(num_samples);
-//     let mut remaining_indices: Vec<usize> = (0..energies.len()).collect();
-//     let mut remaining_energies: Vec<f64> = energies.to_vec();
+pub fn inverted_boltzmann_choices(energies: &[f64], num_samples: Option<usize>) -> Vec<usize> {
+    let mut rng = thread_rng();
+    
+    if num_samples.is_some() {
+        let size = num_samples.unwrap();
+        let mut sampled_indices = Vec::with_capacity(size);
+        let mut remaining_indices: Vec<usize> = (0..energies.len()).collect();
+        let mut remaining_energies: Vec<f64> = energies.to_vec();
+        for _ in 0..size {
+            let probabilities = inverted_boltzmann_probabilities(&remaining_energies, -1., 0.5);
+        
+            // Create a weighted distribution using the probabilities
+            let dist = WeightedIndex::new(&probabilities);
+            if dist.is_ok() {
+        
+                // Sample an index from the remaining indices
+                let sampled_index = dist.unwrap().sample(&mut rng);
+            
+                // Add the corresponding original index to the result
+                sampled_indices.push(remaining_indices[sampled_index]);
+            
+                // Remove the sampled energy and index from the remaining lists
+                remaining_indices.remove(sampled_index);
+                remaining_energies.remove(sampled_index);
+            } else {
+                break;
+            }
+        }
+        
+        sampled_indices
+    } else {
+        // Compute the Boltzmann probabilities for the remaining energies
+        let probabilities = boltzmann_probabilities(&energies);
+    
+        // Create a weighted distribution using the probabilities
+        let dist = WeightedIndex::new(&probabilities);
 
-//     for _ in 0..num_samples {
-//         // Compute the Boltzmann probabilities for the remaining energies
-//         let probabilities = boltzmann_probabilities(&remaining_energies);
-
-//         // Create a weighted distribution using the probabilities
-//         let dist = WeightedIndex::new(&probabilities).unwrap();
-
-//         // Sample an index from the remaining indices
-//         let sampled_index = dist.sample(&mut rng);
-
-//         // Add the corresponding original index to the result
-//         sampled_indices.push(remaining_indices[sampled_index]);
-
-//         // Remove the sampled energy and index from the remaining lists
-//         remaining_indices.remove(sampled_index);
-//         remaining_energies.remove(sampled_index);
-//     }
-
-//     sampled_indices
-// }
+        if dist.is_ok() {
+            // Sample an index from the remaining indices
+            let sampled_index = dist.unwrap().sample(&mut rng);
+            vec![sampled_index]
+        } else {
+            return vec![];
+        }
+    }
+}
 
 pub fn boltzmann_acceptance_rejection(
     new_energies: &f64,
