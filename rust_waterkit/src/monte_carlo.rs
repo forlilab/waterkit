@@ -146,9 +146,7 @@ pub fn boltzmann_acceptance_rejection(
     let random_values: f64 = rng.gen();
 
     // Update decisions based on probabilities
-    // println!("Random value: {} - p_acc: {}", random_values, p_acc);
     if random_values <= p_acc {
-        // println!("Accepted even if not good!");
         return true;
     }
 

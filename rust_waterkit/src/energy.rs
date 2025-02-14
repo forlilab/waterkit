@@ -23,8 +23,7 @@ pub fn lennard_jones_rmin_half(epsilon_1: &f64, epsilon_2: &f64, dist: &f64, rmi
     let rmin = rmin_half1 + rmin_half2;
     let epsilon = (epsilon_1 * epsilon_2).sqrt();
     let c12 = SCALE_VDW * epsilon * rmin.powi(12);
-    // let c6 = epsilon * rmin.powi(6);
-    let c6 = epsilon * rmin.powi(6);
+    let c6 = 2.0 * epsilon * rmin.powi(6);
     let lj = c12 / dist.powi(12) - c6 / dist.powi(6);
     // let lj = 4.0 * epsilon * ((rmin / dist).powi(12) - (rmin / dist).powi(6));
     lj
@@ -41,7 +40,7 @@ pub fn lennard_jones_rmin_half(epsilon_1: &f64, epsilon_2: &f64, dist: &f64, rmi
 pub fn coulomb_energy(q1: &f64, q2: &f64, r: &f64) -> f64 {
     let k_e = 332.0636; // Electrostatic constant in kcal·Å/(mol·e^2)
     // let dielectric = 1.0; // Dielectric constant of the medium (default: 1.0)
-    let coulomb = k_e * ((q1 * q2) / r);
+    let coulomb = (k_e * (q1 * q2)) / r;
     coulomb
 }
 

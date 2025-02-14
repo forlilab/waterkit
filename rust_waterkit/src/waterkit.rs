@@ -128,13 +128,20 @@ fn run_single_waterkit_with_grids(receptor_points: &Vec<Atom>,
         let mut optimized_waters: Vec<Atom> = Vec::new();
         let steps = water_energies.len();
         let indices = monte_carlo::inverted_boltzmann_choices(&water_energies, Some(steps));
-        for index in  indices {
+        // println!("# of choices: {} out of {} total waters.", indices.len(), steps);
+        for (index, water_energy) in  water_energies.iter().enumerate() {
             // Select a water molecule to modify
             let new_water = new_water_molecules[index].clone();
             let waters_in_system: Vec<Atom> = receptor_map.iter().filter(|x| !new_water.as_vec().contains(x)).cloned().collect();
-            let optimized_water = optimize(&new_water, &waters_in_system,  &mut grid);
-            for a in optimized_water.as_vec() {
-                optimized_waters.push(a.clone());
+            if indices.contains(&index) {
+                let optimized_water = optimize(&new_water, &waters_in_system,  &mut grid);
+                for a in optimized_water.as_vec() {
+                    optimized_waters.push(a.clone());
+                }
+            } else {
+                for a in new_water.as_vec() {
+                    optimized_waters.push(a.clone());
+                }
             }
         }
 

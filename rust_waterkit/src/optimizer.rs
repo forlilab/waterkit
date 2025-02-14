@@ -1,4 +1,6 @@
 use crate::consts;
+use crate::consts::BOLTZMANN_K;
+use crate::consts::TEMPERATURE;
 use crate::geometry;
 use crate::atom::Atom;
 use crate::grid::Grid3D;
@@ -69,14 +71,16 @@ fn get_energy(oxygen_pos: [f64; 3], h1_pos: [f64; 3], h2_pos: [f64; 3], grid: &G
 }
 
 pub fn optimize(water: &WaterMolecule, waters_in_system: &Vec<Atom>, grid: &mut Grid3D) -> WaterMolecule {   
+    let mut rng = rand::thread_rng();
     let water_atoms = water.as_vec();
     let mut original_oxygen_coords = water_atoms[0].coords();
     let mut original_h1_coords = water_atoms[1].coords();
     let mut original_h2_coords = water_atoms[2].coords();
     
     // Monte Carlo parameters
-    let num_steps = 500;
+    let num_steps = 1000;
     let max_disp = 0.2;
+    let beta = TEMPERATURE * BOLTZMANN_K;
 
     for _i in 0..num_steps {
         // Propose a move
@@ -92,20 +96,16 @@ pub fn optimize(water: &WaterMolecule, waters_in_system: &Vec<Atom>, grid: &mut 
         let new_energy = energy_for_real_water(waters_in_system, &new_atoms.as_vec());
 
         // Metropolis acceptance criterion
-        if monte_carlo::boltzmann_acceptance_rejection(&new_energy, &old_energy, &consts::TEMPERATURE, &consts::BOLTZMANN_K) {
-            // println!("Old energy: {}", old_energy);
-            // println!("New energy: {}", new_energy);
+        let acceptance_prob = ((-beta * (new_energy - old_energy)).exp()).min(1.0);
+        if rng.gen::<f64>() < acceptance_prob {
             // Accept the move
             original_oxygen_coords = translation[0];
-            // original_oxygen_coords = original_oxygen_coords;
             original_h1_coords = rotation[0];
             original_h2_coords = rotation[1];
         }
     }
 
     let optimized_water = WaterMolecule::new(original_oxygen_coords, original_h1_coords, original_h2_coords);
-    // let atoms_to_update = optimized_water.as_vec();
-    // grid.update_energies(&atoms_to_update);
     optimized_water
 }
 
