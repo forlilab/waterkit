@@ -125,27 +125,27 @@ fn run_single_waterkit_with_grids(receptor_points: &Vec<Atom>,
             water_energies.push(energy::energy_for_real_water(&waters_in_system, &atoms));         
         }
         
-        let mut optimized_waters: Vec<Atom> = Vec::new();
-        let steps = water_energies.len();
-        let indices = monte_carlo::inverted_boltzmann_choices(&water_energies, Some(steps));
-        // println!("# of choices: {} out of {} total waters.", indices.len(), steps);
-        for (index, water_energy) in  water_energies.iter().enumerate() {
-            // Select a water molecule to modify
-            let new_water = new_water_molecules[index].clone();
-            let waters_in_system: Vec<Atom> = receptor_map.iter().filter(|x| !new_water.as_vec().contains(x)).cloned().collect();
-            if indices.contains(&index) {
-                let optimized_water = optimize(&new_water, &waters_in_system,  &mut grid);
-                for a in optimized_water.as_vec() {
-                    optimized_waters.push(a.clone());
-                }
-            } else {
-                for a in new_water.as_vec() {
-                    optimized_waters.push(a.clone());
-                }
-            }
-        }
+        // let mut optimized_waters: Vec<Atom> = Vec::new();
+        // let steps = water_energies.len();
+        // let indices = monte_carlo::inverted_boltzmann_choices(&water_energies, Some(steps));
+        // // println!("# of choices: {} out of {} total waters.", indices.len(), steps);
+        // for (index, water_energy) in  water_energies.iter().enumerate() {
+        //     // Select a water molecule to modify
+        //     let new_water = new_water_molecules[index].clone();
+        //     let waters_in_system: Vec<Atom> = receptor_map.iter().filter(|x| !new_water.as_vec().contains(x)).cloned().collect();
+        //     if indices.contains(&index) {
+        //         let optimized_water = optimize(&new_water, &waters_in_system,  &mut grid);
+        //         for a in optimized_water.as_vec() {
+        //             optimized_waters.push(a.clone());
+        //         }
+        //     } else {
+        //         for a in new_water.as_vec() {
+        //             optimized_waters.push(a.clone());
+        //         }
+        //     }
+        // }
 
-        to_pdb(&optimized_waters, &format!("test/water_{epoch}_optimized.pdb"));
+        // to_pdb(&optimized_waters, &format!("test/water_{epoch}_optimized.pdb"));
 
         receptor_map
 }

@@ -148,6 +148,15 @@ impl Grid3D {
         self.kdtree = tree;
     }
 
+    pub fn is_close_to_edge(&self, xyz: &[[f64; 3]], distance: f64) -> bool {
+        xyz.iter().any(|&[x, y, z]| {
+            let x_close = (self.x_min - x).abs() <= distance || (self.x_max - x).abs() <= distance;
+            let y_close = (self.y_min - y).abs() <= distance || (self.y_max - y).abs() <= distance;
+            let z_close = (self.z_min - z).abs() <= distance || (self.z_max - z).abs() <= distance;
+            x_close || y_close || z_close
+        })
+    }
+
     pub fn get_nearest_neighbor(&self, query_point: &[f64; 3]) -> Option<&GridPoint> {
         if self.in_box(query_point) {
             let nearest = self.kdtree
@@ -182,7 +191,9 @@ impl Grid3D {
         
         let mut neighbor_points = Vec::new();
         for (_distance, &index) in in_range {
-            neighbor_points.push(&self.data[index]);
+            if !self.is_close_to_edge(&[self.data[index].coords], 1.) {
+                neighbor_points.push(&self.data[index]);
+            }
         }
         neighbor_points
     }
@@ -202,7 +213,7 @@ impl Grid3D {
         
         let mut neighbor_points = Vec::new();
         for (_distance, &index) in in_range {
-            if geometry::calculate_angle(&self.data[index].coords, anchor_xyz, vector_xyz).to_degrees() >= 90.0 {
+            if geometry::calculate_angle(&self.data[index].coords, anchor_xyz, vector_xyz).to_degrees() >= 90.0  && !self.is_close_to_edge(&[self.data[index].coords], 1.){
                 neighbor_points.push(&self.data[index]);
             }
         }
