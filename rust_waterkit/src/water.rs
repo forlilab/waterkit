@@ -99,18 +99,13 @@ impl WaterMolecule {
         let ap2 = AnchorPoint::new("acceptor".to_string(), oxygen_xyz, lp2_resized);
         self.hydrogen_bonds.push(ap2);
 
-        // println!("H {} {} {}", lp1_resized[0], lp1_resized[1], lp1_resized[2]);
-        // println!("H {} {} {}", lp2_resized[0], lp2_resized[1], lp2_resized[2]);
         let r_h1 = geometry::resize_vector(&h1.coords(), &2.8, &oxygen_atom.coords());
         let ap3 = AnchorPoint::new("donor".to_string(), oxygen_xyz, r_h1);
         self.hydrogen_bonds.push(ap3);
 
-        // println!("H {} {} {}", r_h1[0], r_h1[1], r_h1[2]);
         let r_h2 = geometry::resize_vector(&h2.coords(), &2.8, &oxygen_atom.coords());
         let ap4 = AnchorPoint::new("donor".to_string(), oxygen_xyz, r_h2);
         self.hydrogen_bonds.push(ap4);
-
-        // println!("H {} {} {}", r_h2[0], r_h2[1], r_h2[2]);
     }
 }
 

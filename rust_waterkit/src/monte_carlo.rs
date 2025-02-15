@@ -2,7 +2,7 @@ use rand::prelude::*;
 use rand::distributions::WeightedIndex;
 use crate::consts::{BOLTZMANN_K, TEMPERATURE};
 
-fn boltzmann_probabilities(energies: &[f64]) -> Vec<f64> {
+pub fn boltzmann_probabilities(energies: &[f64]) -> Vec<f64> {
     // Compute the Boltzmann factor for each energy
     let boltzmann_factors: Vec<f64> = energies.iter()
         .map(|&energy| (-energy / (BOLTZMANN_K * TEMPERATURE)).exp())

@@ -14,7 +14,7 @@ use crate::consts;
 use crate::monte_carlo;
 use crate::optimizer::optimize;
 use crate::energy;
-use crate::sampling::sample;
+// use crate::sampling::sample;
 use crate::sampling::sample_using_grids;
 
 pub fn to_pdb(atoms: &Vec<Atom>, fname: &str) {
@@ -92,7 +92,7 @@ fn run_single_waterkit(receptor_points: &Vec<Atom>,
 
         // while mutable_anchor_points.len() > 0 {
         for _i in 0..3 {
-            sample(&mut grid, &mut receptor_map, &mut mutable_anchor_points, &water_configurations);
+            // sample(&mut grid, &mut receptor_map, &mut mutable_anchor_points, &water_configurations);
         }
         // let elapsed_time = start_time.elapsed();
         // println!("Time taken for one map: {:?}", elapsed_time);
@@ -110,11 +110,17 @@ fn run_single_waterkit_with_grids(receptor_points: &Vec<Atom>,
         
         let mut mutable_anchor_points = anchor_points.clone();
         let mut new_water_molecules = Vec::new();
-        for _i in 0..2 {
+        for _i in 0..3 {
             sample_using_grids(&mut grid,&mut receptor_map, &mut mutable_anchor_points, &water_configurations, &mut new_water_molecules);
         }
 
-        let waters: Vec<Atom> = receptor_map.iter().filter(|x| x.atom_type() == "OW" || x.atom_type() == "HW").cloned().collect();
+        // let waters: Vec<Atom> = receptor_map.iter().filter(|x| x.atom_type() == "OW" || x.atom_type() == "HW").cloned().collect();
+        let mut waters = Vec::new();
+        for w in new_water_molecules.iter() {
+            for a in w.as_vec() {
+                waters.push(a.clone());
+            }
+        } 
         to_pdb(&waters, &format!("test/water_{epoch}_unoptimized.pdb"));
         // Need to get energies for the waters placed and select the ones to perturb based on an 
         // inverted boltzmann wheighted choice
