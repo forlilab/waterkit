@@ -14,7 +14,7 @@ use crate::consts;
 use crate::monte_carlo;
 use crate::optimizer::optimize;
 use crate::energy;
-// use crate::sampling::sample;
+use crate::sampling::sample;
 use crate::sampling::sample_using_grids;
 
 pub fn to_pdb(atoms: &Vec<Atom>, fname: &str) {
@@ -91,9 +91,16 @@ fn run_single_waterkit(receptor_points: &Vec<Atom>,
         let mut mutable_anchor_points = anchor_points.clone();
 
         // while mutable_anchor_points.len() > 0 {
-        for _i in 0..3 {
-            // sample(&mut grid, &mut receptor_map, &mut mutable_anchor_points, &water_configurations);
+        for _i in 0..1 {
+            println!("Epoch {}", _i);
+            // println!("Receptor: {}", receptor_map.len());
+            sample(&mut grid, &mut receptor_map, &mut mutable_anchor_points, &water_configurations);
+            // println!("Receptor: {}\n", receptor_map.len());
+            let waters: Vec<Atom> = receptor_map.iter().filter(|x| x.atom_type() == "OW" || x.atom_type() == "HW").cloned().collect();
+            to_pdb(&waters, &format!("test/water_{_i}_unoptimized.pdb"));
         }
+        let waters: Vec<Atom> = receptor_map.iter().filter(|x| x.atom_type() == "OW" || x.atom_type() == "HW").cloned().collect();
+        to_pdb(&waters, &format!("test/water_unoptimized.pdb"));
         // let elapsed_time = start_time.elapsed();
         // println!("Time taken for one map: {:?}", elapsed_time);
         receptor_map

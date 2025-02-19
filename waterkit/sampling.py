@@ -325,6 +325,9 @@ class WaterSampler():
             atom_types += ["OT", "HT", "LP"]
 
         # Interpolation baby!
+        # print(atom_types)
+        # print(rotated_grid_xyz.shape)
+        # print(indices)
         for atom_type in atom_types:
             energy = self._water_map.energy_coordinates(rotated_grid_xyz, atom_type)
             energy = np.swapaxes(energy.reshape((y.shape[0], x.shape[0], z.shape[0])), 0, 1)

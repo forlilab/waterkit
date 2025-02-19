@@ -177,8 +177,8 @@ def pdb_corners(pdb_file, traj, atom_type="He"):
     print(x_center, y_center, z_center)
     return
 
-def load_waters_orientations(orientations="/data/phd/waterkit/waterkit/data/water_orientations.txt"):
-# def load_waters_orientations(orientations="/home/niccolo/phd/waterkit/waterkit/data/water_orientations.txt"):
+# def load_waters_orientations(orientations="/data/phd/waterkit/waterkit/data/water_orientations.txt"):
+def load_waters_orientations(orientations="/home/niccolo/phd/waterkit/waterkit/data/water_orientations.txt"):
     usecols = [0, 1, 2, 3, 4, 5]
     water_orientations = np.loadtxt(orientations, usecols=usecols)
     return water_orientations
@@ -199,53 +199,6 @@ def fire_waterkit(parametrized_atoms, waters, aps, grid, use_grids, start=0, sto
     progress.close()
     return
 
-# if __name__ == "__main__":
-#     # select as, i. 111+107+103+162+150+98+97+184+96+93+55+52+51+138+139+136+135
-#     import time
-    
-#     surface_points = []
-#     wanted_residues = ["A:ASN:51", "A:SER:52", "A:ALA:55",
-#                        "A:ASP:93", "A:ILE:96", "A:GLY:97",
-#                        "A:MET:98", "A:LEU:103", "A:LEU:107", 
-#                        "A:ALA:111", "A:GLY:135", "A:VAL:136", 
-#                        "A:PHE:138", "A:TYR:139", "A:VAL:150", 
-#                        "A:TRP:162", "A:THR:184"]
-#     # wanted_residues = list()
-#     # parametrized_atoms, min_box_boundaries, max_box_boundaries = get_data_form_meeko(wanted_residues, "/data/phd/waterkit/example/1uyg_no_ligand.pdb")
-#     parametrized_atoms, min_box_boundaries, max_box_boundaries = get_data_form_meeko(wanted_residues, "/home/niccolo/phd/waterkit/example/1uyg_no_ligand.pdb")
-
-#     waters = load_waters_orientations()
-#     # anchor_points = load_anchor_points("/data/phd/waterkit/rust_waterkit/anchor_points.txt")
-#     anchor_points = load_anchor_points("/home/niccolo/phd/waterkit/rust_waterkit/anchor_points.txt")
-#     spacing = 0.375
-#     center = [2.7, 11.45, 24.80]
-#     x_size, y_size, z_size = 24.0, 24.0, 24.0
-
-
-#     print("Starting waterkit!")
-#     start = time.time()
-#     aps = anchor_points
-#     use_grids = True
-#     # n_frames = 1
-#     # n_jobs = 1
-#     n_frames = 1000
-#     n_jobs = mp.cpu_count()
-    
-#     jobs = []
-#     chunks = split_list_in_chunks(n_frames, n_jobs)
-
-#     # Setup grids at the beginning
-#     grid = rust_waterkit.setup_system(parametrized_atoms, x_size, y_size, z_size, spacing, center)
-
-#     for i, chunk in enumerate(chunks):
-#         job = mp.Process(target=fire_waterkit, args=(parametrized_atoms, waters, aps, grid, use_grids, chunk[0], chunk[1], i))
-#         job.start()
-#         jobs.append(job)
-    
-#     for job in jobs:
-#         job.join()
-
-
 '''
     To compile the code: 
         maturin develop -r` --features extension-module
@@ -262,21 +215,22 @@ if __name__ == "__main__":
                        "A:PHE:138", "A:TYR:139", "A:VAL:150", 
                        "A:TRP:162", "A:THR:184"]
     # wanted_residues = list()
-    parametrized_atoms, min_box_boundaries, max_box_boundaries = get_data_form_meeko(wanted_residues, "/data/phd/waterkit/example/1uyg_no_ligand.pdb")
-    # parametrized_atoms, min_box_boundaries, max_box_boundaries = get_data_form_meeko(wanted_residues, "/home/niccolo/phd/waterkit/example/1uyg_no_ligand.pdb")
+    # parametrized_atoms, min_box_boundaries, max_box_boundaries = get_data_form_meeko(wanted_residues, "/data/phd/waterkit/example/1uyg_no_ligand.pdb")
+    parametrized_atoms, min_box_boundaries, max_box_boundaries = get_data_form_meeko(wanted_residues, "/home/niccolo/phd/waterkit/example/1uyg_no_ligand.pdb")
 
     waters = load_waters_orientations()
-    anchor_points = load_anchor_points("/data/phd/waterkit/rust_waterkit/anchor_points.txt")
-    # anchor_points = load_anchor_points("/home/niccolo/phd/waterkit/rust_waterkit/anchor_points.txt")
+    # anchor_points = load_anchor_points("/data/phd/waterkit/rust_waterkit/anchor_points.txt")
+    anchor_points = load_anchor_points("/home/niccolo/phd/waterkit/rust_waterkit/anchor_points.txt")
     spacing = 0.375
     center = [2.7, 11.45, 24.80]
-    x_size, y_size, z_size = 24.0, 24.0, 24.0
+    x_size, y_size, z_size = 10.0, 10.0, 10.0
+    # x_size, y_size, z_size = 24.0, 24.0, 24.0
 
 
     print("Starting waterkit!")
     start = time.time()
     aps = anchor_points
-    use_grids = True
+    use_grids = False
     n_frames = 1
 
     # Setup grids at the beginning

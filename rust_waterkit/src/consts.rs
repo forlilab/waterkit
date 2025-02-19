@@ -9,7 +9,7 @@ pub const BOLTZMANN_ENERGY_CUTOFF: f64 = 0.;
 //pub const MAX_SHELL_DISTANCE: f64 = 3.6;
 
 // TIP3P
-pub const ELECTROSTATICS_CUTOFF: f64 = 20.; // Electrostatics distance cutoff
+pub const ELECTROSTATICS_CUTOFF: f64 = 12.; // Electrostatics distance cutoff
 pub const RMIN_HALF_WATER: f64 = 1.7682; // TIP3P
 pub const TIP3P_EPSILON: f64 = 0.6364;
 pub const OXYGEN_W_Q: f64 = -0.8340;

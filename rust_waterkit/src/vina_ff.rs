@@ -39,7 +39,6 @@ pub fn vina_energy(atoms_1: &Vec<Atom>, sphere_center: &[f64; 3]) -> f64 {
 
         if r < consts::VINA_DISTANCE_CUTOFF {
             if atom_1.is_heavy_atom() {
-                // println!("{}", atom_1.atom_type());
                 let rijs = atom_1.vina_rij() + consts::VINA_O_RIJ;
                 let vg1 = vina_gauss1(&r, &rijs) * consts::VINA_GAUSS1_W;
                 let vg2 = vina_gauss2(&r, &rijs) * consts::VINA_GAUSS2_W;

@@ -19,13 +19,9 @@ pub fn lennard_jones(r: &f64, epsilon: &f64, sigma: &f64) -> f64 {
 }
 
 pub fn lennard_jones_rmin_half(epsilon_1: &f64, epsilon_2: &f64, dist: &f64, rmin_half1: &f64, rmin_half2: &f64) -> f64 {
-    const SCALE_VDW: f64 = 1.0;
     let rmin = rmin_half1 + rmin_half2;
     let epsilon = (epsilon_1 * epsilon_2).sqrt();
-    let c12 = SCALE_VDW * epsilon * rmin.powi(12);
-    let c6 = 2.0 * epsilon * rmin.powi(6);
-    let lj = c12 / dist.powi(12) - c6 / dist.powi(6);
-    // let lj = 4.0 * epsilon * ((rmin / dist).powi(12) - (rmin / dist).powi(6));
+    let lj = epsilon * ((rmin / dist).powi(12) - (2.0 * (rmin / dist).powi(6)));
     lj
 }
 
@@ -40,7 +36,7 @@ pub fn lennard_jones_rmin_half(epsilon_1: &f64, epsilon_2: &f64, dist: &f64, rmi
 pub fn coulomb_energy(q1: &f64, q2: &f64, r: &f64) -> f64 {
     let k_e = 332.0636; // Electrostatic constant in kcal·Å/(mol·e^2)
     // let dielectric = 1.0; // Dielectric constant of the medium (default: 1.0)
-    let coulomb = (k_e * (q1 * q2)) / r;
+    let coulomb = k_e * ((q1 * q2) / r);
     coulomb
 }
 
@@ -89,18 +85,20 @@ pub fn energy_for_real_water(atoms_1: &Vec<Atom>, atoms_2: &Vec<Atom>) -> f64 {
                 &atom_2_coords), 1e-8_f64);
 
             if r < consts::ELECTROSTATICS_CUTOFF {
-                let mut lj_energy = 0.0;
-
                 if atom_1.atom_type() != &"HW".to_string() && atom_2.atom_type() != &"HW".to_string() {
-                    lj_energy = lennard_jones_rmin_half(atom_1.epsilon(),
+                    // println!("Atom1: {}; Atom2: {}", atom_1.atom_type(), atom_2.atom_type());
+                    let lj_energy = lennard_jones_rmin_half(atom_1.epsilon(),
                         atom_2.epsilon(), &r,
                         atom_1.rmin_half(),
                         atom_2.rmin_half());
+                    total_energy += lj_energy;
+                    // println!("LJ: {}", lj_energy);
                 }
 
-                let coulomb_energy = coulomb_energy(atom_1.charge(), atom_2.charge(), &r);
+                let electrostatics_energy = coulomb_energy(atom_1.charge(), atom_2.charge(), &r);
+                // println!("Coulomb: {}", electrostatics_energy);
                 // Add to total energy
-                total_energy += lj_energy + coulomb_energy;
+                total_energy += electrostatics_energy;
             }
         }
     }
@@ -120,9 +118,9 @@ pub fn get_ow_energy(atoms_1: &Vec<Atom>, sphere_center: &[f64; 3]) -> f64{
         if distance < consts::ELECTROSTATICS_CUTOFF {
             if atom_1.atom_type() != &"HW" {
                 let lj_energy = lennard_jones_rmin_half(atom_1.epsilon(),
-                &consts::TIP3P_EPSILON, 
+                &consts::TIP3P_EPSILON,
                 &distance,
-                atom_1.rmin_half(), 
+                atom_1.rmin_half(),
                 &consts::RMIN_HALF_WATER);
                 total_energy += lj_energy;
             }
