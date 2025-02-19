@@ -56,7 +56,7 @@ class Water(Molecule):
         self._add_atom(xyz, atom_type, partial_charge)
 
     @classmethod
-    def from_file(cls, fname, atom_type="W", partial_charge=0.):
+    def from_file(cls, fname, water_model="tip3p"):
         """Create list of Water objects from a PDB file.
         
         The water molecules created are spherical.
@@ -70,26 +70,105 @@ class Water(Molecule):
             list: list of Water molecule objects
 
         """
+        if water_model != "tip3p":
+            raise NotImplementedError("hard-coded tip3p in Water.from_file")
+
         waters = []
 
-        # Get name and file extension
-        name, file_extension = os.path.splitext(fname)
+        with open(fname) as f:
+            pdb_string = f.read()
 
-        if file_extension == ".pdbqt":
-            file_extension = "pdb"
+        def _add_if_new(to_dict, key, value, repeat_log):
+            if key in to_dict:
+                repeat_log.add(key)
+            else:
+                to_dict[key] = value
+            return
 
-        # Read PDB file
-        obconv = ob.OBConversion()
-        obconv.SetInFormat(file_extension)
-        OBMol = ob.OBMol()
-        obconv.ReadFile(OBMol, fname)
+        blocks_by_residue = {}
+        reskey_to_resname = {}
+        reskey = None
+        buffered_reskey = None
+        interrupted_residues = set()
+        pdb_block = []
 
-        for x in ob.OBMolAtomIter(OBMol):
-            if x.IsOxygen():
-                xyz = np.array([x.GetX(), x.GetY(), x.GetZ()])
-                waters.append(cls(xyz, atom_type, partial_charge))
+        for line in pdb_string.splitlines(True):
+            if line.startswith("TER") and reskey is not None:
+                _add_if_new(blocks_by_residue, reskey, pdb_block, interrupted_residues)
+                blocks_by_residue[reskey] = pdb_block
+                pdb_block = []
+                reskey = None
+                buffered_reskey = None
+            if line.startswith("ATOM") or line.startswith("HETATM"):
+                atomname = line[12:16].strip()
+                altloc = line[16:17].strip()
+                resname = line[17:20].strip()
+                chainid = line[21:22].strip()
+                resnum = int(line[22:26].strip())
+                icode = line[26:27].strip()
+                x = float(line[30:38])
+                y = float(line[38:46])
+                z = float(line[46:54])
+                element = line[76:78].strip()
+                reskey = f"{chainid}:{resnum}{icode}"  # e.g. ":42", "A:42B"
+                reskey_to_resname.setdefault(reskey, set())
+                reskey_to_resname[reskey].add(resname)
+                atom = (
+                    atomname, altloc, resname, chainid,
+                    resnum, icode, x, y, z, element,
+                )
 
-        return waters
+                if reskey == buffered_reskey:  # this line continues existing residue
+                    pdb_block.append(atom)
+                else:
+                    if buffered_reskey is not None:
+                        _add_if_new(
+                            blocks_by_residue,
+                            buffered_reskey,
+                            pdb_block,
+                            interrupted_residues,
+                        )
+                    buffered_reskey = reskey
+                    pdb_block = [atom]
+
+        if pdb_block:  # there was not a TER line
+            _add_if_new(blocks_by_residue, reskey, pdb_block, interrupted_residues)
+
+        # verify that each identifier (e.g. "A:17" has a single resname
+        violations = {k: v for k, v in reskey_to_resname.items() if len(v) != 1}
+        if len(violations):
+            msg = "each residue key must have exactly 1 resname" + eol
+            msg += f"but got {violations=}"
+            raise ValueError(msg)
+
+        if interrupted_residues:
+            msg = f"interrupted residues in PDB: {interrupted_residues}"
+            raise ValueError(msg)
+
+        for reskey, pdb_block in blocks_by_residue.items():
+            if list(reskey_to_resname[reskey])[0] not in ["HOH", "WAT"]:
+                continue
+            xyz = []
+            # find oxygen index
+            oxygen_index = None
+            for i, atom in enumerate(pdb_block):
+                if atom[9] == "O":
+                    oxygen_index = i
+            if oxygen_index is None:
+                raise RuntimeError("got water without element O")
+            oxygen = pdb_block[oxygen_index]
+            xyz = np.array([oxygen[6], oxygen[7], oxygen[8]])
+            water = cls(xyz, "OW", -0.834)
+            for i, atom in enumerate(pdb_block):
+                if i == oxygen_index:
+                    continue
+                if atom[9] != "H":
+                    raise RuntimeError("expected hydrogen atom in water")
+                xyz = np.array([atom[6], atom[7], atom[8]])
+                water._add_atom(xyz, "HW", +0.417)
+            waters.append(water)
+
+        return waters, list(blocks_by_residue.keys())
 
     def _add_atom(self, xyz, atom_type, partial_charge):
         """Add an atom to the molecule."""
