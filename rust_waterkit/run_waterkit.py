@@ -292,7 +292,7 @@ if __name__ == "__main__":
     center = [12.4, 12.3, 14.1]
     x_size, y_size, z_size = 24.0, 24.0, 24.0
 
-    frame_waters = parse_waters_frame("/home/niccolo/phd/waterkit/rust_waterkit/minimal_test/traj/water_3.pdb")
+    frame_waters = parse_waters_frame("/home/niccolo/phd/waterkit/rust_waterkit/minimal_test/traj/water_000001.pdb")
     # for water in frame_waters:
     #     distances = list()
     #     oxygen = water[0]
