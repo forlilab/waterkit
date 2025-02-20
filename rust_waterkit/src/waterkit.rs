@@ -243,7 +243,7 @@ pub fn get_energies_for_system(receptor_points: Vec<Atom>,
         }
         // println!("Waters network: {}", waters_network.len());
         // println!("Points after: {}", points.len());
-        let use_grids = false;
+        let use_grids = true;
 
         if use_grids {
             // let grid_receptor_and_w = setup_grid(&points, 21.0, 24.0, 26.0, 0.375, [71.5, 73.1, 243.4]);
