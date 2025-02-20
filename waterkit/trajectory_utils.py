@@ -210,7 +210,7 @@ def _make_trajectory(receptor_dry, water_directory, output_prefix, lib_files, fr
     the amber topology (and coordinate) file(s)."""
     water = pmd.load_file(water_filenames[max_water(water_filenames)[1]])
     receptor_wet = add_water_to_receptor(receptor_dry, water)
-    pdb_fn = "%s_system.pdb" % output_prefix
+    pdb_fn = "%ssystem.pdb" % output_prefix
     write_pdb_file(pdb_fn, receptor_wet)
 
     # Write tleap input script
@@ -224,7 +224,7 @@ def _make_trajectory(receptor_dry, water_directory, output_prefix, lib_files, fr
         raise RuntimeError(error_msg)
 
     # Write trajectory
-    write_trajectory_file("%s_system.nc" % output_prefix, receptor_dry, water_filenames)
+    write_trajectory_file("%ssystem.nc" % output_prefix, receptor_dry, water_filenames)
 
 
 def make_trajectory(receptor_dry, water_directory, output_prefix, lib_files, frcmod_files):
@@ -237,10 +237,10 @@ def make_trajectory(receptor_dry, water_directory, output_prefix, lib_files, frc
     prefix = output_prefix.split("/")[-1]  # split internally in write_tleap_input_file()
     with utils.temporary_directory(clean=True) as tmp_dir:
         _make_trajectory(receptor_dry, water_directory, prefix,lib_files, frcmod_files)
-        copyfile("%s_system.rst7" % prefix, os.path.join(abs_output_dir, "%s_system.rst7" % prefix))
-        copyfile("%s_system.prmtop" % prefix, os.path.join(abs_output_dir, "%s_system.prmtop" % prefix))
-        copyfile("%s_system.nc" % prefix, os.path.join(abs_output_dir, "%s_system.nc" % prefix))
-        copyfile("%s_system.pdb" % prefix, os.path.join(abs_output_dir, "%s_system.pdb" % prefix))
+        copyfile("%ssystem.rst7" % prefix, os.path.join(abs_output_dir, "%ssystem.rst7" % prefix))
+        copyfile("%ssystem.prmtop" % prefix, os.path.join(abs_output_dir, "%ssystem.prmtop" % prefix))
+        copyfile("%ssystem.nc" % prefix, os.path.join(abs_output_dir, "%ssystem.nc" % prefix))
+        copyfile("%ssystem.pdb" % prefix, os.path.join(abs_output_dir, "%ssystem.pdb" % prefix))
 
 # endregion
 

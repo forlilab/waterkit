@@ -77,7 +77,7 @@ def run_waterkit_and_gist(
             renumbering=renumber_receptor,
         )
         pr.prepare_from_parmed_structure(receptor_parmed_structure, clean=clean)
-        pdb_fn = "%s_prepared.pdb" % prefix
+        pdb_fn = "%sprepared.pdb" % prefix
         pr.write_pdb_file(pdb_fn)
         shutil.copyfile(pdb_fn, os.path.join(output_dir, pdb_fn))
         amber_pdbqt_str = pr.write_pdbqt_string(amber_atom_types=True)
@@ -109,9 +109,9 @@ def run_waterkit_and_gist(
         make_trajectory(receptor_dry, wk_frames_dir, prefix, lib_files, frcmod_files)
 
         print("Minimizing trajectory")
-        prmtop_fn = "%s_system.prmtop" % prefix
-        traj_fn = "%s_system.nc" % prefix
-        minimized_traj_fn = "%s_system_minimized.nc" % prefix
+        prmtop_fn = "%ssystem.prmtop" % prefix
+        traj_fn = "%ssystem.nc" % prefix
+        minimized_traj_fn = "%ssystem_minimized.nc" % prefix
         m = WaterMinimizer(nr_minimization_steps, minimization_restraint, platform)
         m.minimize_trajectory(prmtop_fn, traj_fn, minimized_traj_fn)
 
@@ -135,6 +135,6 @@ def run_waterkit_and_gist(
         for key in ("gO", "Esw-dens", "Eww-dens", "dTStrans-dens", "dTSorient-dens"):
             shutil.copyfile(
                 "gist-%s.dx" % key,
-                os.path.join(output_dir, "%s-wk_gist-%s.dx" % (prefix, key)),
+                os.path.join(output_dir, "%swk_gist-%s.dx" % (prefix, key)),
             )
     return
