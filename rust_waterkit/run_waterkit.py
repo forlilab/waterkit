@@ -46,6 +46,8 @@ def get_data_form_meeko(wanted_residues, pdb_file, save=False):
     surface_atoms = list()
     with open(pdb_file) as fi:
         pdbstring = fi.read()
+        
+    blunt_ends = [("A:1", 0)]
     mk_prep = meeko.MoleculePreparation(
         merge_these_atom_types=[],
         load_atom_params=["vina_params", "openff"],
@@ -57,7 +59,8 @@ def get_data_form_meeko(wanted_residues, pdb_file, save=False):
                                             chem_templates=templates,
                                             mk_prep=mk_prep,
                                             allow_bad_res=True,
-                                            default_altloc="A")
+                                            default_altloc="A",
+                                            blunt_ends=blunt_ends)
     json_s = polymer.to_json()
     with open("target.json", "w") as fo:
         fo.write(json_s)
@@ -219,6 +222,7 @@ def parse_waters_frame(fname):
         if atom.getElement() == "O":
             atom_type = "OW"
             rmin_half = 1.7682
+            # rmin_half = 3.15061
             epsilon = 0.15210325
             charge = -0.834
             vina_rij = 1.7
@@ -281,11 +285,14 @@ if __name__ == "__main__":
     # grid = rust_waterkit.setup_system(parametrized_atoms, x_size, y_size, z_size, spacing, center)
     # rust_waterkit.run_parallel_waterkit(parametrized_atoms, waters, anchor_points, grid, n_frames, use_grids)
 
-    parametrized_atoms, min_box_boundaries, max_box_boundaries = get_data_form_meeko(None, "/data/phd/waterkit/rust_waterkit/test_energies/receptor.pdbqt")
-    center = [71.5, 73.1, 243.3]
-    x_size, y_size, z_size = 21.0, 24.0, 26.0
+    parametrized_atoms, min_box_boundaries, max_box_boundaries = get_data_form_meeko(None, "/home/niccolo/phd/waterkit/rust_waterkit/minimal_test/receptor_prepared.pdb")
+    # center = [71.5, 73.1, 243.3]
+    # x_size, y_size, z_size = 21.0, 24.0, 26.0
+    
+    center = [12.4, 12.3, 14.1]
+    x_size, y_size, z_size = 24.0, 24.0, 24.0
 
-    frame_waters = parse_waters_frame("/data/phd/waterkit/rust_waterkit/test_energies/water_000001.pdb")
+    frame_waters = parse_waters_frame("/home/niccolo/phd/waterkit/rust_waterkit/minimal_test/traj/water_3.pdb")
     # for water in frame_waters:
     #     distances = list()
     #     oxygen = water[0]
@@ -296,4 +303,4 @@ if __name__ == "__main__":
     #     print(min(distances))
 
     # print(len(frame_waters))
-    rust_waterkit.get_energies_for_system(parametrized_atoms, frame_waters)
+    rust_waterkit.get_energies_for_system(parametrized_atoms, frame_waters, center, x_size, y_size, z_size)

@@ -25,7 +25,7 @@ pub fn euclidean_distance(p1: &[f64; 3], p2: &[f64; 3]) -> f64 {
     let dx = p1[0] - p2[0];
     let dy = p1[1] - p2[1];
     let dz = p1[2] - p2[2];
-    (dx.powi(2) + dy.powi(2) + dz.powi(2)).sqrt()
+    (dx * dx + dy *dy + dz * dz).sqrt()
 }
 
 pub fn scale_point(p1: &[f64; 3], scalar: &f64) -> [f64; 3] {

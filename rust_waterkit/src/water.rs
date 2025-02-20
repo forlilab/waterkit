@@ -37,7 +37,7 @@ impl WaterMolecule {
                 hydrogen_1_coords,
                 0.0,
                 0.0,
-                0.4170,
+                consts::HYDROGEN_W_Q,
                 0.0,
                 false,
                 false
@@ -47,7 +47,7 @@ impl WaterMolecule {
                 hydrogen_2_coords,
                 0.0,
                 0.0,
-                0.4170,
+                consts::HYDROGEN_W_Q,
                 0.0,
                 false,
                 false
