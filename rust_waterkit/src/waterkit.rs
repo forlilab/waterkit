@@ -17,6 +17,7 @@ use crate::optimizer::optimize;
 use crate::energy;
 use crate::sampling::sample;
 use crate::sampling::sample_using_grids;
+use crate::setup::setup_grid;
 
 pub fn to_pdb(atoms: &Vec<Atom>, fname: &str) {
     let mut cnt = 0;
@@ -226,6 +227,8 @@ pub fn run_parallel_waterkit(receptor_points: Vec<Atom>,
 pub fn get_energies_for_system(receptor_points: Vec<Atom>, 
     waters: Vec<[Atom; 3]>) {
     
+    let grid_receptor = setup_grid(&receptor_points, 21.0, 24.0, 26.0, 0.375, [71.5, 73.1, 243.4]);
+
     for (index, water) in waters.iter().enumerate() {
         let mut points = receptor_points.clone();
         let water_atoms = vec![water[0].clone(), water[1].clone(), water[2].clone()];
@@ -236,29 +239,40 @@ pub fn get_energies_for_system(receptor_points: Vec<Atom>,
             }
         }
 
+        let grid_receptor_and_w = setup_grid(&points, 21.0, 24.0, 26.0, 0.375, [71.5, 73.1, 243.4]);
+
         let oxygen = water_atoms[0].clone();
+        println!("{:?}", oxygen.coords());
         let h1 = water_atoms[1].clone();
         let h2 = water_atoms[2].clone();
         // println!("{}", receptor_points.len());
-        let mut energy = energy_for_real_water(&points, &vec![oxygen.clone()]);
+        // let mut energy = energy_for_real_water(&points, &vec![oxygen.clone()]);
+        let mut energy = grid_receptor_and_w.trilinear_interpolation(oxygen.coords(), ProbeType::OW).unwrap();
+        energy += grid_receptor_and_w.trilinear_interpolation(oxygen.coords(), ProbeType::HW).unwrap() * consts::OXYGEN_W_Q;
         println!("{index} {index} {energy} O (rec+wat)");
 
-        let mut energy_rec = energy_for_real_water(&receptor_points, &vec![oxygen.clone()]);
+        // let mut energy_rec = energy_for_real_water(&receptor_points, &vec![oxygen.clone()]);
+        let mut energy_rec = grid_receptor.trilinear_interpolation(oxygen.coords(), ProbeType::OW).unwrap();
+        energy_rec += grid_receptor.trilinear_interpolation(oxygen.coords(), ProbeType::HW).unwrap() * consts::OXYGEN_W_Q;
         println!("{index} {index} {energy_rec} O (just rec)");
 
-        let e = energy_for_real_water(&points, &vec![h1.clone()]);
+        // let e = energy_for_real_water(&points, &vec![h1.clone()]);
+        let e = grid_receptor_and_w.trilinear_interpolation(h1.coords(), ProbeType::HW).unwrap() * consts::HYDROGEN_W_Q;
         println!("{index} {index} {e} H (rec+wat)");
         energy += e;
 
-        let er = energy_for_real_water(&receptor_points, &vec![h1.clone()]);
+        // let er = energy_for_real_water(&receptor_points, &vec![h1.clone()]);
+        let er = grid_receptor.trilinear_interpolation(h1.coords(), ProbeType::HW).unwrap() * consts::HYDROGEN_W_Q;
         println!("{index} {index} {er} H (just rec)");
         energy_rec += er;
 
-        let e = energy_for_real_water(&points, &vec![h2.clone()]);
+        // let e = energy_for_real_water(&points, &vec![h2.clone()]);
+        let e = grid_receptor_and_w.trilinear_interpolation(h2.coords(), ProbeType::HW).unwrap() * consts::HYDROGEN_W_Q;
         println!("{index} {index} {e} H (rec+wat)");
         energy += e;
 
-        let er = energy_for_real_water(&receptor_points, &vec![h2.clone()]);
+        // let er = energy_for_real_water(&receptor_points, &vec![h2.clone()]);
+        let er = grid_receptor.trilinear_interpolation(h2.coords(), ProbeType::HW).unwrap() * consts::HYDROGEN_W_Q;
         println!("{index} {index} {er} H (just rec)");
         energy_rec += er;
 

@@ -49,7 +49,7 @@ def get_data_form_meeko(wanted_residues, pdb_file, save=False):
     mk_prep = meeko.MoleculePreparation(
         merge_these_atom_types=[],
         load_atom_params=["vina_params", "openff"],
-        charge_model="gasteiger",
+        charge_model="espaloma",
     )
     box_boundaries = list()
     templates = meeko.ResidueChemTemplates.create_from_defaults()
@@ -58,9 +58,9 @@ def get_data_form_meeko(wanted_residues, pdb_file, save=False):
                                             mk_prep=mk_prep,
                                             allow_bad_res=True,
                                             default_altloc="A")
-    # json_s = polymer.to_json()
-    # with open("target.json", "w") as fo:
-    #     fo.write(json_s)
+    json_s = polymer.to_json()
+    with open("target.json", "w") as fo:
+        fo.write(json_s)
 
     # if save:
     #     pdb_f = polymer.to_pdb()
@@ -96,6 +96,7 @@ def get_data_form_meeko(wanted_residues, pdb_file, save=False):
                         vina_rij=vina_rij,
                         vina_donor=vina_donor,
                         vina_acceptor=vina_acceptor)
+            # print(new_atom.rmin_half())
             surface_atoms.append(new_atom)
             if wanted_residues is not None and unique_id in wanted_residues:
                 box_boundaries.append(atom.coord)
