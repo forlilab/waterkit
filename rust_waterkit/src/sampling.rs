@@ -99,7 +99,7 @@ fn optimize_poistion_grid(grid: &Grid3D, point: &AnchorPoint) -> [f64; 3] {
 /// 11 - Update the new anchor points
 pub fn sample(grid: &mut Grid3D, receptor_points: &mut Vec<Atom>, anchor_points: &mut Vec<AnchorPoint>, water_configurations: &Vec<[f64; 6]>) -> bool {
     
-    let mut new_anchor_points = Vec::new();
+    let mut new_anchor_points: Vec<AnchorPoint> = Vec::new();
     let placement: bool = false;
     let mut receptor_points_on_the_grid = Vec::new();
     for point in anchor_points.into_iter() {
@@ -107,6 +107,12 @@ pub fn sample(grid: &mut Grid3D, receptor_points: &mut Vec<Atom>, anchor_points:
             receptor_points_on_the_grid.push(point.clone());
         }
     }
+
+    // Empty the system to see if that helps isolating the problem
+    // DEBUG
+    // receptor_points.clear();
+    // DEBUG
+
     // Sample with Boltzmann the neighbors and the actual point and based on Metropolis 
     // acceptance criteria then these are the starting anchor points
     // let start_time = Instant::now();
@@ -118,7 +124,6 @@ pub fn sample(grid: &mut Grid3D, receptor_points: &mut Vec<Atom>, anchor_points:
         let point_energy = grid.trilinear_interpolation(new_point, ProbeType::ODa).unwrap();
         if mc::boltzmann_acceptance_rejection(&point_energy, &BOLTZMANN_ENERGY_CUTOFF, &TEMPERATURE, &BOLTZMANN_K) {
             // Now we build explicit water
-            // println!("Receptor points: {}", receptor_points.len());
             let (placed, mut water) = sample_real_waters(&new_point, water_configurations, receptor_points);
             if placed {
                 water.guess_new_hydrogen_bonds();
@@ -185,58 +190,129 @@ pub fn sample_real_waters(oxygen_atom: &[f64; 3],
     receptor_points: &mut Vec<Atom>) -> (bool, WaterMolecule) {    
     // Let's parallelize
     let oxygen_position = oxygen_atom;
-    println!("{} {} {}", oxygen_position[0], oxygen_position[1], oxygen_position[2]);
-    let possible_results: Vec<(WaterMolecule, f64)> = water_configurations
-        .par_iter()
-        .map(|configuration| {
-            // H1 in position
-            let h1_coords: [f64; 3] = [
-                configuration[0] + oxygen_position[0],
-                configuration[1] + oxygen_position[1],
-                configuration[2] + oxygen_position[2],
-            ];
-            // H2 in position
-            let h2_coords: [f64; 3] = [
-                configuration[3] + oxygen_position[0],
-                configuration[4] + oxygen_position[1],
-                configuration[5] + oxygen_position[2],
-            ];
+    // println!("O {} {} {}", oxygen_position[0], oxygen_position[1], oxygen_position[2]);
+    let mut possible_results: (WaterMolecule, f64) =  (WaterMolecule::new([0., 0., 0.], [0., 0., 0.], [0., 0., 0.]), 0.1); 
+    for configuration in water_configurations.iter() {
+        // H1 in position
+        let h1_coords: [f64; 3] = [
+            configuration[0] + oxygen_position[0],
+            configuration[1] + oxygen_position[1],
+            configuration[2] + oxygen_position[2],
+        ];
+        // H2 in position
+        let h2_coords: [f64; 3] = [
+            configuration[3] + oxygen_position[0],
+            configuration[4] + oxygen_position[1],
+            configuration[5] + oxygen_position[2],
+        ];
 
-            // Create water molecule
-            let water = WaterMolecule::new(oxygen_position.clone(), 
-                h1_coords.clone(),
-                h2_coords.clone());
-
-            // Compute energy
-            let energy_value = energy_for_real_water(&receptor_points, &water.as_vec());
-            println!("Energy: {}", energy_value);
-            (water, energy_value)
-        })
-        .collect();
-    let possible_waters_energies: Vec<f64> = possible_results.iter().map(|(_, e)| *e).collect();
-
-    let choice = mc::boltzmann_choices(&possible_waters_energies, None);
-    if choice.len() > 0 {
-        let value = choice.first().unwrap().clone();
-        if mc::boltzmann_acceptance_rejection(&possible_results[value].1,
-            &BOLTZMANN_ENERGY_CUTOFF,
-            &TEMPERATURE,
-            &BOLTZMANN_K) {
-            println!("Chosen energy - {}\n", possible_waters_energies[value]);
-            for atom in possible_results[value].0.as_vec() {
-                receptor_points.push(atom.clone());
-            }
-            return (true, possible_results[value].0.clone());
-
+        // Create water molecule
+        let water = WaterMolecule::new(oxygen_position.clone(), 
+            h1_coords.clone(),
+            h2_coords.clone());
+        // water.to_xyz();
+        // Compute energy
+        let energy_value = energy_for_real_water(&receptor_points, &water.as_vec());
+        // println!("Energy: {}", energy_value);
+        if energy_value < possible_results.1 {
+            possible_results = (water, energy_value);
         }
-        else {
-            return (false, WaterMolecule::new([0., 0., 0.], [0., 0., 0.], [0., 0., 0.]));
-        }
+    }
+    if possible_results.1 <= 0.0 {
+        receptor_points.extend(possible_results.0.as_vec());
+        possible_results.0.to_xyz();
+        println!("Energy: {}", possible_results.1);
+        return (true, possible_results.0.clone());
     }
     else {
         return (false, WaterMolecule::new([0., 0., 0.], [0., 0., 0.], [0., 0., 0.]));
     }
 }
+
+// pub fn sample_real_waters(oxygen_atom: &[f64; 3],
+//     water_configurations: &Vec<[f64; 6]>,
+//     receptor_points: &mut Vec<Atom>) -> (bool, WaterMolecule) {    
+//     // Let's parallelize
+//     let oxygen_position = oxygen_atom;
+//     // println!("O {} {} {}", oxygen_position[0], oxygen_position[1], oxygen_position[2]);
+//     // let possible_results: Vec<(WaterMolecule, f64)> = water_configurations
+//     //     .par_iter()
+//     //     .map(|configuration| {
+//     //         // H1 in position
+//     //         let h1_coords: [f64; 3] = [
+//     //             configuration[0] + oxygen_position[0],
+//     //             configuration[1] + oxygen_position[1],
+//     //             configuration[2] + oxygen_position[2],
+//     //         ];
+//     //         // H2 in position
+//     //         let h2_coords: [f64; 3] = [
+//     //             configuration[3] + oxygen_position[0],
+//     //             configuration[4] + oxygen_position[1],
+//     //             configuration[5] + oxygen_position[2],
+//     //         ];
+
+//     //         // Create water molecule
+//     //         let water = WaterMolecule::new(oxygen_position.clone(), 
+//     //             h1_coords.clone(),
+//     //             h2_coords.clone());
+
+//     //         // Compute energy
+//     //         let energy_value = energy_for_real_water(&receptor_points, &water.as_vec());
+//     //         // println!("Energy: {}", energy_value);
+//     //         (water, energy_value)
+//     //     })
+//     //     .collect();
+//     let mut possible_results: Vec<(WaterMolecule, f64)> =  Vec::new(); 
+//     for configuration in water_configurations {
+//         // H1 in position
+//         let h1_coords: [f64; 3] = [
+//             configuration[0] + oxygen_position[0],
+//             configuration[1] + oxygen_position[1],
+//             configuration[2] + oxygen_position[2],
+//         ];
+//         // H2 in position
+//         let h2_coords: [f64; 3] = [
+//             configuration[3] + oxygen_position[0],
+//             configuration[4] + oxygen_position[1],
+//             configuration[5] + oxygen_position[2],
+//         ];
+
+//         // Create water molecule
+//         let water = WaterMolecule::new(oxygen_position.clone(), 
+//             h1_coords.clone(),
+//             h2_coords.clone());
+//         // water.to_xyz();
+//         // Compute energy
+//         let energy_value = energy_for_real_water(&receptor_points, &water.as_vec());
+//         // println!("Energy: {}", energy_value);
+//         possible_results.push((water, energy_value));
+//     }
+//     let possible_waters_energies: Vec<f64> = possible_results.iter().map(|(_, e)| *e).collect();
+//     let probabilities = mc::boltzmann_probabilities(&possible_waters_energies);
+//     // println!("Probabilities: \n{:?}", probabilities);
+//     let choice = mc::boltzmann_choices(&possible_waters_energies, None);
+//     if choice.len() > 0 {
+//         let value = choice.first().unwrap().clone();
+//         if mc::boltzmann_acceptance_rejection(&possible_results[value].1,
+//             &BOLTZMANN_ENERGY_CUTOFF,
+//             &TEMPERATURE,
+//             &BOLTZMANN_K) {
+//             // println!("Chosen energy - {}\n", possible_waters_energies[value]);
+//             receptor_points.extend(possible_results[value].0.as_vec());
+//             // for atom in possible_results[value].0.as_vec() {
+//             //     receptor_points.push(atom.clone());
+//             // }
+//             return (true, possible_results[value].0.clone());
+
+//         }
+//         else {
+//             return (false, WaterMolecule::new([0., 0., 0.], [0., 0., 0.], [0., 0., 0.]));
+//         }
+//     }
+//     else {
+//         return (false, WaterMolecule::new([0., 0., 0.], [0., 0., 0.], [0., 0., 0.]));
+//     }
+// }
 
 pub fn sample_waters_with_grids(oxygen_atom: &[f64; 3],
     water_configurations: &Vec<[f64; 6]>,

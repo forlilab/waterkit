@@ -68,6 +68,14 @@ impl WaterMolecule {
         self.hydrogen_bonds.clone()
     } 
 
+    pub fn to_xyz(&self) {
+        let atoms = self.as_vec();
+        println!("3\n\n");
+        println!("O {} {} {}", atoms[0].coords()[0], atoms[0].coords()[1], atoms[0].coords()[2]);
+        println!("H {} {} {}", atoms[1].coords()[0], atoms[1].coords()[1], atoms[1].coords()[2]);
+        println!("H {} {} {}", atoms[2].coords()[0], atoms[2].coords()[1], atoms[2].coords()[2])
+    }
+
     pub fn guess_new_hydrogen_bonds(
         &mut self,
     ) {

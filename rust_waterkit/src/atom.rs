@@ -60,16 +60,16 @@ impl Atom {
         self.coords
     }
 
-    pub fn rmin_half(&self) -> &f64 {
-        &self.rmin_half
+    pub fn rmin_half(&self) -> f64 {
+        self.rmin_half
     }
 
-    pub fn epsilon(&self) -> &f64 {
-        &self.epsilon
+    pub fn epsilon(&self) -> f64 {
+        self.epsilon
     }
 
-    pub fn charge(&self) -> &f64 {
-        &self.charge
+    pub fn charge(&self) -> f64 {
+        self.charge
     }
 
     pub fn is_heavy_atom(&self) -> bool {

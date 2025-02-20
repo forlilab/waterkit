@@ -8,6 +8,7 @@ use rayon::prelude::*;
 
 use crate::anchor_point::AnchorPoint;
 use crate::atom::Atom;
+use crate::energy::energy_for_real_water;
 use crate::grid::Grid3D;
 use crate::grid::ProbeType;
 use crate::consts;
@@ -70,8 +71,8 @@ pub fn to_pdb(atoms: &Vec<Atom>, fname: &str) {
             );
         }
         let mut f = OpenOptions::new()
+        .create(true)// Optionally create the file if it doesn't already exist
         .append(true)
-        .create(true) // Optionally create the file if it doesn't already exist
         .open(fname)
         .expect("Unable to open file");
         
@@ -86,12 +87,17 @@ fn run_single_waterkit(receptor_points: &Vec<Atom>,
     anchor_points: &Vec<AnchorPoint>, 
     mut grid: Grid3D) -> Vec<Atom> {
         // let start_time = Instant::now();
-        let mut receptor_map = receptor_points.clone();
-        
+        // let mut receptor_map = receptor_points.clone();
+        let mut receptor_map = Vec::new();
         let mut mutable_anchor_points = anchor_points.clone();
 
+        // select 16 random samples of waters configurations
+        // let mut rng = thread_rng();
+        // let num_samples = 16;
+        // let sampled_configurations = water_configurations.choose_multiple(&mut rng, num_samples).cloned().collect();
+
         // while mutable_anchor_points.len() > 0 {
-        for _i in 0..1 {
+        for _i in 0..3 {
             println!("Epoch {}", _i);
             // println!("Receptor: {}", receptor_map.len());
             sample(&mut grid, &mut receptor_map, &mut mutable_anchor_points, &water_configurations);
@@ -195,6 +201,10 @@ pub fn run_parallel_waterkit(receptor_points: Vec<Atom>,
     epochs: usize,
     use_grids: bool) {
 
+    // for point in grid.all_points() {
+    //     println!("{} {} {} {}", point.energy_hw, point.coords[0], point.coords[1], point.coords[2]);
+    // }
+
     (0..epochs).into_par_iter()
         .for_each(|epoch| {
             if !use_grids {
@@ -209,4 +219,27 @@ pub fn run_parallel_waterkit(receptor_points: Vec<Atom>,
                 );
             }
         });
+}
+
+
+#[pyfunction]
+pub fn get_energies_for_system(receptor_points: Vec<Atom>, 
+    waters: Vec<[Atom; 3]>) {
+    
+    for water in waters.iter() {
+        let mut points = receptor_points.clone();
+        let water_atoms = vec![water[0].clone(), water[1].clone(), water[2].clone()];
+        let waters_exluding: Vec<&[Atom; 3]> = waters.iter().filter(|x| &water != x).collect();
+        for excluded_w in waters_exluding {
+            for excluded_atom in excluded_w {
+                points.push(excluded_atom.clone());
+            }
+        }
+
+        // println!("{:?}", water);
+        // println!("{:?}\n", water_atoms);
+        let energy = energy_for_real_water(&points, &water_atoms);
+        println!("Energy for water: {}", energy);
+    }
+
 }
