@@ -243,7 +243,7 @@ pub fn get_energies_for_system(receptor_points: Vec<Atom>,
         }
         // println!("Waters network: {}", waters_network.len());
         // println!("Points after: {}", points.len());
-        let use_grids = true;
+        let use_grids = false;
 
         if use_grids {
             // let grid_receptor_and_w = setup_grid(&points, 21.0, 24.0, 26.0, 0.375, [71.5, 73.1, 243.4]);
@@ -297,40 +297,40 @@ pub fn get_energies_for_system(receptor_points: Vec<Atom>,
             let h2 = water_atoms[2].clone();
             // println!("{}", receptor_points.len());
             let mut energy = energy_for_real_water(&points, &vec![oxygen.clone()]);
-            println!("{index} {index} {energy} O (rec+wat)\n");
+            println!("{index} {index} {energy} O (rec+wat)");
 
-            let mut energy_w = energy_for_real_water(&waters_network, &vec![oxygen.clone()]);
-            println!("{index} {index} {energy_w} O (just wat)\n");
+            // let mut energy_w = energy_for_real_water(&waters_network, &vec![oxygen.clone()]);
+            // println!("{index} {index} {energy_w} O (just wat)");
 
             let mut energy_rec = energy_for_real_water(&receptor_points, &vec![oxygen.clone()]);
-            println!("{index} {index} {energy_rec} O (just rec)\n");
+            println!("{index} {index} {energy_rec} O (just rec)");
 
             let e = energy_for_real_water(&points, &vec![h1.clone()]);
-            println!("{index} {index} {e} H (rec+wat)\n");
+            println!("{index} {index} {e} H (rec+wat)");
             energy += e;
 
-            let ew = energy_for_real_water(&waters_network, &vec![h1.clone()]);
-            println!("{index} {index} {ew} H (just wat)\n");
-            energy_w += ew;
+            // let ew = energy_for_real_water(&waters_network, &vec![h1.clone()]);
+            // println!("{index} {index} {ew} H (just wat)");
+            // energy_w += ew;
 
             let er = energy_for_real_water(&receptor_points, &vec![h1.clone()]);
-            println!("{index} {index} {er} H (just rec)\n");
+            println!("{index} {index} {er} H (just rec)");
             energy_rec += er;
 
             let e = energy_for_real_water(&points, &vec![h2.clone()]);
-            println!("{index} {index} {e} H (rec+wat)\n");
+            println!("{index} {index} {e} H (rec+wat)");
             energy += e;
 
-            let ew = energy_for_real_water(&waters_network, &vec![h2.clone()]);
-            println!("{index} {index} {ew} H (just wat)\n");
-            energy_w += ew;
+            // let ew = energy_for_real_water(&waters_network, &vec![h2.clone()]);
+            // println!("{index} {index} {ew} H (just wat)\n");
+            // energy_w += ew;
 
             let er = energy_for_real_water(&receptor_points, &vec![h2.clone()]);
-            println!("{index} {index} {er} H (just rec)\n");
+            println!("{index} {index} {er} H (just rec)");
             energy_rec += er;
 
-            println!("{index} {index} {energy} HOH (rec+wat)\n");
-            println!("{index} {index} {energy_w} HOH (just wat)\n");
+            println!("{index} {index} {energy} HOH (rec+wat)");
+            // println!("{index} {index} {energy_w} HOH (just wat)\n");
             println!("{index} {index} {energy_rec} HOH (just rec)\n");
             // println!();
         }
