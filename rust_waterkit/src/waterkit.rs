@@ -226,7 +226,7 @@ pub fn run_parallel_waterkit(receptor_points: Vec<Atom>,
 pub fn get_energies_for_system(receptor_points: Vec<Atom>, 
     waters: Vec<[Atom; 3]>) {
     
-    for water in waters.iter() {
+    for (index, water) in waters.iter().enumerate() {
         let mut points = receptor_points.clone();
         let water_atoms = vec![water[0].clone(), water[1].clone(), water[2].clone()];
         let waters_exluding: Vec<&[Atom; 3]> = waters.iter().filter(|x| &water != x).collect();
@@ -236,10 +236,39 @@ pub fn get_energies_for_system(receptor_points: Vec<Atom>,
             }
         }
 
+        let oxygen = water_atoms[0].clone();
+        let h1 = water_atoms[1].clone();
+        let h2 = water_atoms[2].clone();
+        // println!("{}", receptor_points.len());
+        let mut energy = energy_for_real_water(&points, &vec![oxygen.clone()]);
+        println!("{index} {index} {energy} O (rec+wat)");
+
+        let mut energy_rec = energy_for_real_water(&receptor_points, &vec![oxygen.clone()]);
+        println!("{index} {index} {energy_rec} O (just rec)");
+
+        let e = energy_for_real_water(&points, &vec![h1.clone()]);
+        println!("{index} {index} {e} H (rec+wat)");
+        energy += e;
+
+        let er = energy_for_real_water(&receptor_points, &vec![h1.clone()]);
+        println!("{index} {index} {er} H (just rec)");
+        energy_rec += er;
+
+        let e = energy_for_real_water(&points, &vec![h2.clone()]);
+        println!("{index} {index} {e} H (rec+wat)");
+        energy += e;
+
+        let er = energy_for_real_water(&receptor_points, &vec![h2.clone()]);
+        println!("{index} {index} {er} H (just rec)");
+        energy_rec += er;
+
+        println!("{index} {index} {energy} HOH (rec+wat)");
+        println!("{index} {index} {energy_rec} HOH (just rec)");
+        println!();
         // println!("{:?}", water);
         // println!("{:?}\n", water_atoms);
-        let energy = energy_for_real_water(&points, &water_atoms);
-        println!("Energy for water: {}", energy);
+        // let energy = energy_for_real_water(&points, &water_atoms);
+        // println!("Energy for water: {}", energy);
     }
 
 }

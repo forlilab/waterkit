@@ -46,30 +46,30 @@ def get_data_form_meeko(wanted_residues, pdb_file, save=False):
     surface_atoms = list()
     with open(pdb_file) as fi:
         pdbstring = fi.read()
-    # mk_prep = meeko.MoleculePreparation(
-    #     merge_these_atom_types=[],
-    #     load_atom_params=["vina_params", "openff"],
-    #     charge_model="gasteiger",
-    # )
+    mk_prep = meeko.MoleculePreparation(
+        merge_these_atom_types=[],
+        load_atom_params=["vina_params", "openff"],
+        charge_model="gasteiger",
+    )
     box_boundaries = list()
-    # templates = meeko.ResidueChemTemplates.create_from_defaults()
-    # polymer = meeko.Polymer.from_pdb_string(pdb_string=pdbstring,
-    #                                         chem_templates=templates,
-    #                                         mk_prep=mk_prep,
-    #                                         allow_bad_res=True,
-    #                                         default_altloc="A")
+    templates = meeko.ResidueChemTemplates.create_from_defaults()
+    polymer = meeko.Polymer.from_pdb_string(pdb_string=pdbstring,
+                                            chem_templates=templates,
+                                            mk_prep=mk_prep,
+                                            allow_bad_res=True,
+                                            default_altloc="A")
     # json_s = polymer.to_json()
     # with open("target.json", "w") as fo:
     #     fo.write(json_s)
 
-    if save:
-        pdb_f = polymer.to_pdb()
-        with open("meeko.pdb", "w") as fo:
-            fo.write(pdb_f)
-    with open("target.json") as fi:
-        json_string = fi.read()
+    # if save:
+    #     pdb_f = polymer.to_pdb()
+    #     with open("meeko.pdb", "w") as fo:
+    #         fo.write(pdb_f)
+    # with open("target.json") as fi:
+    #     json_string = fi.read()
 
-    polymer = meeko.Polymer.from_json(json_string)
+    # polymer = meeko.Polymer.from_json(json_string)
 
     for res_id, monomer in polymer.get_valid_monomers().items():
         unique_id = f"{res_id.split(':')[0]}:{monomer.input_resname}:{res_id.split(':')[-1]}"
@@ -208,7 +208,6 @@ def parse_waters_frame(fname):
     atoms = list()
     retvalue = list()
     for idx, atom in enumerate(frame):
-        print(idx)
         atom_type = "HW"
         rmin_half = 0.0
         epsilon = 0.0
@@ -286,5 +285,14 @@ if __name__ == "__main__":
     x_size, y_size, z_size = 21.0, 24.0, 26.0
 
     frame_waters = parse_waters_frame("/data/phd/waterkit/rust_waterkit/test_energies/water_000001.pdb")
-    print(len(frame_waters))
+    # for water in frame_waters:
+    #     distances = list()
+    #     oxygen = water[0]
+    #     oc = np.array(oxygen.coords())
+    #     for atom in parametrized_atoms:
+    #         ac = np.array(atom.coords())
+    #         distances.append(np.linalg.norm(oc - ac))
+    #     print(min(distances))
+
+    # print(len(frame_waters))
     rust_waterkit.get_energies_for_system(parametrized_atoms, frame_waters)

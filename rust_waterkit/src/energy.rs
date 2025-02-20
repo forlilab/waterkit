@@ -86,7 +86,7 @@ pub fn energy_for_real_water(atoms_1: &Vec<Atom>, atoms_2: &Vec<Atom>) -> f64 {
             // Calculate distance avoiding division by 0
             let distance = f64::max(geometry::euclidean_distance(&atom_1_coords,
                 &atom_2_coords), 1e-8_f64);
-
+            // println!("{distance}");
             if distance < consts::ELECTROSTATICS_CUTOFF {
 
                 if atom_1.atom_type() != &"HW".to_string() && atom_2.atom_type() != &"HW".to_string() {
@@ -101,6 +101,7 @@ pub fn energy_for_real_water(atoms_1: &Vec<Atom>, atoms_2: &Vec<Atom>) -> f64 {
                 }
 
                 let electrostatics_energy = coulomb_energy(atom_1.charge(), atom_2.charge(), distance);
+                // println!("{}", electrostatics_energy);
                 e_elec += electrostatics_energy;
 
                 // if r < 2. && atom_1.atom_type() == &"HW" && atom_2.atom_type() == &"HW" {
