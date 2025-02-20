@@ -91,6 +91,7 @@ if __name__ == "__main__":
 
         # compute energy of current water
         oxygen_xyz = this_water.coordinates(1)
+        print(oxygen_xyz)
         water_info = this_water.atom_informations()
         energy = wbox.map.energy_coordinates(oxygen_xyz, water_info["t"][0])[0]
         print(f"{index:3} {reskeys[index]:6} {energy:12.6f} O (rec+wat)")

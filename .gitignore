@@ -112,6 +112,7 @@ autodocksuite-4.2.6-src/autogrid/x86_Linux2/
 *.xyz
 *.txt
 *.pdb
+*.pdbqt
 *.pse
 *.csv
 *.dx
