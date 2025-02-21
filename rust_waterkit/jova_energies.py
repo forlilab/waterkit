@@ -38,25 +38,25 @@ PARAMS = {
 }
 
 def get_data_form_meeko(pdb_file, save=False):
-    # with open(pdb_file) as fi:
-    #     pdbstring = fi.read()
+    with open(pdb_file) as fi:
+        pdbstring = fi.read()
         
-    # blunt_ends = [("A:1", 0)]
-    # mk_prep = meeko.MoleculePreparation(
-    #     merge_these_atom_types=[],
-    #     load_atom_params=["vina_params", "openff"],
-    #     charge_model="espaloma",
-    # )
-    # templates = meeko.ResidueChemTemplates.create_from_defaults()
-    # polymer = meeko.Polymer.from_pdb_string(pdb_string=pdbstring,
-    #                                         chem_templates=templates,
-    #                                         mk_prep=mk_prep,
-    #                                         allow_bad_res=True,
-    #                                         default_altloc="A",
-    #                                         blunt_ends=blunt_ends)
-    # json_s = polymer.to_json()
-    # with open("target.json", "w") as fo:
-    #     fo.write(json_s)
+    blunt_ends = [("A:1", 0)]
+    mk_prep = meeko.MoleculePreparation(
+        merge_these_atom_types=[],
+        load_atom_params=["vina_params", "openff"],
+        charge_model="espaloma",
+    )
+    templates = meeko.ResidueChemTemplates.create_from_defaults()
+    polymer = meeko.Polymer.from_pdb_string(pdb_string=pdbstring,
+                                            chem_templates=templates,
+                                            mk_prep=mk_prep,
+                                            allow_bad_res=True,
+                                            default_altloc="A",
+                                            blunt_ends=blunt_ends)
+    json_s = polymer.to_json()
+    with open("target.json", "w") as fo:
+        fo.write(json_s)
 
     with open("target.json") as fi:
         json_string = fi.read()
@@ -84,19 +84,21 @@ def load_waters(waters_pdb):
         res_coords = residue.getCoords()
         for idx, molsetup_atom in enumerate(molsetup.atoms):
             molsetup_atom.coord = res_coords[idx]
-            molsetup.atom_params["rmin_half"][molsetup_atom.index] = TIP3P_RMIN_HALF
-            molsetup.atom_params["epsilon"][molsetup_atom.index] = TIP3P_EPSILON
             if molsetup_atom.atom_type == "N-TIP3P-O":
                 molsetup_atom.charge = TIP3P_O_COULOMB
+                molsetup.atom_params["rmin_half"][molsetup_atom.index] = TIP3P_RMIN_HALF
+                molsetup.atom_params["epsilon"][molsetup_atom.index] = TIP3P_EPSILON
             else:
                 molsetup_atom.charge = TIP3P_H_COULOMB
+                molsetup.atom_params["rmin_half"][molsetup_atom.index] = 0.0
+                molsetup.atom_params["epsilon"][molsetup_atom.index] = 0.0
 
         waters_molsetups.append(molsetup)
     return waters_molsetups
 
 if __name__ == "__main__":
-    polymer = get_data_form_meeko("/data/phd/waterkit/rust_waterkit/waterkit_data/1uyg_prepared.pdb")
-    molsetups = load_waters("/data/phd/waterkit/rust_waterkit/test/original_wk/traj/water_000001.pdb")
+    polymer = get_data_form_meeko("/home/niccolo/phd/waterkit/rust_waterkit/minimal_test/receptor.pdbqt")
+    molsetups = load_waters("/home/niccolo/phd/waterkit/rust_waterkit/minimal_test/traj/water_000001.pdb")
     docksys = jova.DockingSystem(
             moving_molsetups=molsetups,
             parameters=PARAMS,
@@ -107,7 +109,8 @@ if __name__ == "__main__":
         )
 
 
-    print("Everything okay!")
-    # energies = {}
-    # g = docksys.get_current_genes()
-    # e = docksys.eval(g, log=energies)
+    # print("Everything okay!")
+    energies = {}
+    g = docksys.get_current_genes()
+    e = docksys.eval(g, log=energies)
+    print(energies)
