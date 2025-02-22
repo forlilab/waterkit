@@ -118,9 +118,17 @@ impl Grid3D {
 impl Grid3D {
     pub fn update_energies(&mut self, new_points: &Vec<Atom>) {
         for point in self.all_points_mut() {
-            point.energy_oda = vina_ff::vina_energy(new_points, &point.coords);
-            // point.energy_ow += energy::get_ow_energy(new_points, &point.coords);
-            // point.energy_hw += energy::get_q_energy(new_points, &point.coords);
+            point.energy_oda += vina_ff::vina_energy(new_points, &point.coords);
+            point.energy_ow += energy::get_ow_energy(new_points, &point.coords);
+            point.energy_hw += energy::get_q_energy(new_points, &point.coords);
+        }
+    }
+
+    pub fn remove_points(&mut self, points_to_remove: &Vec<Atom>) {
+        for point in self.all_points_mut() {
+            point.energy_oda -= vina_ff::vina_energy(points_to_remove, &point.coords);
+            point.energy_ow -= energy::get_ow_energy(points_to_remove, &point.coords);
+            point.energy_hw -= energy::get_q_energy(points_to_remove, &point.coords);
         }
     }
 

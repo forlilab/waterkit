@@ -37,7 +37,7 @@ fn rotate_hydrogens(oxygen_coords: [f64; 3], h1_coords: [f64; 3], h2_coords: [f6
     let mut rng = rand::thread_rng();
     let axis = geometry::normalize(&[rng.gen(), rng.gen(), rng.gen()]);
     // let angle = rng.gen_range(-max_angle..max_angle);
-    let angle = rng.gen_range(0.0..(2.0 * PI)); // Full rotational sampling [0, 2π]
+    let angle = rng.gen_range(0.0..(PI/4.0)); // Full rotational sampling [0, 2π]
     let cos_theta = angle.cos();
     let sin_theta = angle.sin();
 
@@ -72,6 +72,7 @@ fn get_energy(oxygen_pos: [f64; 3], h1_pos: [f64; 3], h2_pos: [f64; 3], grid: &G
 
 pub fn optimize(water: &WaterMolecule, waters_in_system: &Vec<Atom>, grid: &mut Grid3D) -> WaterMolecule {   
     let mut rng = rand::thread_rng();
+    let mut update_grids = false;
     let water_atoms = water.as_vec();
     let mut original_oxygen_coords = water_atoms[0].coords();
     let mut original_h1_coords = water_atoms[1].coords();
@@ -79,8 +80,8 @@ pub fn optimize(water: &WaterMolecule, waters_in_system: &Vec<Atom>, grid: &mut 
     
     // Monte Carlo parameters
     let num_steps = 1000;
-    let max_disp = 0.2;
-    let beta = TEMPERATURE * BOLTZMANN_K;
+    let max_disp = 0.1;
+    // let beta = TEMPERATURE * BOLTZMANN_K;
 
     for _i in 0..num_steps {
         // Propose a move
@@ -88,24 +89,35 @@ pub fn optimize(water: &WaterMolecule, waters_in_system: &Vec<Atom>, grid: &mut 
         let rotation = rotate_hydrogens(translation[0], translation[1], translation[2]);
 
         // Evaluate energy change
+        // let old_energy = get_energy(original_oxygen_coords, original_h1_coords, original_h2_coords, grid);
         let old_atoms = WaterMolecule::new(original_oxygen_coords, original_h1_coords, original_h2_coords);
         let old_energy = energy_for_real_water(waters_in_system, &old_atoms.as_vec());
 
-        // let new_energy = get_energy(new_atoms[0], new_hydrogens[0], new_hydrogens[1], grid);
+        // let new_energy = get_energy(translation[0], rotation[0], rotation[1], grid);
         let new_atoms = WaterMolecule::new(translation[0], rotation[0], rotation[1]);
         let new_energy = energy_for_real_water(waters_in_system, &new_atoms.as_vec());
 
+        println!("Old Energy: {old_energy}");
+        println!("New Energy: {new_energy}");
         // Metropolis acceptance criterion
-        let acceptance_prob = ((-beta * (new_energy - old_energy)).exp()).min(1.0);
-        if rng.gen::<f64>() < acceptance_prob {
+        if monte_carlo::boltzmann_acceptance_rejection(&new_energy, &old_energy, &TEMPERATURE, &BOLTZMANN_K) {
+            println!("Accepted!!\n");
             // Accept the move
+            update_grids = true;
             original_oxygen_coords = translation[0];
             original_h1_coords = rotation[0];
             original_h2_coords = rotation[1];
         }
+        else {
+            update_grids = false;
+        }
     }
 
     let optimized_water = WaterMolecule::new(original_oxygen_coords, original_h1_coords, original_h2_coords);
+    if update_grids {
+        grid.remove_points(&water.as_vec());
+        grid.update_energies(&optimized_water.as_vec());
+    }
     optimized_water
 }
 

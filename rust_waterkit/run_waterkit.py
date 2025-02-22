@@ -2,8 +2,7 @@ import numpy as np
 import prody
 import multiprocessing as mp
 from tqdm import tqdm
-import gc
-
+import sys
 import meeko
 import rust_waterkit
 
@@ -44,35 +43,35 @@ def to_xyz_water(traj, fname):
 
 def get_data_form_meeko(wanted_residues, pdb_file, save=False):
     surface_atoms = list()
-    with open(pdb_file) as fi:
-        pdbstring = fi.read()
+    # with open(pdb_file) as fi:
+    #     pdbstring = fi.read()
         
-    blunt_ends = [("A:1", 0)]
-    mk_prep = meeko.MoleculePreparation(
-        merge_these_atom_types=[],
-        load_atom_params=["vina_params", "openff"],
-        charge_model="espaloma",
-    )
+    # blunt_ends = [("A:1", 0)]
+    # mk_prep = meeko.MoleculePreparation(
+    #     merge_these_atom_types=[],
+    #     load_atom_params=["vina_params", "openff"],
+    #     charge_model="espaloma",
+    # )
     box_boundaries = list()
-    templates = meeko.ResidueChemTemplates.create_from_defaults()
-    polymer = meeko.Polymer.from_pdb_string(pdb_string=pdbstring,
-                                            chem_templates=templates,
-                                            mk_prep=mk_prep,
-                                            allow_bad_res=True,
-                                            default_altloc="A",
-                                            blunt_ends=blunt_ends)
-    json_s = polymer.to_json()
-    with open("target.json", "w") as fo:
-        fo.write(json_s)
+    # templates = meeko.ResidueChemTemplates.create_from_defaults()
+    # polymer = meeko.Polymer.from_pdb_string(pdb_string=pdbstring,
+    #                                         chem_templates=templates,
+    #                                         mk_prep=mk_prep,
+    #                                         allow_bad_res=True,
+    #                                         default_altloc="A",
+    #                                         blunt_ends=blunt_ends)
+    # json_s = polymer.to_json()
+    # with open("target.json", "w") as fo:
+    #     fo.write(json_s)
 
     # if save:
     #     pdb_f = polymer.to_pdb()
     #     with open("meeko.pdb", "w") as fo:
     #         fo.write(pdb_f)
-    # with open("target.json") as fi:
-    #     json_string = fi.read()
+    with open("target.json") as fi:
+        json_string = fi.read()
 
-    # polymer = meeko.Polymer.from_json(json_string)
+    polymer = meeko.Polymer.from_json(json_string)
 
     for res_id, monomer in polymer.get_valid_monomers().items():
         unique_id = f"{res_id.split(':')[0]}:{monomer.input_resname}:{res_id.split(':')[-1]}"
@@ -252,55 +251,43 @@ def parse_waters_frame(fname):
         maturin develop -r` --features extension-module
 '''
 if __name__ == "__main__":
-    # select as, i. 111+107+103+162+150+98+97+184+96+93+55+52+51+138+139+136+135
-    # import time
+    if len(sys.argv) < 2:
+        # select as, i. 111+107+103+162+150+98+97+184+96+93+55+52+51+138+139+136+135
+        surface_points = []
+        wanted_residues = ["A:ASN:51", "A:SER:52", "A:ALA:55",
+                           "A:ASP:93", "A:ILE:96", "A:GLY:97",
+                           "A:MET:98", "A:LEU:103", "A:LEU:107",
+                           "A:ALA:111", "A:GLY:135", "A:VAL:136",
+                           "A:PHE:138", "A:TYR:139", "A:VAL:150",
+                           "A:TRP:162", "A:THR:184"]
+        # wanted_residues = list()
+        parametrized_atoms, min_box_boundaries, max_box_boundaries = get_data_form_meeko(wanted_residues, "/data/phd/waterkit/example/1uyg_no_ligand.pdb")
+        # parametrized_atoms, min_box_boundaries, max_box_boundaries = get_data_form_meeko(wanted_residues, "/home/niccolo/phd/waterkit/example/1uyg_no_ligand.pdb")
 
-    # surface_points = []
-    # wanted_residues = ["A:ASN:51", "A:SER:52", "A:ALA:55",
-    #                    "A:ASP:93", "A:ILE:96", "A:GLY:97",
-    #                    "A:MET:98", "A:LEU:103", "A:LEU:107",
-    #                    "A:ALA:111", "A:GLY:135", "A:VAL:136",
-    #                    "A:PHE:138", "A:TYR:139", "A:VAL:150",
-    #                    "A:TRP:162", "A:THR:184"]
-    # # wanted_residues = list()
-    # parametrized_atoms, min_box_boundaries, max_box_boundaries = get_data_form_meeko(wanted_residues, "/data/phd/waterkit/example/1uyg_no_ligand.pdb")
-    # # parametrized_atoms, min_box_boundaries, max_box_boundaries = get_data_form_meeko(wanted_residues, "/home/niccolo/phd/waterkit/example/1uyg_no_ligand.pdb")
-
-    # waters = load_waters_orientations()
-    # anchor_points = load_anchor_points("/data/phd/waterkit/rust_waterkit/anchor_points.txt")
-    # # anchor_points = load_anchor_points("/home/niccolo/phd/waterkit/rust_waterkit/anchor_points.txt")
-    # spacing = 0.375
-    # center = [2.7, 11.45, 24.80]
-    # x_size, y_size, z_size = 10.0, 10.0, 10.0
-    # # x_size, y_size, z_size = 24.0, 24.0, 24.0
+        waters = load_waters_orientations()
+        anchor_points = load_anchor_points("/data/phd/waterkit/rust_waterkit/anchor_points.txt")
+        # anchor_points = load_anchor_points("/home/niccolo/phd/waterkit/rust_waterkit/anchor_points.txt")
+        spacing = 0.375
+        center = [2.7, 11.45, 24.80]
+        x_size, y_size, z_size = 24.0, 24.0, 24.0
 
 
-    # print("Starting waterkit!")
-    # start = time.time()
-    # aps = anchor_points
-    # use_grids = False
-    # n_frames = 1
+        print("Starting waterkit!")
+        aps = anchor_points
+        use_grids = True
+        n_frames = 1
 
-    # # Setup grids at the beginning
-    # grid = rust_waterkit.setup_system(parametrized_atoms, x_size, y_size, z_size, spacing, center)
-    # rust_waterkit.run_parallel_waterkit(parametrized_atoms, waters, anchor_points, grid, n_frames, use_grids)
+        # Setup grids at the beginning
+        grid = rust_waterkit.setup_system(parametrized_atoms, x_size, y_size, z_size, spacing, center)
+        rust_waterkit.run_parallel_waterkit(parametrized_atoms, waters, anchor_points, grid, n_frames, use_grids)
 
-    parametrized_atoms, min_box_boundaries, max_box_boundaries = get_data_form_meeko(None, "/home/niccolo/phd/waterkit/rust_waterkit/minimal_test/receptor_prepared.pdb")
-    # center = [71.5, 73.1, 243.3]
-    # x_size, y_size, z_size = 21.0, 24.0, 26.0
-    
-    center = [12.4, 12.3, 14.1]
-    x_size, y_size, z_size = 30.0, 30.0, 30.0
+    elif sys.argv[1] == "--energies":
+        parametrized_atoms, min_box_boundaries, max_box_boundaries = get_data_form_meeko(None, "/data/phd/waterkit/rust_waterkit/minimal_test/receptor.pdbqt")
+        # center = [71.5, 73.1, 243.3]
+        # x_size, y_size, z_size = 21.0, 24.0, 26.0
+        
+        center = [12.4, 12.3, 14.1]
+        x_size, y_size, z_size = 24.0, 24.0, 24.0
 
-    frame_waters = parse_waters_frame("/home/niccolo/phd/waterkit/rust_waterkit/minimal_test/traj/water_000001.pdb")
-    # for water in frame_waters:
-    #     distances = list()
-    #     oxygen = water[0]
-    #     oc = np.array(oxygen.coords())
-    #     for atom in parametrized_atoms:
-    #         ac = np.array(atom.coords())
-    #         distances.append(np.linalg.norm(oc - ac))
-    #     print(min(distances))
-
-    # print(len(frame_waters))
-    rust_waterkit.get_energies_for_system(parametrized_atoms, frame_waters, center, x_size, y_size, z_size)
+        frame_waters = parse_waters_frame("/data/phd/waterkit/rust_waterkit/minimal_test/traj/water_000001.pdb")
+        rust_waterkit.get_energies_for_system(parametrized_atoms, frame_waters, center, x_size, y_size, z_size)
