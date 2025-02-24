@@ -13,16 +13,19 @@ pub struct WaterMolecule {
     hydrogen_1: Atom,
     hydrogen_2: Atom,
     hydrogen_bonds: Vec<AnchorPoint>,
+    res_number: i32
 }
 
 // #[pymethods]
 impl WaterMolecule {
     // #[new]
     pub fn new(oxygen_coords: [f64; 3], 
-        hydrogen_1_coords: [f64; 3],
-        hydrogen_2_coords: [f64; 3],) -> Self {
+                hydrogen_1_coords: [f64; 3],
+                hydrogen_2_coords: [f64; 3],
+                chain: String,
+                resnumber: i32) -> Self {
             let oxygen = Atom::new("OW".to_string(),
-                "0".to_string(),
+                format!("{chain}:HOH:{resnumber}:0"),
                 oxygen_coords,
                 consts::RMIN_HALF_WATER,
                 consts::TIP3P_EPSILON,
@@ -33,7 +36,7 @@ impl WaterMolecule {
 
             );
             let hydrogen_1 = Atom::new("HW".to_string(),
-                "1".to_string(),
+            format!("{chain}:HOH:{resnumber}:H1"),
                 hydrogen_1_coords,
                 0.0,
                 0.0,
@@ -43,7 +46,7 @@ impl WaterMolecule {
                 false
             );
             let hydrogen_2 = Atom::new("HW".to_string(),
-                "2".to_string(),
+            format!("{chain}:HOH:{resnumber}:H2"),
                 hydrogen_2_coords,
                 0.0,
                 0.0,
@@ -52,16 +55,22 @@ impl WaterMolecule {
                 false,
                 false
             );
+            let res_number: i32 = oxygen.residue_number;
             WaterMolecule {
                 oxygen: oxygen,
                 hydrogen_1: hydrogen_1,
                 hydrogen_2: hydrogen_2,
-                hydrogen_bonds: Vec::new()
+                hydrogen_bonds: Vec::new(),
+                res_number: res_number
             }
         }
     pub fn as_vec(&self) -> Vec<Atom> {
         let atoms = vec![self.oxygen.clone(), self.hydrogen_1.clone(), self.hydrogen_2.clone()];
         atoms
+    }
+
+    pub fn get_res_number(&self) -> i32 {
+        self.res_number
     }
 
     pub fn hydrogen_bonds(&self) -> Vec<AnchorPoint> {
@@ -74,6 +83,15 @@ impl WaterMolecule {
         println!("O {} {} {}", atoms[0].coords()[0], atoms[0].coords()[1], atoms[0].coords()[2]);
         println!("H {} {} {}", atoms[1].coords()[0], atoms[1].coords()[1], atoms[1].coords()[2]);
         println!("H {} {} {}", atoms[2].coords()[0], atoms[2].coords()[1], atoms[2].coords()[2])
+    }
+
+    pub fn update_coords(&mut self, oxygen_coords: [f64; 3], 
+        hydrogen_1_coords: [f64; 3],
+        hydrogen_2_coords: [f64; 3]) {
+            self.oxygen.set_coords(oxygen_coords);
+            self.hydrogen_1.set_coords(hydrogen_1_coords);
+            self.hydrogen_2.set_coords(hydrogen_2_coords);
+
     }
 
     pub fn guess_new_hydrogen_bonds(

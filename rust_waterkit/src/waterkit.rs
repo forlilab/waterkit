@@ -15,72 +15,12 @@ use crate::consts;
 use crate::monte_carlo;
 use crate::optimizer::optimize;
 use crate::energy;
+use crate::utils;
 use crate::sampling::sample;
 use crate::sampling::sample_using_grids;
 use crate::setup::setup_grid;
-
-pub fn to_pdb(atoms: &Vec<Atom>, fname: &str) {
-    let mut cnt = 0;
-    let mut h_index = 1;
-    for (index, point) in atoms.iter().enumerate() {
-        if index % 3 == 0 {
-            cnt += 1;
-        }
-        let coordinates = point.coords();
-        let mut line = String::new();
-        let mut h_type = "";
-        if point.atom_type() == "HW" {
-            if h_index < 2 {
-                h_type = "H1";
-                h_index += 1;
-            }
-            else {
-                h_type = "H2";
-                h_index = 1;
-            }
-            line = format!(
-                "{:<6}{:>5} {:^4} {:>3} {:1}{:>4}    {:>8.3}{:>8.3}{:>8.3}{:>6.2}{:>6.2}          {:>2}\n",
-                "ATOM",
-                index,
-                h_type,
-                "HOH",
-                "A",
-                cnt,
-                coordinates[0],
-                coordinates[1],
-                coordinates[2],
-                0.0,
-                0.0,
-                "H"
-            );
-        }
-        else {
-            line = format!(
-                "{:<6}{:>5} {:^4} {:>3} {:1}{:>4}    {:>8.3}{:>8.3}{:>8.3}{:>6.2}{:>6.2}          {:>2}\n",
-                "ATOM",
-                index,
-                "O",
-                "HOH",
-                "A",
-                cnt,
-                coordinates[0],
-                coordinates[1],
-                coordinates[2],
-                0.0,
-                0.0,
-                "O"
-            );
-        }
-        let mut f = OpenOptions::new()
-        .create(true)// Optionally create the file if it doesn't already exist
-        .append(true)
-        .open(fname)
-        .expect("Unable to open file");
-        
-        f.write_all(line.as_bytes()).expect("Unable to write data");
-        // fs::write(fname, line).expect("Unable to write file");
-    }
-}
+use crate::utils::to_pdb;
+use crate::water::WaterMolecule;
 
 
 fn run_single_waterkit(receptor_points: &Vec<Atom>, 
@@ -88,28 +28,20 @@ fn run_single_waterkit(receptor_points: &Vec<Atom>,
     anchor_points: &Vec<AnchorPoint>, 
     mut grid: Grid3D) -> Vec<Atom> {
         // let start_time = Instant::now();
-        // let mut receptor_map = receptor_points.clone();
-        let mut receptor_map = Vec::new();
+        let mut receptor_map = receptor_points.clone();
+        receptor_map.sort_by_key(|n| n.residue_number);
+        let mut last_residue_number = receptor_map.last().unwrap().residue_number.clone();
         let mut mutable_anchor_points = anchor_points.clone();
 
-        // select 16 random samples of waters configurations
-        // let mut rng = thread_rng();
-        // let num_samples = 16;
-        // let sampled_configurations = water_configurations.choose_multiple(&mut rng, num_samples).cloned().collect();
 
-        // while mutable_anchor_points.len() > 0 {
         for _i in 0..3 {
             println!("Epoch {}", _i);
-            // println!("Receptor: {}", receptor_map.len());
-            sample(&mut grid, &mut receptor_map, &mut mutable_anchor_points, &water_configurations);
-            // println!("Receptor: {}\n", receptor_map.len());
-            let waters: Vec<Atom> = receptor_map.iter().filter(|x| x.atom_type() == "OW" || x.atom_type() == "HW").cloned().collect();
-            to_pdb(&waters, &format!("test/water_{_i}_unoptimized.pdb"));
+            sample(&mut grid, &mut receptor_map, &mut mutable_anchor_points, &water_configurations, &mut last_residue_number);
+            // let waters: Vec<Atom> = receptor_map.iter().filter(|x| x.atom_type() == "OW" || x.atom_type() == "HW").cloned().collect();
+            // utils::to_pdb(&waters, &format!("test/water_{_i}_unoptimized.pdb"));
         }
         let waters: Vec<Atom> = receptor_map.iter().filter(|x| x.atom_type() == "OW" || x.atom_type() == "HW").cloned().collect();
-        to_pdb(&waters, &format!("test/water_unoptimized.pdb"));
-        // let elapsed_time = start_time.elapsed();
-        // println!("Time taken for one map: {:?}", elapsed_time);
+        utils::to_pdb(&waters, &format!("test/water_unoptimized.pdb"));
         receptor_map
 }
 
@@ -119,13 +51,15 @@ fn run_single_waterkit_with_grids(receptor_points: &Vec<Atom>,
     anchor_points: &Vec<AnchorPoint>, 
     mut grid: Grid3D,
     epoch: usize) -> Vec<Atom> {
-        // let start_time = Instant::now();
         let mut receptor_map = receptor_points.clone();
-        
+        // This is to keep track of the last atom
+        receptor_map.sort_by_key(|n| n.residue_number);
+        let mut last_residue_number = receptor_map.last().unwrap().residue_number.clone();
+
         let mut mutable_anchor_points = anchor_points.clone();
         let mut new_water_molecules = Vec::new();
         for _i in 0..3 {
-            sample_using_grids(&mut grid,&mut receptor_map, &mut mutable_anchor_points, &water_configurations, &mut new_water_molecules);
+            sample_using_grids(&mut grid, &mut mutable_anchor_points, &water_configurations, &mut new_water_molecules, &mut last_residue_number);
         }
 
         // let waters: Vec<Atom> = receptor_map.iter().filter(|x| x.atom_type() == "OW" || x.atom_type() == "HW").cloned().collect();
@@ -133,43 +67,42 @@ fn run_single_waterkit_with_grids(receptor_points: &Vec<Atom>,
         for w in new_water_molecules.iter() {
             for a in w.as_vec() {
                 waters.push(a.clone());
+                receptor_map.push(a.clone());
             }
         } 
-        to_pdb(&waters, &format!("test/water_{epoch}_unoptimized.pdb"));
-        // Need to get energies for the waters placed and select the ones to perturb based on an 
-        // inverted boltzmann wheighted choice
-        let mut water_energies = Vec::new();
-        for water in new_water_molecules.iter() {
-            let atoms = water.as_vec();
-            let waters_in_system: Vec<Atom> = receptor_map.iter().filter(|x| !atoms.contains(x)).cloned().collect();
-            water_energies.push(energy::energy_for_real_water(&waters_in_system, &atoms));         
-        }
-        
-        let mut optimized_waters: Vec<Atom> = Vec::new();
+        // utils::to_pdb(&waters, &format!("test/water_{epoch}_unoptimized.pdb"));
 
-        // let steps = water_energies.len();
-        // let indices = monte_carlo::boltzmann_choices(&water_energies, Some(steps));
-        // println!("# of choices: {} out of {} total waters.", indices.len(), steps);
-        for (index, water_energy) in  water_energies.iter().enumerate() {
-            // Select a water molecule to modify
-            let new_water = new_water_molecules[index].clone();
-            let waters_in_system: Vec<Atom> = receptor_map.iter().filter(|x| !new_water.as_vec().contains(x)).cloned().collect();
-            // if indices.contains(&index) {
-            let optimized_water = optimize(&new_water, &waters_in_system,  &mut grid);
-            for a in optimized_water.as_vec() {
-                optimized_waters.push(a.clone());
-                new_water_molecules[index] = optimized_water.clone();
-                // }
-            // } else {
-                // for a in new_water.as_vec() {
-                //     optimized_waters.push(a.clone());
-                // }
-            }
-        }
+        // optimize_water_network(&mut receptor_map, &new_water_molecules, &mut grid, &format!("test/water_{epoch}_optimized.pdb"));
+        waters
+}
 
-        to_pdb(&optimized_waters, &format!("test/water_{epoch}_optimized.pdb"));
+pub fn optimize_water_network(receptor_map: &mut Vec<Atom>, new_waters: &Vec<WaterMolecule>, grid: &mut Grid3D, filename: &str) {
+    let mut rng = thread_rng();
+    let mut waters_res_number: Vec<i32> = new_waters.iter().map(|w| w.get_res_number()).collect();
+    // Remove duplicates
+    waters_res_number.sort();
+    waters_res_number.dedup();
+    waters_res_number.shuffle(&mut rng);
+    for res_number in waters_res_number.iter() {
+        // println!("{}", res_number);
+        let mut filtered = Vec::new();
 
         receptor_map
+            .retain(|a| {
+                if &a.residue_number == res_number {
+                    filtered.push(a.clone());
+                    false
+                } else {
+                    true
+                }
+            });
+
+        // Here I optimize
+        optimize(&mut filtered, &receptor_map, grid);
+
+        receptor_map.extend(filtered);
+    }
+    to_pdb(&receptor_map.iter().filter(|x| x.atom_type() == "OW" || x.atom_type() == "HW").cloned().collect::<Vec<Atom>>(), filename);
 }
 
 #[pyfunction]
@@ -207,20 +140,21 @@ pub fn run_parallel_waterkit(receptor_points: Vec<Atom>,
     //     println!("{} {} {} {}", point.energy_hw, point.coords[0], point.coords[1], point.coords[2]);
     // }
 
-    (0..epochs).into_par_iter()
-        .for_each(|epoch| {
-            if !use_grids {
-                run_single_waterkit(&receptor_points.clone(), &water_configurations.clone(), &anchor_points.clone(), grid.clone());
-            } else {
-                run_single_waterkit_with_grids(
-                    &receptor_points.clone(),
-                    &water_configurations.clone(),
-                    &anchor_points.clone(),
-                    grid.clone(),
-                    epoch
-                );
-            }
-        });
+    let waters: Vec<Vec<Atom>> = (0..epochs).into_par_iter()
+        .map(|epoch| {
+            let new_waters= run_single_waterkit_with_grids(
+                &receptor_points.clone(),
+                &water_configurations.clone(),
+                &anchor_points.clone(),
+                grid.clone(),
+                epoch
+            );
+            new_waters
+        }).collect();
+    println!("Done sampling...saving results!");
+    
+    waters.into_par_iter().enumerate()
+        .for_each(|(idx, system)| to_pdb(&system, &format!("/data/phd/waterkit/rust_waterkit/test/water_{idx}.pdb")));
 }
 
 

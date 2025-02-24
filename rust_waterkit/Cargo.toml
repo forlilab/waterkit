@@ -23,3 +23,6 @@ simple-logging = "2.0.2"
 
 [features]
 extension-module = ["pyo3/extension-module"]
+
+[profile.release]
+debug = true

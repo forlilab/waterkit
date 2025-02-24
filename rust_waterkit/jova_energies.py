@@ -38,30 +38,30 @@ PARAMS = {
 }
 
 def get_data_form_meeko(pdb_file, save=False):
-    with open(pdb_file) as fi:
-        pdbstring = fi.read()
+    # with open(pdb_file) as fi:
+    #     pdbstring = fi.read()
         
-    blunt_ends = [("A:1", 0)]
-    mk_prep = meeko.MoleculePreparation(
-        merge_these_atom_types=[],
-        load_atom_params=["vina_params", "openff"],
-        charge_model="espaloma",
-    )
-    templates = meeko.ResidueChemTemplates.create_from_defaults()
-    polymer = meeko.Polymer.from_pdb_string(pdb_string=pdbstring,
-                                            chem_templates=templates,
-                                            mk_prep=mk_prep,
-                                            allow_bad_res=True,
-                                            default_altloc="A",
-                                            blunt_ends=blunt_ends)
+    # blunt_ends = [("A:1", 0)]
+    # mk_prep = meeko.MoleculePreparation(
+    #     merge_these_atom_types=[],
+    #     load_atom_params=["vina_params", "openff"],
+    #     charge_model="espaloma",
+    # )
+    # templates = meeko.ResidueChemTemplates.create_from_defaults()
+    # polymer = meeko.Polymer.from_pdb_string(pdb_string=pdbstring,
+    #                                         chem_templates=templates,
+    #                                         mk_prep=mk_prep,
+    #                                         allow_bad_res=True,
+    #                                         default_altloc="A",
+    #                                         blunt_ends=blunt_ends)
     # json_s = polymer.to_json()
     # with open("target.json", "w") as fo:
     #     fo.write(json_s)
 
-    # with open("/data/phd/waterkit/rust_waterkit/target.json") as fi:
-    #     json_string = fi.read()
+    with open("/data/phd/waterkit/rust_waterkit/target.json") as fi:
+        json_string = fi.read()
 
-    # polymer = meeko.Polymer.from_json(json_string)
+    polymer = meeko.Polymer.from_json(json_string)
     return polymer
 
 
@@ -111,47 +111,52 @@ def get_molsetup_coords(molsetup):
 
 if __name__ == "__main__":
     polymer = get_data_form_meeko("/data/phd/waterkit/example/1uyg_no_ligand.pdb")
-    molsetups = load_waters("/data/phd/waterkit/rust_waterkit/test/water_0_optimized.pdb")
-    # molsetups = load_waters("/data/phd/waterkit/example/traj/water_000001.pdb")
-    docksys = jova.DockingSystem(
-            moving_molsetups=molsetups,
-            parameters=PARAMS,
-            static_molsetup=None,
-            polymer=polymer,
-            mapo=None,
-            grid_desolv=None
-        )
-
-
-    # print("Everything okay!")
-    energies = {}
-    g = docksys.get_current_genes()
-    e = docksys.eval(g, log=energies)
-    # print(energies)
-    # terms_of_interest = ["lj_12_6", "coulomb"]
-    # mapping = {0: "Receptor", 
-    #            1: f"Water at coords: {get_molsetup_coords(molsetups[0])}", 
-    #            2: f"Water at coords: {get_molsetup_coords(molsetups[1])}",
-    #            3: f"Water at coords: {get_molsetup_coords(molsetups[2])}",
-    #            4: f"Water at coords: {get_molsetup_coords(molsetups[3])}"}
-    # for term in terms_of_interest:
-    #     data = energies['direct']['terms'][term]
-    #     print(f"{term}")
-    #     for idx, value in enumerate(data):
-    #         print(f"\t{mapping[energies['direct']['pairs'][idx][0]]} - {mapping[energies['direct']['pairs'][idx][1]]}: {value}")
     
-    # total_lj = 0
-    # total_elec = 0
-    # for idx, p in enumerate(energies['direct']['pairs']):
-    #     if 1 in p:
-    #         print(energies['direct']['terms']['lj_12_6'][idx])
-    #         total_lj += energies['direct']['terms']['lj_12_6'][idx]
-    #         total_elec += energies['direct']['terms']['coulomb'][idx]
-    # print(f"Total LJ for {mapping[1]}:\n")
-    # print(f"\t{total_lj}")
-    # print(f"Total Coulomb for {mapping[1]}:\n")
-    # print(f"\t{total_elec}")
-    print(f"Total Energy: {energies['direct_sum']}")
+    # molsetups_names = ["/data/phd/waterkit/example/traj/water_000001.pdb",
+    for i in range(0, 100):
+        molsetups_names = [f"/data/phd/waterkit/rust_waterkit/test/water_{i}_unoptimized.pdb",
+                        f"/data/phd/waterkit/rust_waterkit/test/water_{i}_optimized.pdb"]
+        for name in molsetups_names:
+            molsetups = load_waters(name)
+            docksys = jova.DockingSystem(
+                    moving_molsetups=molsetups,
+                    parameters=PARAMS,
+                    static_molsetup=None,
+                    polymer=polymer,
+                    mapo=None,
+                    grid_desolv=None
+                )
+
+
+            # print("Everything okay!")
+            energies = {}
+            g = docksys.get_current_genes()
+            e = docksys.eval(g, log=energies)
+            # print(energies)
+            # terms_of_interest = ["lj_12_6", "coulomb"]
+            # mapping = {0: "Receptor", 
+            #            1: f"Water at coords: {get_molsetup_coords(molsetups[0])}", 
+            #            2: f"Water at coords: {get_molsetup_coords(molsetups[1])}",
+            #            3: f"Water at coords: {get_molsetup_coords(molsetups[2])}",
+            #            4: f"Water at coords: {get_molsetup_coords(molsetups[3])}"}
+            # for term in terms_of_interest:
+            #     data = energies['direct']['terms'][term]
+            #     print(f"{term}")
+            #     for idx, value in enumerate(data):
+            #         print(f"\t{mapping[energies['direct']['pairs'][idx][0]]} - {mapping[energies['direct']['pairs'][idx][1]]}: {value}")
+            
+            # total_lj = 0
+            # total_elec = 0
+            # for idx, p in enumerate(energies['direct']['pairs']):
+            #     if 1 in p:
+            #         print(energies['direct']['terms']['lj_12_6'][idx])
+            #         total_lj += energies['direct']['terms']['lj_12_6'][idx]
+            #         total_elec += energies['direct']['terms']['coulomb'][idx]
+            # print(f"Total LJ for {mapping[1]}:\n")
+            # print(f"\t{total_lj}")
+            # print(f"Total Coulomb for {mapping[1]}:\n")
+            # print(f"\t{total_elec}")
+            print(f"Total Energy for {name.split('/')[-1]}: {energies['direct_sum']}")
 
 
     #11760.157995647669

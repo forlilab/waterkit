@@ -68,7 +68,7 @@ def get_data_form_meeko(wanted_residues, pdb_file, save=False):
     #     pdb_f = polymer.to_pdb()
     #     with open("meeko.pdb", "w") as fo:
     #         fo.write(pdb_f)
-    with open("target.json") as fi:
+    with open("/data/phd/waterkit/rust_waterkit/target.json") as fi:
         json_string = fi.read()
 
     polymer = meeko.Polymer.from_json(json_string)
@@ -275,7 +275,7 @@ if __name__ == "__main__":
         print("Starting waterkit!")
         aps = anchor_points
         use_grids = True
-        n_frames = 1
+        n_frames = 1000
 
         # Setup grids at the beginning
         grid = rust_waterkit.setup_system(parametrized_atoms, x_size, y_size, z_size, spacing, center)
