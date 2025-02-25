@@ -1,4 +1,5 @@
 use core::f64;
+use std::collections::HashSet;
 use pyo3::prelude::*;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
@@ -13,6 +14,7 @@ use crate::consts;
 use crate::optimizer::optimize;
 use crate::sampling::sample_using_grids;
 use crate::setup::setup_grid;
+use crate::utils;
 use crate::utils::to_pdb;
 use crate::water::WaterMolecule;
 
@@ -20,7 +22,8 @@ use crate::water::WaterMolecule;
 fn run_single_waterkit_with_grids(receptor_points: &[Atom], 
     water_configurations: &Vec<[f64; 6]>, 
     anchor_points: &[AnchorPoint], 
-    mut grid: Grid3D) -> Vec<Atom> {
+    mut grid: Grid3D,
+    epoch: usize) -> Vec<Atom> {
         let mut receptor_map = receptor_points.to_vec();
         let mut last_residue_number = receptor_map.iter().map(|n| n.residue_number).max().unwrap_or(1);
 
@@ -38,25 +41,28 @@ fn run_single_waterkit_with_grids(receptor_points: &[Atom],
         } 
         // utils::to_pdb(&waters, &format!("test/water_{epoch}_unoptimized.pdb"));
 
-        // optimize_water_network(&mut receptor_map, &new_water_molecules, &mut grid, &format!("test/water_{epoch}_optimized.pdb"));
-        waters
+        let optimized_waters = optimize_water_network(&mut receptor_map, &new_water_molecules, &mut grid, &format!("test/water_{epoch}_optimized.pdb"));
+        optimized_waters
 }
 
-pub fn optimize_water_network(receptor_map: &mut Vec<Atom>, new_waters: &Vec<WaterMolecule>, grid: &mut Grid3D, filename: &str) {
+pub fn optimize_water_network(receptor_map: &mut Vec<Atom>, new_waters: &Vec<WaterMolecule>, grid: &mut Grid3D, filename: &str) -> Vec<Atom> {
     let mut rng = thread_rng();
-    let mut waters_res_number: Vec<i32> = new_waters.iter().map(|w| w.get_res_number()).collect();
-    // Remove duplicates
-    waters_res_number.sort();
-    waters_res_number.dedup();
+
+    let mut waters_res_number: Vec<i32> = new_waters.iter()
+        .map(|w| w.get_res_number())
+        .collect::<HashSet<_>>() // Collect unique values first
+        .into_iter()
+        .collect();
+
     waters_res_number.shuffle(&mut rng);
     for res_number in waters_res_number.iter() {
         // println!("{}", res_number);
         let mut filtered = Vec::new();
 
         receptor_map
-            .retain(|a| {
-                if &a.residue_number == res_number {
-                    filtered.push(a.clone());
+            .retain(|atom| {
+                if atom.residue_number == *res_number {
+                    filtered.push(atom.clone());
                     false
                 } else {
                     true
@@ -68,7 +74,8 @@ pub fn optimize_water_network(receptor_map: &mut Vec<Atom>, new_waters: &Vec<Wat
 
         receptor_map.extend(filtered);
     }
-    to_pdb(&receptor_map.iter().filter(|x| x.atom_type() == "OW" || x.atom_type() == "HW").cloned().collect::<Vec<Atom>>(), filename);
+    receptor_map.iter().filter(|x| x.atom_type() == "OW" || x.atom_type() == "HW").cloned().collect::<Vec<Atom>>()
+    // to_pdb(&receptor_map.iter().filter(|x| x.atom_type() == "OW" || x.atom_type() == "HW").cloned().collect::<Vec<Atom>>(), filename);
 }
 
 
@@ -80,17 +87,18 @@ pub fn run_parallel_waterkit(receptor_points: Vec<Atom>,
     epochs: usize) {
 
     let waters: Vec<Vec<Atom>> = (0..epochs).into_par_iter()
-        .map(|_| run_single_waterkit_with_grids(
+        .map(|epoch| run_single_waterkit_with_grids(
                 &receptor_points.clone(),
                 &water_configurations.clone(),
                 &anchor_points.clone(),
                 grid.clone(),
+                epoch
             )).collect();
             
     println!("Done sampling...saving results!");
     
-    waters.into_par_iter().enumerate()
-        .for_each(|(idx, system)| to_pdb(&system, &format!("/home/niccolo/phd/waterkit/rust_waterkit/test/water_{idx}.pdb")));
+    waters.par_iter().enumerate()
+        .for_each(|(idx, system)| to_pdb(&system, &format!("/home/niccolo/phd/waterkit/rust_waterkit/test/water_{idx}_optimized.pdb")));
 }
 
 

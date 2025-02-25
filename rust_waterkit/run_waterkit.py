@@ -275,7 +275,7 @@ if __name__ == "__main__":
 
         print("Starting waterkit!")
         aps = anchor_points
-        n_frames = 1
+        n_frames = 1000
 
         # Setup grids at the beginning
         grid = rust_waterkit.setup_system(parametrized_atoms, x_size, y_size, z_size, spacing, center)

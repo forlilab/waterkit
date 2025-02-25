@@ -8,7 +8,6 @@ use kdtree::KdTree;
 use crate::atom::Atom;
 use crate::energy;
 use crate::geometry;
-use crate::vina_ff;
 
 pub enum ProbeType {
     ODa,
