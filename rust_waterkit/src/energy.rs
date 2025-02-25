@@ -1,6 +1,7 @@
 use crate::atom::Atom;
 use crate::geometry;
 use crate::consts;
+use crate::vina_ff;
 
 
 /// Calculate the Lennard-Jones interaction energy
@@ -140,4 +141,46 @@ pub fn get_q_energy(atoms_1: &Vec<Atom>, sphere_center: &[f64; 3]) -> f64 {
         // }
     }
     total_energy
+}
+
+
+pub fn update_grid_energies(atoms_1: &Vec<Atom>, sphere_center: &[f64; 3]) -> (f64, f64, f64) {
+    let mut total_oda_energy = 0.0;
+    let mut total_ow_energy = 0.0;
+    let mut total_q_energy = 0.0;
+
+    for atom_1 in atoms_1.iter() {
+        let atom_1_coords = atom_1.coords();
+        let distance = f64::max(geometry::euclidean_distance(&atom_1_coords, sphere_center), 1e-8_f64);
+
+        if atom_1.atom_type() != &"HW" {
+            let lj_energy = lennard_jones_rmin_half(atom_1.epsilon(),
+            consts::TIP3P_EPSILON,
+            distance,
+            atom_1.rmin_half(),
+            consts::RMIN_HALF_WATER);
+            total_ow_energy += lj_energy;
+        }
+
+        let electrostatics = coulomb_energy(atom_1.charge(), 1.0, distance);
+        total_q_energy += electrostatics;
+
+        if distance < consts::VINA_DISTANCE_CUTOFF {
+            if atom_1.is_heavy_atom() {
+                let rijs = atom_1.vina_rij() + consts::VINA_O_RIJ;
+                let vg1 = vina_ff::vina_gauss1(&distance, &rijs) * consts::VINA_GAUSS1_W;
+                let vg2 = vina_ff::vina_gauss2(&distance, &rijs) * consts::VINA_GAUSS2_W;
+                let rep = vina_ff::vina_repulsion(&distance, &rijs) * consts::VINA_REPULSION_W;
+                // println!()
+                total_oda_energy += vg1 + vg2 + rep;
+                
+                // only donors or acceptors contribute to this term
+                if atom_1.is_vina_acceptor() || atom_1.is_vina_donor() {
+                    let hb = vina_ff::vina_hb(&distance, &rijs) * consts::VINA_HB_W;
+                    total_oda_energy += hb;
+                }
+            }
+        }
+    }
+    (total_oda_energy, total_ow_energy, total_q_energy)
 }

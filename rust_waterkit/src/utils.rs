@@ -1,5 +1,6 @@
 use std::fs::OpenOptions;
 use std::io::{BufWriter, Write};
+use std::time::SystemTime;
 
 use crate::atom::Atom;
 
@@ -93,4 +94,13 @@ pub fn to_pdb(atoms: &Vec<Atom>, fname: &str) {
         write!(f, "{}", line).expect("Unable to write data");
         // fs::write(fname, line).expect("Unable to write file");
     }
+}
+
+pub fn timeit<F: Fn() -> T, T>(f: F) -> T {
+    let start = SystemTime::now();
+    let result = f();
+    let end = SystemTime::now();
+    let duration = end.duration_since(start).unwrap();
+    println!("it took {} seconds", duration.as_secs());
+    result
 }

@@ -1,6 +1,4 @@
 use core::f64;
-use std::io::Write;
-use std::fs::OpenOptions;
 use pyo3::prelude::*;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
@@ -12,63 +10,31 @@ use crate::energy::energy_for_real_water;
 use crate::grid::Grid3D;
 use crate::grid::ProbeType;
 use crate::consts;
-use crate::monte_carlo;
 use crate::optimizer::optimize;
-use crate::energy;
-use crate::utils;
-use crate::sampling::sample;
 use crate::sampling::sample_using_grids;
 use crate::setup::setup_grid;
 use crate::utils::to_pdb;
 use crate::water::WaterMolecule;
 
 
-fn run_single_waterkit(receptor_points: &Vec<Atom>, 
+fn run_single_waterkit_with_grids(receptor_points: &[Atom], 
     water_configurations: &Vec<[f64; 6]>, 
-    anchor_points: &Vec<AnchorPoint>, 
+    anchor_points: &[AnchorPoint], 
     mut grid: Grid3D) -> Vec<Atom> {
-        // let start_time = Instant::now();
-        let mut receptor_map = receptor_points.clone();
-        receptor_map.sort_by_key(|n| n.residue_number);
-        let mut last_residue_number = receptor_map.last().unwrap().residue_number.clone();
-        let mut mutable_anchor_points = anchor_points.clone();
+        let mut receptor_map = receptor_points.to_vec();
+        let mut last_residue_number = receptor_map.iter().map(|n| n.residue_number).max().unwrap_or(1);
 
-
-        for _i in 0..3 {
-            println!("Epoch {}", _i);
-            sample(&mut grid, &mut receptor_map, &mut mutable_anchor_points, &water_configurations, &mut last_residue_number);
-            // let waters: Vec<Atom> = receptor_map.iter().filter(|x| x.atom_type() == "OW" || x.atom_type() == "HW").cloned().collect();
-            // utils::to_pdb(&waters, &format!("test/water_{_i}_unoptimized.pdb"));
-        }
-        let waters: Vec<Atom> = receptor_map.iter().filter(|x| x.atom_type() == "OW" || x.atom_type() == "HW").cloned().collect();
-        utils::to_pdb(&waters, &format!("test/water_unoptimized.pdb"));
-        receptor_map
-}
-
-
-fn run_single_waterkit_with_grids(receptor_points: &Vec<Atom>, 
-    water_configurations: &Vec<[f64; 6]>, 
-    anchor_points: &Vec<AnchorPoint>, 
-    mut grid: Grid3D,
-    epoch: usize) -> Vec<Atom> {
-        let mut receptor_map = receptor_points.clone();
-        // This is to keep track of the last atom
-        receptor_map.sort_by_key(|n| n.residue_number);
-        let mut last_residue_number = receptor_map.last().unwrap().residue_number.clone();
-
-        let mut mutable_anchor_points = anchor_points.clone();
+        let mut mutable_anchor_points = anchor_points.to_vec();
         let mut new_water_molecules = Vec::new();
         for _i in 0..3 {
             sample_using_grids(&mut grid, &mut mutable_anchor_points, &water_configurations, &mut new_water_molecules, &mut last_residue_number);
         }
 
         // let waters: Vec<Atom> = receptor_map.iter().filter(|x| x.atom_type() == "OW" || x.atom_type() == "HW").cloned().collect();
-        let mut waters = Vec::new();
+        let mut waters: Vec<Atom> = Vec::with_capacity(new_water_molecules.len() * 3);
         for w in new_water_molecules.iter() {
-            for a in w.as_vec() {
-                waters.push(a.clone());
-                receptor_map.push(a.clone());
-            }
+            waters.extend(w.as_vec().into_iter());
+            receptor_map.extend(w.as_vec().into_iter());
         } 
         // utils::to_pdb(&waters, &format!("test/water_{epoch}_unoptimized.pdb"));
 
@@ -105,56 +71,26 @@ pub fn optimize_water_network(receptor_map: &mut Vec<Atom>, new_waters: &Vec<Wat
     to_pdb(&receptor_map.iter().filter(|x| x.atom_type() == "OW" || x.atom_type() == "HW").cloned().collect::<Vec<Atom>>(), filename);
 }
 
-#[pyfunction]
-pub fn run_waterkit(receptor_points: Vec<Atom>, 
-    water_configurations: Vec<[f64; 6]>, 
-    anchor_points: Vec<AnchorPoint>, 
-    grid: Grid3D,
-    epochs: usize,
-    use_grids: bool) -> Vec<Vec<Atom>> {
-
-    let mut results = Vec::new();
-    if !use_grids {
-        results.push(run_single_waterkit(&receptor_points.clone(), &water_configurations.clone(), &anchor_points.clone(), grid.clone()));
-    } else {
-        results.push(run_single_waterkit_with_grids(
-            &receptor_points.clone(),
-            &water_configurations.clone(),
-            &anchor_points.clone(),
-            grid.clone(),
-            epochs
-        ));
-    }
-    return results;
-}
 
 #[pyfunction]
 pub fn run_parallel_waterkit(receptor_points: Vec<Atom>, 
     water_configurations: Vec<[f64; 6]>, 
     anchor_points: Vec<AnchorPoint>, 
     grid: Grid3D,
-    epochs: usize,
-    use_grids: bool) {
-
-    // for point in grid.all_points() {
-    //     println!("{} {} {} {}", point.energy_hw, point.coords[0], point.coords[1], point.coords[2]);
-    // }
+    epochs: usize) {
 
     let waters: Vec<Vec<Atom>> = (0..epochs).into_par_iter()
-        .map(|epoch| {
-            let new_waters= run_single_waterkit_with_grids(
+        .map(|_| run_single_waterkit_with_grids(
                 &receptor_points.clone(),
                 &water_configurations.clone(),
                 &anchor_points.clone(),
                 grid.clone(),
-                epoch
-            );
-            new_waters
-        }).collect();
+            )).collect();
+            
     println!("Done sampling...saving results!");
     
     waters.into_par_iter().enumerate()
-        .for_each(|(idx, system)| to_pdb(&system, &format!("/data/phd/waterkit/rust_waterkit/test/water_{idx}.pdb")));
+        .for_each(|(idx, system)| to_pdb(&system, &format!("/home/niccolo/phd/waterkit/rust_waterkit/test/water_{idx}.pdb")));
 }
 
 
