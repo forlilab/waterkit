@@ -173,9 +173,9 @@ pub fn sample_waters_with_grids(oxygen_atom: &[f64; 3],
         }
 
         let energy_value = lj_oxygen
-            + electrostatics_oxygen.unwrap() * OXYGEN_W_Q
-            + electrostatics_h1.unwrap() * HYDROGEN_W_Q
-            + electrostatics_h2.unwrap() * HYDROGEN_W_Q;
+            + electrostatics_oxygen.unwrap() * OXYGEN_W_Q_TIP3PFB
+            + electrostatics_h1.unwrap() * HYDROGEN_W_Q_TIP3PFB
+            + electrostatics_h2.unwrap() * HYDROGEN_W_Q_TIP3PFB;
 
         if energy_value < best_energy {
             best_energy = energy_value;

@@ -51,10 +51,10 @@ def _box_information(traj_filename):
 
 
 class WaterMinimizer:
-    def __init__(self, n_steps=100, restraint=None, platform="OpenCL", verbose=True):
+    def __init__(self, n_steps=50, restraint=None, platform="OpenCL", verbose=True):
         self._n_steps = n_steps
         self._restraint = restraint
-        self._platform = platform
+        # self._platform = platform
         self._verbose = verbose
 
     def minimize_trajectory(self, prmtop_filename, traj_filename, output_filename):
@@ -75,8 +75,8 @@ class WaterMinimizer:
 
         box = _box_information(traj_filename)
 
-        platform = Platform.getPlatform(self._platform)
-        platformProperties = {'Precision': 'single'}
+        # platform = Platform.getPlatform(self._platform)
+        # platformProperties = {'Precision': 'single'}
 
         prmtop = AmberPrmtopFile(prmtop_filename)
         parmedtop = pmd.load_file(prmtop_filename)
@@ -105,7 +105,8 @@ class WaterMinimizer:
 
             # Create simulation
             integrator = LangevinIntegrator(temperature, friction, dt)
-            simulation = Simulation(prmtop.topology, system, integrator, platform)
+            simulation = Simulation(prmtop.topology, system, integrator)
+            # simulation = Simulation(prmtop.topology, system, integrator, platform)
             simulation.context.setPositions(old_positions)
 
             # Minimize the water molecules

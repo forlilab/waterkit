@@ -27,9 +27,9 @@ impl WaterMolecule {
             let oxygen = Atom::new("OW".to_string(),
                 format!("{chain}:HOH:{resnumber}:0"),
                 oxygen_coords,
-                consts::RMIN_HALF_WATER,
-                consts::TIP3P_EPSILON,
-                consts::OXYGEN_W_Q,
+                consts::RMIN_HALF_WATER_TIP3PFB,
+                consts::EPSILON_TIP3PFB,
+                consts::OXYGEN_W_Q_TIP3PFB,
                 1.7,
                 true,
                 true
@@ -40,7 +40,7 @@ impl WaterMolecule {
                 hydrogen_1_coords,
                 0.0,
                 0.0,
-                consts::HYDROGEN_W_Q,
+                consts::HYDROGEN_W_Q_TIP3PFB,
                 0.0,
                 false,
                 false
@@ -50,7 +50,7 @@ impl WaterMolecule {
                 hydrogen_2_coords,
                 0.0,
                 0.0,
-                consts::HYDROGEN_W_Q,
+                consts::HYDROGEN_W_Q_TIP3PFB,
                 0.0,
                 false,
                 false

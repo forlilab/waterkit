@@ -57,70 +57,21 @@ fn rotate_hydrogens(oxygen_coords: [f64; 3], h1_coords: [f64; 3], h2_coords: [f6
 }
 
 fn get_energy(oxygen_pos: [f64; 3], h1_pos: [f64; 3], h2_pos: [f64; 3], grid: &Grid3D) -> f64 {
-    let mut energy_value = f64::INFINITY;
     // Need to interpolate the oxygen too since we are sampling small movements for this atom too 
-    let lj_oxygen = grid.trilinear_interpolation(oxygen_pos, ProbeType::OW);
+    let lj_oxygen = grid.trilinear_interpolation(oxygen_pos, ProbeType::OW).unwrap_or(f64::INFINITY);
 
     let electrostatics_h1 = grid.trilinear_interpolation(h1_pos, ProbeType::HW);
     let electrostatics_h2 = grid.trilinear_interpolation(h2_pos, ProbeType::HW);
     let electrostatics_oxygen = grid.trilinear_interpolation(oxygen_pos, ProbeType::HW);
-    if lj_oxygen.is_some() && electrostatics_h1.is_some() && electrostatics_h2.is_some() && electrostatics_oxygen.is_some() {
-        energy_value = lj_oxygen.unwrap() + (electrostatics_oxygen.unwrap() * consts::OXYGEN_W_Q) + (electrostatics_h1.unwrap()  * consts::HYDROGEN_W_Q) + (electrostatics_h2.unwrap() * consts::HYDROGEN_W_Q);
+    if electrostatics_h1.is_some() && electrostatics_h2.is_some() && electrostatics_oxygen.is_some() {
+        let energy_value = lj_oxygen
+            + electrostatics_oxygen.unwrap() * consts::OXYGEN_W_Q_TIP3PFB
+            + electrostatics_h1.unwrap() * consts::HYDROGEN_W_Q_TIP3PFB
+            + electrostatics_h2.unwrap() * consts::HYDROGEN_W_Q_TIP3PFB;
+        return energy_value;
     }
-    energy_value
+    f64::INFINITY
 }
-
-// pub fn optimize(water: &WaterMolecule, waters_in_system: &Vec<Atom>, grid: &mut Grid3D) -> WaterMolecule {   
-//     let res_number = water.get_res_number();
-//     let mut rng = rand::thread_rng();
-//     let mut update_grids = false;
-//     let water_atoms = water.as_vec();
-//     let mut original_oxygen_coords = water_atoms[0].coords();
-//     let mut original_h1_coords = water_atoms[1].coords();
-//     let mut original_h2_coords = water_atoms[2].coords();
-    
-//     // Monte Carlo parameters
-//     let num_steps = 1000;
-//     let max_disp = 0.1;
-//     // let beta = TEMPERATURE * BOLTZMANN_K;
-
-//     for _i in 0..num_steps {
-//         // Propose a move
-//         let translation = translate_oxygen(original_oxygen_coords, original_h1_coords, original_h2_coords, max_disp);
-//         let rotation = rotate_hydrogens(translation[0], translation[1], translation[2]);
-
-//         // Evaluate energy change
-//         let old_energy = get_energy(original_oxygen_coords, original_h1_coords, original_h2_coords, grid);
-//         let old_atoms = WaterMolecule::new(original_oxygen_coords, original_h1_coords, original_h2_coords, "".to_string(), res_number);
-//         let old_energy = energy_for_real_water(waters_in_system, &old_atoms.as_vec());
-
-//         // let new_energy = get_energy(translation[0], rotation[0], rotation[1], grid);
-//         let new_atoms = WaterMolecule::new(translation[0], rotation[0], rotation[1], "".to_string(), res_number);
-//         let new_energy = energy_for_real_water(waters_in_system, &new_atoms.as_vec());
-
-//         println!("Old Energy: {old_energy}");
-//         println!("New Energy: {new_energy}");
-//         // Metropolis acceptance criterion
-//         if monte_carlo::boltzmann_acceptance_rejection(&new_energy, &old_energy, &TEMPERATURE, &BOLTZMANN_K) {
-//             println!("Accepted!!\n");
-//             // Accept the move
-//             update_grids = true;
-//             original_oxygen_coords = translation[0];
-//             original_h1_coords = rotation[0];
-//             original_h2_coords = rotation[1];
-//         }
-//         else {
-//             update_grids = false;
-//         }
-//     }
-
-//     let optimized_water = WaterMolecule::new(original_oxygen_coords, original_h1_coords, original_h2_coords, "".to_string(), 1000000);
-//     if update_grids {
-//         grid.remove_points(&water.as_vec());
-//         grid.update_energies(&optimized_water.as_vec());
-//     }
-//     optimized_water
-// }
 
 pub fn optimize(water: &mut Vec<Atom>, waters_in_system: &Vec<Atom>, grid: &mut Grid3D) -> WaterMolecule {   
     let res_number = water[0].residue_number;
@@ -138,12 +89,14 @@ pub fn optimize(water: &mut Vec<Atom>, waters_in_system: &Vec<Atom>, grid: &mut 
     
     // Early stopping parameters
     let early_stop_threshold = 1e-4; // Minimum energy improvement required
-    let max_no_improve_steps = 15; // If no improvement in X steps, stop early
+    let max_no_improve_steps = 50; // If no improvement in X steps, stop early
     let mut no_improve_counter = 0;
     
     // Compute initial energy once
     let old_atoms = WaterMolecule::new(original_oxygen_coords, original_h1_coords, original_h2_coords, "".to_string(), res_number);
     let mut old_energy = energy_for_real_water(waters_in_system, &old_atoms.as_vec());
+    // let mut old_energy = get_energy(original_oxygen_coords, original_h1_coords, original_h2_coords, &grid);
+    // grid.remove_points(&water);
 
     for step in 0..num_steps {
         // Propose new move
@@ -155,6 +108,7 @@ pub fn optimize(water: &mut Vec<Atom>, waters_in_system: &Vec<Atom>, grid: &mut 
 
         // Compute new energy
         let new_energy = energy_for_real_water(waters_in_system, &new_atoms.as_vec());
+        // let new_energy = get_energy(translation[0], rotation[0], rotation[1], &grid);
 
         // Compute energy difference (avoids redundant computation)
         let delta_energy = new_energy - old_energy;
@@ -194,18 +148,91 @@ pub fn optimize(water: &mut Vec<Atom>, waters_in_system: &Vec<Atom>, grid: &mut 
         }
     }
 
-    let optimized_water = WaterMolecule::new(original_oxygen_coords, original_h1_coords, original_h2_coords, "".to_string(), 1000000);
+    let optimized_water = WaterMolecule::new(original_oxygen_coords, original_h1_coords, original_h2_coords, "".to_string(), res_number);
 
     // Update grid if needed
     if update_grids {
         grid.remove_points(&water);
-
         water[0].set_coords(original_oxygen_coords);
         water[1].set_coords(original_h1_coords);
         water[2].set_coords(original_h2_coords);
-
-        grid.update_energies(&optimized_water.as_vec());
+        grid.update_energies(&optimized_water.as_vec());    
     }
+    // grid.update_energies(&optimized_water.as_vec());
+
+    optimized_water
+}
+
+pub fn optimize_using_grids(water: &Vec<Atom>, grid: &mut Grid3D) -> WaterMolecule {   
+    let res_number = water[0].residue_number;
+    // let mut update_grids = false;
+    
+    // Extract initial coordinates
+    let mut original_oxygen_coords = water[0].coords();
+    let mut original_h1_coords = water[1].coords();
+    let mut original_h2_coords = water[2].coords();
+
+    // Monte Carlo parameters
+    let num_steps = 2000;
+    let mut max_disp = 0.2;
+    let mut accepted_moves = 0;
+    
+    // Early stopping parameters
+    let early_stop_threshold = 1e-4; // Minimum energy improvement required
+    let max_no_improve_steps = 50; // If no improvement in X steps, stop early
+    let mut no_improve_counter = 0;
+    
+    // Compute initial energy once
+    let mut old_energy = get_energy(original_oxygen_coords, original_h1_coords, original_h2_coords, &grid);
+    grid.remove_points(&water);
+
+    for step in 0..num_steps {
+        // Propose new move
+        let translation = translate_oxygen(original_oxygen_coords, original_h1_coords, original_h2_coords, max_disp);
+        let rotation = rotate_hydrogens(translation[0], translation[1], translation[2]);
+
+        // Compute new energy
+        let new_energy = get_energy(translation[0], rotation[0], rotation[1], &grid);
+
+        // Compute energy difference (avoids redundant computation)
+        let delta_energy = new_energy - old_energy;
+
+        // Metropolis acceptance criterion
+        if monte_carlo::boltzmann_acceptance_rejection(&new_energy, &old_energy, &TEMPERATURE, &BOLTZMANN_K) {
+            // Accept the move
+            original_oxygen_coords = translation[0];
+            original_h1_coords = rotation[0];
+            original_h2_coords = rotation[1];
+            old_energy = new_energy;  // Update energy
+            accepted_moves += 1;
+            no_improve_counter = 0; // Reset counter since we improved
+        } else {
+            no_improve_counter += 1;
+        }
+
+        // **Early stopping:** If no improvement in `max_no_improve_steps`, stop
+        if no_improve_counter >= max_no_improve_steps {
+            break;
+        }
+
+        // **Early stopping:** If energy change is below the threshold, stop
+        if delta_energy.abs() < early_stop_threshold {
+            break;
+        }
+
+        // **Adaptive step size adjustment every 10 steps**
+        if step % 10 == 0 {
+            let acceptance_rate = accepted_moves as f64 / (step + 1) as f64;
+            if acceptance_rate < 0.3 {
+                max_disp *= 0.9;  // Reduce step size
+            } else if acceptance_rate > 0.7 {
+                max_disp *= 1.1;  // Increase step size
+            }
+        }
+    }
+
+    let optimized_water = WaterMolecule::new(original_oxygen_coords, original_h1_coords, original_h2_coords, "".to_string(), res_number);
+    grid.update_energies(&optimized_water.as_vec());
 
     optimized_water
 }

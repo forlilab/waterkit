@@ -11,6 +11,12 @@ pub const TIP3P_EPSILON: f64 = 0.15210325;
 pub const OXYGEN_W_Q: f64 = -0.8340;
 pub const HYDROGEN_W_Q: f64 = 0.4170;
 
+// TIP3PFB
+pub const RMIN_HALF_WATER_TIP3PFB: f64 = 1.7835723; // TIP3P
+pub const EPSILON_TIP3PFB: f64 = 0.15586604;
+pub const OXYGEN_W_Q_TIP3PFB: f64 = -0.8484;
+pub const HYDROGEN_W_Q_TIP3PFB: f64 = 0.4242;
+
 
 // VINA
 pub const VINA_GAUSS1_SIGMA: f64 = 0.5;

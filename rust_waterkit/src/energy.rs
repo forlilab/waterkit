@@ -113,12 +113,22 @@ pub fn get_ow_energy(atoms_1: &Vec<Atom>, sphere_center: &[f64; 3]) -> f64{
         let distance = f64::max(geometry::euclidean_distance(&atom_1_coords,
             sphere_center), 1e-8_f64);
         // if distance < consts::ELECTROSTATICS_CUTOFF {
+            // TIP3P
+            // if atom_1.atom_type() != &"HW" {
+            //     let lj_energy = lennard_jones_rmin_half(atom_1.epsilon(),
+            //     consts::TIP3P_EPSILON,
+            //     distance,
+            //     atom_1.rmin_half(),
+            //     consts::RMIN_HALF_WATER);
+            //     total_energy += lj_energy;
+            // }
+            // TIP3PFB
             if atom_1.atom_type() != &"HW" {
                 let lj_energy = lennard_jones_rmin_half(atom_1.epsilon(),
-                consts::TIP3P_EPSILON,
+                consts::EPSILON_TIP3PFB,
                 distance,
                 atom_1.rmin_half(),
-                consts::RMIN_HALF_WATER);
+                consts::RMIN_HALF_WATER_TIP3PFB);
                 total_energy += lj_energy;
             }
         // }
@@ -155,10 +165,10 @@ pub fn update_grid_energies(atoms_1: &Vec<Atom>, sphere_center: &[f64; 3]) -> (f
 
         if atom_1.atom_type() != &"HW" {
             let lj_energy = lennard_jones_rmin_half(atom_1.epsilon(),
-            consts::TIP3P_EPSILON,
+            consts::EPSILON_TIP3PFB,
             distance,
             atom_1.rmin_half(),
-            consts::RMIN_HALF_WATER);
+            consts::RMIN_HALF_WATER_TIP3PFB);
             total_ow_energy += lj_energy;
         }
 
