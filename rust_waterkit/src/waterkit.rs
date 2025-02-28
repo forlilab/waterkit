@@ -4,6 +4,7 @@ use std::time::SystemTime;
 use pyo3::prelude::*;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
+use rand::Rng;
 use rayon::prelude::*;
 
 use crate::anchor_point::AnchorPoint;
@@ -66,8 +67,10 @@ pub fn optimize_water_nw_with_grids(new_waters: &mut Vec<WaterMolecule>, grid: &
     //         .for_each(|a| optimized_waters.push(a));
     // } 
     for step in 0..1000 {
-        let mut water = new_waters.choose(&mut rng).unwrap();
-        optimize_using_grids(&mut water, grid);
+        let index = rng.gen_range(0..new_waters.len()); // Generate a random index
+        let water = &new_waters[index];
+        let new_water = optimize_using_grids(water, grid);
+        new_waters[index] = new_water;
     }
 }
 

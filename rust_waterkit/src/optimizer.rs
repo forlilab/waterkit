@@ -163,7 +163,7 @@ pub fn optimize(water: &mut Vec<Atom>, waters_in_system: &Vec<Atom>, grid: &mut 
     optimized_water
 }
 
-pub fn optimize_using_grids(water_molecule: &mut WaterMolecule, grid: &mut Grid3D) {   
+pub fn optimize_using_grids(water_molecule: &WaterMolecule, grid: &mut Grid3D) -> WaterMolecule{   
     let water = water_molecule.as_vec();
     let res_number = water[0].residue_number;
     // let mut update_grids = false;
@@ -232,10 +232,7 @@ pub fn optimize_using_grids(water_molecule: &mut WaterMolecule, grid: &mut Grid3
         }
     }
 
-    // let optimized_water = WaterMolecule::new(original_oxygen_coords, original_h1_coords, original_h2_coords, "".to_string(), res_number);
-    // grid.update_energies(&optimized_water.as_vec());
-
-    // optimized_water
-    water_molecule.update_coords(original_oxygen_coords, original_h1_coords, original_h2_coords)
-    grid.update_energies(&water.as_vec());
+    let optimized_water = WaterMolecule::new(original_oxygen_coords, original_h1_coords, original_h2_coords, "".to_string(), res_number);
+    grid.update_energies(&optimized_water.as_vec());
+    optimized_water
 }
