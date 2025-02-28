@@ -36,29 +36,39 @@ fn run_single_waterkit_with_grids(receptor_points: &[Atom],
 
     // let waters: Vec<Atom> = receptor_map.iter().filter(|x| x.atom_type() == "OW" || x.atom_type() == "HW").cloned().collect();
     let mut waters: Vec<Atom> = Vec::with_capacity(new_water_molecules.len() * 3);
-    for w in new_water_molecules.iter() {
-        waters.extend(w.as_vec().into_iter());
-        receptor_map.extend(w.as_vec().into_iter());
-    } 
+    // for w in new_water_molecules.iter() {
+    //     waters.extend(w.as_vec().into_iter());
+    //     receptor_map.extend(w.as_vec().into_iter());
+    // } 
     // utils::to_pdb(&waters, &format!("test/water_{epoch}_unoptimized.pdb"));
+    // waters
 
     // let optimized_waters = optimize_water_network(&mut receptor_map, &new_water_molecules, &mut grid, &format!("test/water_{epoch}_optimized.pdb"));
-    let optimized_waters = optimize_water_nw_with_grids(&mut new_water_molecules, &mut grid);
-    optimized_waters
+    // let optimized_waters = optimize_water_nw_with_grids(&mut new_water_molecules, &mut grid);
+    // optimized_waters
+    optimize_water_nw_with_grids(&mut new_water_molecules, &mut grid);
+    for w in new_water_molecules.into_iter() {
+        waters.extend(w.as_vec().into_iter());
+    }
+    waters
 }
 
-pub fn optimize_water_nw_with_grids(new_waters: &mut Vec<WaterMolecule>, grid: &mut Grid3D) -> Vec<Atom> {
-    let mut optimized_waters = Vec::new();
+pub fn optimize_water_nw_with_grids(new_waters: &mut Vec<WaterMolecule>, grid: &mut Grid3D) {
+    // let mut optimized_waters = Vec::new();
     let mut rng = thread_rng();
-    new_waters.shuffle(&mut rng);
-    for water in new_waters.into_iter() {
-        let water_atoms = optimize_using_grids(&water.as_vec(), grid).as_vec();
-        water_atoms
-            .into_iter()
-            .for_each(|a| optimized_waters.push(a));
-    } 
 
-    optimized_waters
+    // Standard approach
+    // new_waters.shuffle(&mut rng);
+    // for water in new_waters.into_iter() {
+    //     let water_atoms = optimize_using_grids(&water.as_vec(), grid).as_vec();
+    //     water_atoms
+    //         .into_iter()
+    //         .for_each(|a| optimized_waters.push(a));
+    // } 
+    for step in 0..1000 {
+        let mut water = new_waters.choose(&mut rng).unwrap();
+        optimize_using_grids(&mut water, grid);
+    }
 }
 
 pub fn optimize_water_network(receptor_map: &mut Vec<Atom>, new_waters: &Vec<WaterMolecule>, grid: &mut Grid3D, filename: &str) -> Vec<Atom> {
@@ -130,7 +140,9 @@ pub fn run_parallel_waterkit(receptor_points: Vec<Atom>,
     println!("Done sampling...saving results!");
     
     waters.par_iter().enumerate()
-        .for_each(|(idx, system)| to_pdb(&system, &format!("/home/niccolo/phd/waterkit/rust_waterkit/test/water_{idx}_optimized.pdb")));
+        .for_each(|(idx, system)| to_pdb(&system, &format!("/data/phd/waterkit/rust_waterkit/test/water_{idx}_optimized.pdb")));
+    // waters.par_iter().enumerate()
+    //     .for_each(|(idx, system)| to_pdb(&system, &format!("/data/phd/waterkit/rust_waterkit/test/water_{idx}_unoptimized.pdb")));
 }
 
 
