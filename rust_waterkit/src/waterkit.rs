@@ -19,13 +19,17 @@ use crate::sampling::sample_using_grids;
 use crate::setup::setup_grid;
 use crate::utils::to_pdb;
 use crate::water::WaterMolecule;
+use crate::energy;
 
 
 fn run_single_waterkit_with_grids(receptor_points: &[Atom], 
     water_configurations: &Vec<[f64; 6]>, 
     anchor_points: &[AnchorPoint], 
     mut grid: Grid3D,
-    epoch: usize) -> Vec<Atom> {
+    epoch: usize, 
+    num_steps: i32, 
+    optimization_steps: i32) -> Vec<Atom> {
+    
     let mut receptor_map = receptor_points.to_vec();
     let mut last_residue_number = receptor_map.iter().map(|n| n.residue_number).max().unwrap_or(1);
 
@@ -47,30 +51,45 @@ fn run_single_waterkit_with_grids(receptor_points: &[Atom],
     // let optimized_waters = optimize_water_network(&mut receptor_map, &new_water_molecules, &mut grid, &format!("test/water_{epoch}_optimized.pdb"));
     // let optimized_waters = optimize_water_nw_with_grids(&mut new_water_molecules, &mut grid);
     // optimized_waters
-    optimize_water_nw_with_grids(&mut new_water_molecules, &mut grid);
+    optimize_water_nw_with_grids_sa(&mut new_water_molecules, &receptor_map, &mut grid, num_steps, optimization_steps);
     for w in new_water_molecules.into_iter() {
         waters.extend(w.as_vec().into_iter());
     }
     waters
 }
 
-pub fn optimize_water_nw_with_grids(new_waters: &mut Vec<WaterMolecule>, grid: &mut Grid3D) {
+pub fn optimize_water_nw_with_grids(new_waters: &mut Vec<WaterMolecule>, grid: &mut Grid3D, num_steps: i32, optimization_steps: i32) {
     // let mut optimized_waters = Vec::new();
     let mut rng = thread_rng();
 
-    // Standard approach
-    // new_waters.shuffle(&mut rng);
-    // for water in new_waters.into_iter() {
-    //     let water_atoms = optimize_using_grids(&water.as_vec(), grid).as_vec();
-    //     water_atoms
-    //         .into_iter()
-    //         .for_each(|a| optimized_waters.push(a));
-    // } 
-    for step in 0..1000 {
-        let index = rng.gen_range(0..new_waters.len()); // Generate a random index
-        let water = &new_waters[index];
-        let new_water = optimize_using_grids(water, grid);
-        new_waters[index] = new_water;
+    for step in 0..num_steps {
+        if let Some(water) = new_waters.choose_mut(&mut rng) {
+            optimize_using_grids(water, grid, optimization_steps, consts::TEMPERATURE);
+        }
+    }
+}
+
+pub fn optimize_water_nw_with_grids_sa(new_waters: &mut Vec<WaterMolecule>, receptor_atoms: &Vec<Atom>, grid: &mut Grid3D, num_steps: i32, optimization_steps: i32) {
+    let mut rng = thread_rng();
+    let cooling_rate = 0.99;
+    let mut starting_temp = 2000.5;
+    let final_temp = -10.0;
+    
+    let mut initial_systems_energy = energy::get_system_energy(new_waters, receptor_atoms); 
+
+    for step in 0..num_steps {
+        if let Some(water) = new_waters.choose_mut(&mut rng) {
+            optimize_using_grids(water, grid, optimization_steps, starting_temp);
+            let new_energy = energy::get_system_energy(new_waters, receptor_atoms);
+            println!("Old energy: {initial_systems_energy}, new energy: {new_energy}");
+            initial_systems_energy = new_energy;
+            starting_temp *= cooling_rate;
+            // println!("Temp: {starting_temp}");
+            if starting_temp < final_temp {
+                // println!("Temperature reached at step {step}");
+                break;
+            }
+        }
     }
 }
 
@@ -129,7 +148,10 @@ pub fn run_parallel_waterkit(receptor_points: Vec<Atom>,
     water_configurations: Vec<[f64; 6]>, 
     anchor_points: Vec<AnchorPoint>, 
     grid: Grid3D,
-    epochs: usize) {
+    epochs: usize,
+    num_steps: i32,
+    optimization_steps: i32,
+    save_path: String) {
 
     let waters: Vec<Vec<Atom>> = (0..epochs).into_par_iter()
         .map(|epoch| run_single_waterkit_with_grids(
@@ -137,13 +159,15 @@ pub fn run_parallel_waterkit(receptor_points: Vec<Atom>,
                 &water_configurations.clone(),
                 &anchor_points.clone(),
                 grid.clone(),
-                epoch
+                epoch,
+                num_steps,
+                optimization_steps
             )).collect();
             
     println!("Done sampling...saving results!");
     
     waters.par_iter().enumerate()
-        .for_each(|(idx, system)| to_pdb(&system, &format!("/data/phd/waterkit/rust_waterkit/test/water_{idx}_optimized.pdb")));
+        .for_each(|(idx, system)| to_pdb(&system, &format!("{save_path}/water_{idx}_optimized.pdb")));
     // waters.par_iter().enumerate()
     //     .for_each(|(idx, system)| to_pdb(&system, &format!("/data/phd/waterkit/rust_waterkit/test/water_{idx}_unoptimized.pdb")));
 }

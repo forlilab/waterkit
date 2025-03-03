@@ -1,0 +1,16 @@
+#!/bin/bash
+#SBATCH --cpus-per-task=20
+#SBATCH --mem=250gb
+#SBATCH --time=250-23:00
+#SBATCH --partition=highmem
+#SBATCH --exclusive
+#SBATCH --output=waterkit.%j.out
+#SBATCH --error=waterkit.%j.err
+
+source /gpfs/home/nbruciaferri/.bashrc
+
+pwd; hostname; date
+
+conda activate waterkit
+
+python /gpfs/home/nbruciaferri/rust_waterkit/run_waterkit.py

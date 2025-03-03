@@ -163,7 +163,7 @@ pub fn optimize(water: &mut Vec<Atom>, waters_in_system: &Vec<Atom>, grid: &mut 
     optimized_water
 }
 
-pub fn optimize_using_grids(water_molecule: &WaterMolecule, grid: &mut Grid3D) -> WaterMolecule{   
+pub fn optimize_using_grids(water_molecule: &mut WaterMolecule, grid: &mut Grid3D, num_steps: i32, temp: f64) {   
     let water = water_molecule.as_vec();
     let res_number = water[0].residue_number;
     // let mut update_grids = false;
@@ -174,7 +174,7 @@ pub fn optimize_using_grids(water_molecule: &WaterMolecule, grid: &mut Grid3D) -
     let mut original_h2_coords = water[2].coords();
 
     // Monte Carlo parameters
-    let num_steps = 100;
+    // let num_steps = 1000;
     let mut max_disp = 0.2;
     let mut accepted_moves = 0;
     
@@ -184,8 +184,9 @@ pub fn optimize_using_grids(water_molecule: &WaterMolecule, grid: &mut Grid3D) -
     let mut no_improve_counter = 0;
     
     // Compute initial energy once
+    grid.remove_points(&water_molecule.as_vec());
     let mut old_energy = get_energy(original_oxygen_coords, original_h1_coords, original_h2_coords, &grid);
-    grid.remove_points(&water);
+    // println!("Old {old_energy}");
 
     for step in 0..num_steps {
         // Propose new move
@@ -199,14 +200,17 @@ pub fn optimize_using_grids(water_molecule: &WaterMolecule, grid: &mut Grid3D) -
         let delta_energy = new_energy - old_energy;
 
         // Metropolis acceptance criterion
-        if monte_carlo::boltzmann_acceptance_rejection(&new_energy, &old_energy, &TEMPERATURE, &BOLTZMANN_K) {
+        if monte_carlo::boltzmann_acceptance_rejection(&new_energy, &old_energy, &temp, &BOLTZMANN_K) {
             // Accept the move
             original_oxygen_coords = translation[0];
             original_h1_coords = rotation[0];
             original_h2_coords = rotation[1];
+
             old_energy = new_energy;  // Update energy
+            // println!("New {old_energy}");
             accepted_moves += 1;
             no_improve_counter = 0; // Reset counter since we improved
+        // }
         } else {
             no_improve_counter += 1;
         }
@@ -232,7 +236,7 @@ pub fn optimize_using_grids(water_molecule: &WaterMolecule, grid: &mut Grid3D) -
         }
     }
 
-    let optimized_water = WaterMolecule::new(original_oxygen_coords, original_h1_coords, original_h2_coords, "".to_string(), res_number);
-    grid.update_energies(&optimized_water.as_vec());
-    optimized_water
+    // let optimized_water = WaterMolecule::new(original_oxygen_coords, original_h1_coords, original_h2_coords, "".to_string(), res_number);
+    water_molecule.update_coords(original_oxygen_coords, original_h1_coords, original_h2_coords);
+    grid.update_energies(&water_molecule.as_vec());
 }

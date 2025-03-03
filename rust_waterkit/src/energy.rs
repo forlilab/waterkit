@@ -2,6 +2,8 @@ use crate::atom::Atom;
 use crate::geometry;
 use crate::consts;
 use crate::vina_ff;
+use crate::water;
+use crate::water::WaterMolecule;
 
 
 /// Calculate the Lennard-Jones interaction energy
@@ -193,4 +195,18 @@ pub fn update_grid_energies(atoms_1: &Vec<Atom>, sphere_center: &[f64; 3]) -> (f
         }
     }
     (total_oda_energy, total_ow_energy, total_q_energy)
+}
+
+pub fn get_system_energy(water_molecules: &Vec<WaterMolecule>, receptor_atoms: &Vec<Atom>) -> f64 {
+    let mut total_energy = 0.0;
+    let n_waters = water_molecules.len();
+    for index_1 in 0..n_waters {
+        let water_1_atoms = &water_molecules[index_1].as_vec();
+        for index_2 in index_1+1..n_waters {
+            let water_2_atoms = &water_molecules[index_2].as_vec();
+            total_energy += energy_for_real_water(&water_1_atoms, &water_2_atoms);
+        }
+        total_energy += energy_for_real_water(receptor_atoms, water_1_atoms);
+    }
+    total_energy
 }

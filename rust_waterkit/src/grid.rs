@@ -7,7 +7,9 @@ use kdtree::KdTree;
 
 use crate::atom::Atom;
 use crate::energy;
+use crate::consts;
 use crate::geometry;
+use crate::water::WaterMolecule;
 
 pub enum ProbeType {
     ODa,
@@ -306,19 +308,38 @@ impl Grid3D {
             None
         }
     }
+}
 
-    pub fn get_systems_energy(&self) {
-        let mut oda_energy = 0.0;
-        let mut ow_energy = 0.0;
-        let mut hw_energy = 0.0;
+pub fn get_systems_energy(grid: &Grid3D, water_atoms: &Vec<WaterMolecule>) -> f64 {
+    let mut total_energy = 0.0;
 
-        for p in self.all_points() {
-            oda_energy += p.energy_oda;
-            ow_energy += p.energy_ow;
-            hw_energy += p.energy_hw;
+    for water in water_atoms {
+        let atoms = water.as_vec();
+        let oxygen = atoms[0].coords();
+        let h1 = atoms[1].coords();
+        let h2 = atoms[2].coords();
+        let oda = grid.trilinear_interpolation(oxygen, ProbeType::ODa).unwrap();
+        // println!("ODA: {oda}");
+        let lj_oxygen = grid.get_nearest_neighbor(&oxygen).unwrap().energy_ow;
+        // println!("LJ {lj_oxygen}");
+        let electrostatics_h1 = grid.trilinear_interpolation(h1, ProbeType::HW);
+        let electrostatics_h2 = grid.trilinear_interpolation(h2, ProbeType::HW);
+        let electrostatics_oxygen = grid.trilinear_interpolation(oxygen, ProbeType::HW);
+
+        if electrostatics_h1.is_none() || electrostatics_h2.is_none() || electrostatics_oxygen.is_none() {
+            continue; // Skip invalid configurations
         }
-
-        println!("SYSTEM's energies: \n\tODA: {} - OW: {} - HW: {}", oda_energy, ow_energy, hw_energy);
+        // println!("LJ: {lj_oxygen}");
+        // println!("Q O: {}", electrostatics_oxygen.unwrap() * consts::OXYGEN_W_Q_TIP3PFB);
+        // println!("Q H1: {}", electrostatics_h1.unwrap() * consts::HYDROGEN_W_Q_TIP3PFB);
+        // println!("Q H2: {}", electrostatics_oxygen.unwrap() * consts::HYDROGEN_W_Q_TIP3PFB);
+        
+        let energy_value = lj_oxygen
+            + electrostatics_oxygen.unwrap() * consts::OXYGEN_W_Q_TIP3PFB
+            + electrostatics_h1.unwrap() * consts::HYDROGEN_W_Q_TIP3PFB
+            + electrostatics_h2.unwrap() * consts::HYDROGEN_W_Q_TIP3PFB;
+        // println!("Water's energy: {energy_value}");
+        total_energy += energy_value;    
     }
-
+    total_energy
 }

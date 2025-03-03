@@ -3,6 +3,7 @@ import prody
 import multiprocessing as mp
 from tqdm import tqdm
 import sys
+import os
 import meeko
 import rust_waterkit
 
@@ -276,18 +277,28 @@ if __name__ == "__main__":
         print("Starting waterkit!")
         aps = anchor_points
         n_frames = 100
-
+        
+        num_steps = [1, 10, 100, 1000, 10000]
+        optimization_steps = [1, 10, 100, 1000, 10000]
+        
         # Setup grids at the beginning
         grid = rust_waterkit.setup_system(parametrized_atoms, x_size, y_size, z_size, spacing, center)
-        rust_waterkit.run_parallel_waterkit(parametrized_atoms, waters, anchor_points, grid, n_frames)
-
-    elif sys.argv[1] == "--energies":
-        parametrized_atoms, min_box_boundaries, max_box_boundaries = get_data_form_meeko(None, "/data/phd/waterkit/rust_waterkit/minimal_test/receptor.pdbqt")
-        # center = [71.5, 73.1, 243.3]
-        # x_size, y_size, z_size = 21.0, 24.0, 26.0
         
-        center = [12.4, 12.3, 14.1]
-        x_size, y_size, z_size = 24.0, 24.0, 24.0
+        # for n_steps in num_steps:
+        #     for o_steps in optimization_steps:
+        n_steps = 1000000
+        o_steps = 1000
+        save_path = f"test"
+        os.makedirs(save_path, exist_ok=True)
+        rust_waterkit.run_parallel_waterkit(parametrized_atoms, waters, anchor_points, grid, n_frames, n_steps, o_steps, save_path)
 
-        frame_waters = parse_waters_frame("/data/phd/waterkit/rust_waterkit/minimal_test/traj/water_000001.pdb")
-        rust_waterkit.get_energies_for_system(parametrized_atoms, frame_waters, center, x_size, y_size, z_size)
+    # elif sys.argv[1] == "--energies":
+    #     parametrized_atoms, min_box_boundaries, max_box_boundaries = get_data_form_meeko(None, "/data/phd/waterkit/rust_waterkit/minimal_test/receptor.pdbqt")
+    #     # center = [71.5, 73.1, 243.3]
+    #     # x_size, y_size, z_size = 21.0, 24.0, 26.0
+        
+    #     center = [12.4, 12.3, 14.1]
+    #     x_size, y_size, z_size = 24.0, 24.0, 24.0
+
+    #     frame_waters = parse_waters_frame("/data/phd/waterkit/rust_waterkit/minimal_test/traj/water_000001.pdb")
+    #     rust_waterkit.get_energies_for_system(parametrized_atoms, frame_waters, center, x_size, y_size, z_size)
