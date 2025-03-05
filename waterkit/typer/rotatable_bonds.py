@@ -50,7 +50,6 @@ class RotatableBonds():
                             rotamers = np.arange(0, 360, int(sline[-1])) + int(sline[6])
                         else:
                             rotamers = np.array(sline[6:]).astype(int)
-
                         rotatable_bond = self._Rotatable_bond(name, reference_atoms, rotamers, ob_smarts)
                         self._rotatable_bonds[name] = rotatable_bond 
 
@@ -98,10 +97,8 @@ class RotatableBonds():
                     atom_l_xyz = np.array([ob_atom.GetX(), ob_atom.GetY(), ob_atom.GetZ()])
 
                     data.append((match[0], match[1], atom_i_xyz, atom_j_xyz,
-                                atom_k_xyz, atom_l_xyz, rotatable_bond.rotamers, name))
-
+                                atom_k_xyz, atom_l_xyz, rotatable_bond.rotamers, name)) 
         df = pd.DataFrame(data=data, columns=columns)
         df.sort_values(by="atom_i", inplace=True)
         df.reset_index(drop=True, inplace=True)
-
         return df

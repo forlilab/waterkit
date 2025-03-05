@@ -18,6 +18,7 @@ use crate::optimizer::optimize_using_grids;
 use crate::sampling::sample_using_grids;
 use crate::setup::setup_grid;
 use crate::utils::to_pdb;
+use crate::utils::plot_optimization;
 use crate::water::WaterMolecule;
 use crate::energy;
 
@@ -70,27 +71,76 @@ pub fn optimize_water_nw_with_grids(new_waters: &mut Vec<WaterMolecule>, grid: &
 }
 
 pub fn optimize_water_nw_with_grids_sa(new_waters: &mut Vec<WaterMolecule>, receptor_atoms: &Vec<Atom>, grid: &mut Grid3D, num_steps: i32, optimization_steps: i32) {
-    let mut rng = thread_rng();
-    let cooling_rate = 0.99;
-    let mut starting_temp = 2000.5;
-    let final_temp = -10.0;
+    // Worth trying reannealing after there's no acceptance for x epochs
     
-    let mut initial_systems_energy = energy::get_system_energy(new_waters, receptor_atoms); 
+    let plot_energies = false;
+
+    let mut rng = thread_rng();
+    let cooling_rate = 0.98;
+    let mut starting_temp = 1200.;
+    let final_temp = 0.001;
+    
+    // Reannealing
+    // let reanneal_threshold = 5000;  // Steps before checking for stagnation
+    let reanneal_factor = 0.995 ;      // Reset temp to 50% of current if stagnation occurs
+    let mut rejection_counter = 0;
+    let max_rejections = 1000;
+    
+    // For the plot
+    let mut waters_energies = Vec::with_capacity((num_steps/100) as usize);
+    let mut receptor_energies = Vec::with_capacity((num_steps/100) as usize);
+    let mut total_energies = Vec::with_capacity((num_steps/100) as usize);
+    let (waters_energy, receptor_energy) = energy::get_system_energy(new_waters, receptor_atoms);
+    let mut initial_energy = waters_energy + receptor_energy;
+    let mut upper_b = initial_energy.max(waters_energy).max(receptor_energy);
+    let mut lower_b = initial_energy.min(waters_energy).min(receptor_energy);
+    waters_energies.push(waters_energy);
+    receptor_energies.push(receptor_energy); 
+    total_energies.push(initial_energy);
 
     for step in 0..num_steps {
         if let Some(water) = new_waters.choose_mut(&mut rng) {
-            optimize_using_grids(water, grid, optimization_steps, starting_temp);
-            let new_energy = energy::get_system_energy(new_waters, receptor_atoms);
-            println!("Old energy: {initial_systems_energy}, new energy: {new_energy}");
-            initial_systems_energy = new_energy;
-            starting_temp *= cooling_rate;
-            // println!("Temp: {starting_temp}");
-            if starting_temp < final_temp {
-                // println!("Temperature reached at step {step}");
-                break;
+            let accepted = optimize_using_grids(water, grid, optimization_steps, starting_temp);
+
+            // Track rejected moves
+            if accepted {
+                rejection_counter = 0;  // Reset if a move is accepted
+            } else {
+                rejection_counter += 1;
             }
+
+            // Check for reannealing
+            if rejection_counter >= max_rejections {
+                starting_temp = (starting_temp * reanneal_factor);
+                rejection_counter = 0;  // Reset counter after reannealing
+                println!("Reannealing at step {}: Reset temp to {:.2}", step, starting_temp);
+            }
+
+            // Cooling schedule
+            if step % 10 == 0 {
+
+                // For the plot
+                let (new_water_energy, new_receptor_energy) = energy::get_system_energy(new_waters, receptor_atoms);
+                let new_energy = new_water_energy + new_receptor_energy;
+                upper_b = upper_b.max(new_energy).max(new_water_energy).max(new_receptor_energy);
+                lower_b = lower_b.min(new_energy).min(new_water_energy).min(new_receptor_energy);
+                waters_energies.push(new_water_energy);
+                receptor_energies.push(new_receptor_energy);
+                total_energies.push(new_energy);
+                // println!("Old energy: {initial_systems_energy}, new energy: {new_energy}");
+                initial_energy = new_energy;
+                
+                starting_temp *= cooling_rate;
+                if starting_temp < final_temp {
+                    println!("Temperature reached at step {step}");
+                    break;
+                }
+            }
+            // starting_temp *= cooling_rate;
+            // println!("Temp: {starting_temp}");
         }
     }
+    let plot = plot_optimization(&total_energies, &waters_energies, &receptor_energies, lower_b, upper_b, num_steps as usize, optimization_steps as usize);
 }
 
 pub fn optimize_water_network(receptor_map: &mut Vec<Atom>, new_waters: &Vec<WaterMolecule>, grid: &mut Grid3D, filename: &str) -> Vec<Atom> {

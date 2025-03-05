@@ -92,15 +92,21 @@ class WaterSampler():
 
         # Iterate through every disordered bonds
         for index, row in receptor.rotatable_bonds.iterrows():
+            # print(row)
             energies = []
             angles = []
             rot_waters = []
 
             # Get index of all the waters attached
             # to a disordered group by looking at the connections
+            # print(connections["atom_i"])
             tmp = connections["atom_i"].isin(row[["atom_i", "atom_j"]])
             molecule_j = connections.loc[tmp]["molecule_j"].values
             rot_waters.extend([waters[j] for j in molecule_j])
+            # print(index)
+            # print(row[["atom_i_xyz"]].values)
+            # for rot_water in rot_waters:
+            #     print(rot_water.atoms)
 
             if rot_waters:
                 # Get energy of the favorable disordered waters

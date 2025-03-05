@@ -69,8 +69,8 @@ def get_data_form_meeko(wanted_residues, pdb_file, save=False):
     #     pdb_f = polymer.to_pdb()
     #     with open("meeko.pdb", "w") as fo:
     #         fo.write(pdb_f)
-    with open("/data/phd/waterkit/rust_waterkit/target.json") as fi:
-    # with open("/home/niccolo/phd/waterkit/rust_waterkit/target.json") as fi:
+    # with open("/data/phd/waterkit/rust_waterkit/target.json") as fi:
+    with open("/home/niccolo/phd/waterkit/rust_waterkit/target.json") as fi:
         json_string = fi.read()
 
     polymer = meeko.Polymer.from_json(json_string)
@@ -186,8 +186,8 @@ def pdb_corners(pdb_file, traj, atom_type="He"):
     print(x_center, y_center, z_center)
     return
 
-def load_waters_orientations(orientations="/data/phd/waterkit/waterkit/data/water_orientations.txt"):
-# def load_waters_orientations(orientations="/home/niccolo/phd/waterkit/waterkit/data/water_orientations.txt"):
+# def load_waters_orientations(orientations="/data/phd/waterkit/waterkit/data/water_orientations.txt"):
+def load_waters_orientations(orientations="/home/niccolo/phd/waterkit/waterkit/data/water_orientations.txt"):
     usecols = [0, 1, 2, 3, 4, 5]
     water_orientations = np.loadtxt(orientations, usecols=usecols)
     return water_orientations
@@ -263,12 +263,12 @@ if __name__ == "__main__":
                            "A:PHE:138", "A:TYR:139", "A:VAL:150",
                            "A:TRP:162", "A:THR:184"]
         # wanted_residues = list()
-        parametrized_atoms, min_box_boundaries, max_box_boundaries = get_data_form_meeko(wanted_residues, "/data/phd/waterkit/example/1uyg_no_ligand.pdb")
-        # parametrized_atoms, min_box_boundaries, max_box_boundaries = get_data_form_meeko(wanted_residues, "/home/niccolo/phd/waterkit/example/1uyg_no_ligand.pdb")
+        # parametrized_atoms, min_box_boundaries, max_box_boundaries = get_data_form_meeko(wanted_residues, "/data/phd/waterkit/example/1uyg_no_ligand.pdb")
+        parametrized_atoms, min_box_boundaries, max_box_boundaries = get_data_form_meeko(wanted_residues, "/home/niccolo/phd/waterkit/example/1uyg_no_ligand.pdb")
 
         waters = load_waters_orientations()
-        anchor_points = load_anchor_points("/data/phd/waterkit/rust_waterkit/anchor_points.txt")
-        # anchor_points = load_anchor_points("/home/niccolo/phd/waterkit/rust_waterkit/anchor_points.txt")
+        # anchor_points = load_anchor_points("/data/phd/waterkit/rust_waterkit/anchor_points.txt")
+        anchor_points = load_anchor_points("/home/niccolo/phd/waterkit/rust_waterkit/anchor_points.txt")
         spacing = 0.375
         center = [2.7, 11.45, 24.80]
         x_size, y_size, z_size = 24.0, 24.0, 24.0
@@ -276,7 +276,7 @@ if __name__ == "__main__":
 
         print("Starting waterkit!")
         aps = anchor_points
-        n_frames = 100
+        n_frames = 1
         
         num_steps = [1, 10, 100, 1000, 10000]
         optimization_steps = [1, 10, 100, 1000, 10000]
@@ -286,8 +286,8 @@ if __name__ == "__main__":
         
         # for n_steps in num_steps:
         #     for o_steps in optimization_steps:
-        n_steps = 1000000
-        o_steps = 1000
+        n_steps = 40000
+        o_steps = 10000
         save_path = f"test"
         os.makedirs(save_path, exist_ok=True)
         rust_waterkit.run_parallel_waterkit(parametrized_atoms, waters, anchor_points, grid, n_frames, n_steps, o_steps, save_path)

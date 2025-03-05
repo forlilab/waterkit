@@ -163,9 +163,9 @@ pub fn optimize(water: &mut Vec<Atom>, waters_in_system: &Vec<Atom>, grid: &mut 
     optimized_water
 }
 
-pub fn optimize_using_grids(water_molecule: &mut WaterMolecule, grid: &mut Grid3D, num_steps: i32, temp: f64) {   
+pub fn optimize_using_grids(water_molecule: &mut WaterMolecule, grid: &mut Grid3D, num_steps: i32, temp: f64) -> bool {   
+    let mut accepted = false;
     let water = water_molecule.as_vec();
-    let res_number = water[0].residue_number;
     // let mut update_grids = false;
     
     // Extract initial coordinates
@@ -201,6 +201,7 @@ pub fn optimize_using_grids(water_molecule: &mut WaterMolecule, grid: &mut Grid3
 
         // Metropolis acceptance criterion
         if monte_carlo::boltzmann_acceptance_rejection(&new_energy, &old_energy, &temp, &BOLTZMANN_K) {
+            accepted = true;
             // Accept the move
             original_oxygen_coords = translation[0];
             original_h1_coords = rotation[0];
@@ -212,6 +213,7 @@ pub fn optimize_using_grids(water_molecule: &mut WaterMolecule, grid: &mut Grid3
             no_improve_counter = 0; // Reset counter since we improved
         // }
         } else {
+            accepted = false;
             no_improve_counter += 1;
         }
 
@@ -239,4 +241,6 @@ pub fn optimize_using_grids(water_molecule: &mut WaterMolecule, grid: &mut Grid3
     // let optimized_water = WaterMolecule::new(original_oxygen_coords, original_h1_coords, original_h2_coords, "".to_string(), res_number);
     water_molecule.update_coords(original_oxygen_coords, original_h1_coords, original_h2_coords);
     grid.update_energies(&water_molecule.as_vec());
+
+    accepted
 }

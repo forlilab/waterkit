@@ -8,6 +8,10 @@ use crate::grid::{Grid3D, ProbeType};
 use crate::consts::*;
 use crate::water::WaterMolecule;
 
+fn optimize_disordered_hydrogens() {
+    
+}
+
 fn optimize_placement_order_grid(grid: &Grid3D, points: &Vec<AnchorPoint>) -> Vec<AnchorPoint> {
     let mut energies = Vec::with_capacity(points.len());
     let mut min_points = Vec::with_capacity(points.len());

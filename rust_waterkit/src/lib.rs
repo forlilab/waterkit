@@ -1,3 +1,5 @@
+#![allow(warnings)]
+
 pub mod utils;
 pub mod consts;
 pub mod geometry;
