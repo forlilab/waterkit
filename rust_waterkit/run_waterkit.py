@@ -1,59 +1,48 @@
 import numpy as np
 import prody
+import re
 import multiprocessing as mp
 from tqdm import tqdm
 import sys
 import os
 import meeko
 import rust_waterkit
+from rdkit import Chem
 
-def load_anchor_points(filename):
+def load_anchor_points(filename, rotatable_hydrogens):
     anchor_points = list()
+    disordered_hydrogens = [x.atom_i_xyz() for x in rotatable_hydrogens]
     with open(filename) as fi:
         lines = fi.readlines()
 
     for (idx, line) in enumerate(lines):
+        rotatable_bond = None
         line = line.strip().split(" ")
         anchor_xyz = [float(line[0]), float(line[1]), float(line[2])]
-        # if idx == 669:
-        #     print(f"{anchor_xyz[0]}, {anchor_xyz[1]}, {anchor_xyz[2]}")
+        for h_idx, h in enumerate(disordered_hydrogens):
+            if np.allclose(h, anchor_xyz, atol=1e-7):
+                rotatable_bond = rotatable_hydrogens[h_idx]
         vector_xyz = [float(line[3]), float(line[4]), float(line[5])]
         hb_type = line[-1]
-        ap = rust_waterkit.AnchorPoint(hb_type, anchor_xyz, vector_xyz)
+        ap = rust_waterkit.AnchorPoint(hb_type, anchor_xyz, vector_xyz, rotatable_bond)
         anchor_points.append(ap)
     return anchor_points
 
-def to_xyz(traj, step_size, fname):
-    with open(f"{fname}.xyz", 'w') as fo:
-        fo.write(f"{len(traj)}\n")
-        fo.write("\n")
-        for t in traj:
-            t_v = t
-            fo.write(f"He {t_v[0]} {t_v[1]} {t_v[2]}\n")
-    return
-
-def to_xyz_water(traj, fname):
-    with open(f"{fname}.xyz", 'w') as fo:
-        fo.write(f"{len(traj)}\n")
-        fo.write("\n")
-        fo.write(f"O {traj[0][0]} {traj[0][1]} {traj[0][2]}\n")
-        for t in range(1, len(traj)):
-            fo.write(f"H {traj[t][0]} {traj[t][1]} {traj[t][2]}\n")
-        # fo.write(f"O {traj[-1][0]} {traj[-1][1]} {traj[-1][2]}\n")
-    return
-
-def get_data_form_meeko(wanted_residues, pdb_file, save=False):
+def get_data_form_meeko(wanted_residues, pdb_file, save=True):
+    rotatable_hydrogens = list()
+    rotatable_bonds = parse_rotatable_hydrogens()
     surface_atoms = list()
+    box_boundaries = list()
     # with open(pdb_file) as fi:
     #     pdbstring = fi.read()
         
-    # # blunt_ends = [("A:1", 0)]
+    # # # blunt_ends = [("A:1", 0)]
     # mk_prep = meeko.MoleculePreparation(
     #     merge_these_atom_types=[],
     #     load_atom_params=["vina_params", "openff"],
     #     charge_model="espaloma",
     # )
-    box_boundaries = list()
+    
     # templates = meeko.ResidueChemTemplates.create_from_defaults()
     # polymer = meeko.Polymer.from_pdb_string(pdb_string=pdbstring,
     #                                         chem_templates=templates,
@@ -69,15 +58,40 @@ def get_data_form_meeko(wanted_residues, pdb_file, save=False):
     #     pdb_f = polymer.to_pdb()
     #     with open("meeko.pdb", "w") as fo:
     #         fo.write(pdb_f)
-    # with open("/data/phd/waterkit/rust_waterkit/target.json") as fi:
-    with open("/home/niccolo/phd/waterkit/rust_waterkit/target.json") as fi:
+    with open("/data/phd/waterkit/target.json") as fi:
+    # with open("/home/niccolo/phd/waterkit/rust_waterkit/target.json") as fi:
         json_string = fi.read()
 
     polymer = meeko.Polymer.from_json(json_string)
 
     for res_id, monomer in polymer.get_valid_monomers().items():
         unique_id = f"{res_id.split(':')[0]}:{monomer.input_resname}:{res_id.split(':')[-1]}"
+        matching_atoms_rotatable = None
+        for rot_bond in rotatable_bonds:
+            pattern = rotatable_bonds[rot_bond]
+            matching_atoms_rotatable = monomer.rdkit_mol.GetSubstructMatches(pattern)
+            if len(matching_atoms_rotatable) > 0: 
+                map_idx = {v: k for k, v in monomer.molsetup_mapidx.items()}
+                atom_i_xyz = monomer.molsetup.atoms[map_idx[matching_atoms_rotatable[0][0]]].coord
+                atom_j_xyz = monomer.molsetup.atoms[map_idx[matching_atoms_rotatable[0][1]]].coord
+                atom_k_xyz = monomer.molsetup.atoms[map_idx[matching_atoms_rotatable[0][2]]].coord
+                atom_l_xyz = monomer.molsetup.atoms[map_idx[matching_atoms_rotatable[0][3]]].coord
+                rotatable_hydrogens.append(rust_waterkit.RotatableBond(atom_i_xyz=atom_i_xyz,
+                                                                   atom_j_xyz=atom_j_xyz,
+                                                                   atom_k_xyz=atom_k_xyz,
+                                                                   atom_l_xyz=atom_l_xyz))
+                break
+        # atom_i_xyz, atom_j_xyz, atom_k_xyz, atom_l_xyz = None, None, None, None
         for atom in monomer.molsetup.atoms:
+            # if len(matching_atoms_rotatable) > 0:
+            #     if atom.index == matching_atoms_rotatable[0][0]:
+            #         atom_i_xyz = atom.coord
+            #     elif atom.index == matching_atoms_rotatable[0][1]:
+            #         atom_j_xyz = atom.coord
+            #     elif atom.index == matching_atoms_rotatable[0][2]:
+            #         atom_k_xyz = atom.coord
+            #     elif atom.index == matching_atoms_rotatable[0][3]:
+            #         atom_l_xyz = atom.coord
             if atom.is_ignore:
                 continue
             rmin_half = monomer.molsetup.atom_params["rmin_half"][atom.index]
@@ -100,10 +114,14 @@ def get_data_form_meeko(wanted_residues, pdb_file, save=False):
                         vina_rij=vina_rij,
                         vina_donor=vina_donor,
                         vina_acceptor=vina_acceptor)
-            # print(new_atom.rmin_half())
             surface_atoms.append(new_atom)
             if wanted_residues is not None and unique_id in wanted_residues:
                 box_boundaries.append(atom.coord)
+        # if atom_i_xyz is not None and atom_j_xyz is not None and atom_k_xyz is not None and atom_l_xyz is not None:  
+        #     rotatable_hydrogens.append(rust_waterkit.RotatableBond(atom_i_xyz=atom_i_xyz,
+        #                                                            atom_j_xyz=atom_j_xyz,
+        #                                                            atom_k_xyz=atom_k_xyz,
+        #                                                            atom_l_xyz=atom_l_xyz))
     try:
         box_boundaries = np.array(box_boundaries)
         min_box_boundaries = [np.min(box_boundaries[:, 0]), np.min(box_boundaries[:, 1]), np.min(box_boundaries[:, 2])]
@@ -111,142 +129,32 @@ def get_data_form_meeko(wanted_residues, pdb_file, save=False):
     except:
         min_box_boundaries = list()
         max_box_boundaries = list()
-    return surface_atoms, min_box_boundaries, max_box_boundaries
+    return surface_atoms, min_box_boundaries, max_box_boundaries, rotatable_hydrogens
 
-def load_data_from_pdb(pdb_file):
-    return
+def parse_rotatable_hydrogens(path="/data/phd/waterkit/rust_waterkit/disordered_hydrogens.par"):
+    rotatable_bonds_smarts = dict()
+    with open(path) as f:
+        lines = f.readlines()
 
-def to_pdb(pdb_file, w_map):
-    ag = prody.AtomGroup('Surface')
-    coords = []
-    names = []
-    resnames = []
-    resnums = []
-    cnt = 0
-    for (idx, atom) in enumerate(w_map):
-        coords.append(atom.coords())
-        names.append(atom.atom_type())
-        resnames.append("HOH")
-        if idx % 3 == 0:
-            cnt += 1
-        resnums.append(cnt)
+    for line in lines:
+        line = line.strip()
+        if line.startswith("#"):
+            continue
+        # if re.search(r"^[A-Za-z0-9].*?(\[.*?\]){4}( [0-9]){4} -?[0-9]{1,3}", line):
+        sline = line.split(" ")
+        if len(line) > 1:
+            name = sline[0]
+            smarts_pattern = Chem.MolFromSmarts(sline[1])
+            rotatable_bonds_smarts[name] = smarts_pattern
+    return rotatable_bonds_smarts
 
-    ag.setCoords(coords)
-    ag.setNames(names)
-    ag.setResnames(resnames)
-    ag.setResnums(resnums)
-    # ag.setBetas(capped_energies)
-    prody.writePDB(pdb_file, ag)
-    return
 
-def pdb_with_temp(pdb_file, traj, energies, atom_type="He"):
-    capped_energies = list()
-    for e in energies:
-        if e > 100:
-            capped_energies.append(100)
-        else:
-            capped_energies.append(e)
-    ag = prody.AtomGroup('Surface')
-    ag.setCoords(traj)
-    ag.setNames([atom_type for _ in traj])
-    ag.setResnames(["MOL" for _ in traj])
-    ag.setResnums([1 for _ in traj])
-    ag.setBetas(capped_energies)
-    prody.writePDB(pdb_file, ag)
-    return
 
-def pdb_corners(pdb_file, traj, atom_type="He"):
-    x_min, y_min, z_min = np.min(traj, axis=0)
-    x_max, y_max, z_max = np.max(traj, axis=0)
-
-    # Generate all combinations of extrema
-    corners = np.array([
-        [x_min, y_min, z_min],
-        [x_min, y_min, z_max],
-        [x_min, y_max, z_min],
-        [x_min, y_max, z_max],
-        [x_max, y_min, z_min],
-        [x_max, y_min, z_max],
-        [x_max, y_max, z_min],
-        [x_max, y_max, z_max],
-    ])
-    ag = prody.AtomGroup('Surface')
-    ag.setCoords(corners)
-    ag.setNames([atom_type for _ in corners])
-    ag.setResnames(["MOL" for _ in corners])
-    ag.setResnums([1 for _ in corners])
-    prody.writePDB(pdb_file, ag)
-
-    x_center = sum(corner[0] for corner in corners) / 8
-
-    y_center = sum(corner[1] for corner in corners) / 8
-
-    z_center = sum(corner[2] for corner in corners) / 8
-
-    print(x_center, y_center, z_center)
-    return
-
-# def load_waters_orientations(orientations="/data/phd/waterkit/waterkit/data/water_orientations.txt"):
-def load_waters_orientations(orientations="/home/niccolo/phd/waterkit/waterkit/data/water_orientations.txt"):
+def load_waters_orientations(orientations="/data/phd/waterkit/waterkit/data/water_orientations.txt"):
+# def load_waters_orientations(orientations="/home/niccolo/phd/waterkit/waterkit/data/water_orientations.txt"):
     usecols = [0, 1, 2, 3, 4, 5]
     water_orientations = np.loadtxt(orientations, usecols=usecols)
     return water_orientations
-
-def split_list_in_chunks(size, n):
-    if size < n:
-        n = size
-    return [(l[0], l[-1]) for l in np.array_split(range(size), n)]
-
-def fire_waterkit(parametrized_atoms, waters, aps, grid, use_grids, start=0, stop=1, position=0):
-    progress = tqdm(total=stop - start, position=position,
-                    desc='job %02d' % (position + 1),
-                    bar_format='{l_bar}{bar:50}{r_bar}{bar:-10b}')
-
-    for frame_id in range(start, stop + 1):
-        rust_waterkit.run_waterkit(parametrized_atoms, waters, aps, grid, frame_id, use_grids)
-        progress.update(1)
-    progress.close()
-    return
-
-def parse_waters_frame(fname):
-    frame = prody.parsePDB(fname)
-    atoms = list()
-    retvalue = list()
-    for idx, atom in enumerate(frame):
-        atom_type = "HW"
-        rmin_half = 0.0
-        epsilon = 0.0
-        charge = 0.4170
-        vina_rij = 0.0
-        vina_donor = False
-        vina_acceptor = False
-        if atom.getElement() == "O":
-            atom_type = "OW"
-            rmin_half = 1.7682
-            # rmin_half = 3.15061
-            epsilon = 0.15210325
-            charge = -0.834
-            vina_rij = 1.7
-            vina_donor = True
-            vina_acceptor = True
-        
-        rust_atom = rust_waterkit.Atom(atom_type=atom_type,
-                        atom_id=f"{idx}:{atom_type}",
-                        coords_point=atom.getCoords(),
-                        rmin_half=rmin_half,
-                        epsilon=epsilon,
-                        charge=charge,
-                        vina_rij=vina_rij,
-                        vina_donor=vina_donor,
-                        vina_acceptor=vina_acceptor)
-        atoms.append(rust_atom)
-        if len(atoms) == 3:
-            assert(len(atoms) == 3)
-            retvalue.append(atoms)
-            # print(retvalue)
-            atoms = list()
-    # print(retvalue[0])
-    return retvalue
 
 '''
     To compile the code:
@@ -263,42 +171,37 @@ if __name__ == "__main__":
                            "A:PHE:138", "A:TYR:139", "A:VAL:150",
                            "A:TRP:162", "A:THR:184"]
         # wanted_residues = list()
-        # parametrized_atoms, min_box_boundaries, max_box_boundaries = get_data_form_meeko(wanted_residues, "/data/phd/waterkit/example/1uyg_no_ligand.pdb")
-        parametrized_atoms, min_box_boundaries, max_box_boundaries = get_data_form_meeko(wanted_residues, "/home/niccolo/phd/waterkit/example/1uyg_no_ligand.pdb")
+        parametrized_atoms, min_box_boundaries, max_box_boundaries, rotatable_hydrogens = get_data_form_meeko(wanted_residues, "/data/phd/waterkit/rust_waterkit/waterkit_data/1uyg_prepared.pdb")
+        # parametrized_atoms, min_box_boundaries, max_box_boundaries = get_data_form_meeko(wanted_residues, "/home/niccolo/phd/waterkit/example/1uyg_no_ligand.pdb")
 
         waters = load_waters_orientations()
-        # anchor_points = load_anchor_points("/data/phd/waterkit/rust_waterkit/anchor_points.txt")
-        anchor_points = load_anchor_points("/home/niccolo/phd/waterkit/rust_waterkit/anchor_points.txt")
+        anchor_points = load_anchor_points("/data/phd/waterkit/rust_waterkit/anchor_points.txt", rotatable_hydrogens)
+        # anchor_points = load_anchor_points("/home/niccolo/phd/waterkit/rust_waterkit/anchor_points.txt")
         spacing = 0.375
         center = [2.7, 11.45, 24.80]
         x_size, y_size, z_size = 24.0, 24.0, 24.0
 
+        
 
-        print("Starting waterkit!")
+        # print("Starting waterkit!")
         aps = anchor_points
-        n_frames = 1
+        n_frames = 1000
+
+        # num_steps = [1, 10, 100, 1000, 10000]
+        # optimization_steps = [1, 10, 100, 1000, 10000]
         
-        num_steps = [1, 10, 100, 1000, 10000]
-        optimization_steps = [1, 10, 100, 1000, 10000]
-        
-        # Setup grids at the beginning
+        # # Setup grids at the beginning
         grid = rust_waterkit.setup_system(parametrized_atoms, x_size, y_size, z_size, spacing, center)
-        
-        # for n_steps in num_steps:
-        #     for o_steps in optimization_steps:
-        n_steps = 40000
-        o_steps = 10000
-        save_path = f"test"
-        os.makedirs(save_path, exist_ok=True)
-        rust_waterkit.run_parallel_waterkit(parametrized_atoms, waters, anchor_points, grid, n_frames, n_steps, o_steps, save_path)
+        receptor_points = rust_waterkit.optimize_disordered_hydrogens(parametrized_atoms, aps, grid)
+        for point in receptor_points:
+            coords = point.coords()
+            print(f"{point.atom_type()} {coords[0]} {coords[1]} {coords[2]}")
+        grid = rust_waterkit.setup_system(receptor_points, x_size, y_size, z_size, spacing, center)
 
-    # elif sys.argv[1] == "--energies":
-    #     parametrized_atoms, min_box_boundaries, max_box_boundaries = get_data_form_meeko(None, "/data/phd/waterkit/rust_waterkit/minimal_test/receptor.pdbqt")
-    #     # center = [71.5, 73.1, 243.3]
-    #     # x_size, y_size, z_size = 21.0, 24.0, 26.0
-        
-    #     center = [12.4, 12.3, 14.1]
-    #     x_size, y_size, z_size = 24.0, 24.0, 24.0
-
-    #     frame_waters = parse_waters_frame("/data/phd/waterkit/rust_waterkit/minimal_test/traj/water_000001.pdb")
-    #     rust_waterkit.get_energies_for_system(parametrized_atoms, frame_waters, center, x_size, y_size, z_size)
+        # # for n_steps in num_steps:
+        # #     for o_steps in optimization_steps:
+        # n_steps = 30000
+        # o_steps = 1000
+        # save_path = f"test"
+        # os.makedirs(save_path, exist_ok=True)
+        # rust_waterkit.run_parallel_waterkit(parametrized_atoms, waters, anchor_points, grid, n_frames, n_steps, o_steps, save_path)

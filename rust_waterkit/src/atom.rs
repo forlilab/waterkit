@@ -29,7 +29,7 @@ pub struct Atom {
 
     vina_donor: bool,
 
-    vina_acceptor: bool,
+    vina_acceptor: bool
 }
 
 #[pymethods]

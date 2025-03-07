@@ -1,22 +1,26 @@
 use pyo3::prelude::*;
 
+use crate::rotatable_bond::RotatableBond;
+
 #[derive(Clone, Debug, PartialEq)]
 
 #[pyclass]
 pub struct AnchorPoint {
     hb_type: String,
     anchor_xyz: [f64; 3],
-    vector_xyz: [f64; 3]
+    vector_xyz: [f64; 3],
+    disordered_hydrogens: Option<RotatableBond>
 }
 
 #[pymethods]
 impl AnchorPoint {
     #[new]
-    pub fn new(hb_type: String, anchor_xyz: [f64; 3], vector_xyz: [f64; 3]) -> AnchorPoint {
+    pub fn new(hb_type: String, anchor_xyz: [f64; 3], vector_xyz: [f64; 3], disorderd_hydrogens: Option<RotatableBond>) -> AnchorPoint {
         Self {
             hb_type: hb_type.clone(),
             anchor_xyz: anchor_xyz.clone(),
-            vector_xyz: vector_xyz.clone()
+            vector_xyz: vector_xyz.clone(),
+            disordered_hydrogens: disorderd_hydrogens
         }
     }
 
@@ -30,5 +34,17 @@ impl AnchorPoint {
 
     pub fn hb_type(&self) -> &String {
         &self.hb_type
+    }
+
+    pub fn disordered_hydrogens(&self) -> Option<RotatableBond> {
+        self.disordered_hydrogens.clone()
+    }
+
+    pub fn set_anchor_point_xyz(&mut self, xyz: [f64; 3]) {
+        self.anchor_xyz = xyz
+    }
+
+    pub fn set_anchor_vector_xyz(&mut self, xyz: [f64; 3]) {
+        self.vector_xyz = xyz;
     }
 }

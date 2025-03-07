@@ -96,6 +96,40 @@ pub fn to_pdb(atoms: &Vec<Atom>, fname: &str) {
     }
 }
 
+
+pub fn receptor_to_pdb(atoms: &Vec<Atom>, fname: &str) {
+    let mut cnt = 0;
+    let mut h_index = 1;
+    let f = std::fs::File::create(fname).expect("unable to create file");
+    let mut f = BufWriter::new(f);
+    for (index, point) in atoms.iter().enumerate() {
+        let coordinates = point.coords();
+        let mut line = String::new();
+        let atom_type = point.atom_type();
+        let splitted: Vec<&str> = point.atom_id().split(':').collect();
+        let chain = splitted[0];
+        let resname = splitted[1];
+        let resid = splitted[2];
+        line = format!(
+            "{:<6}{:>5} {:^4} {:>3} {:1}{:>4}    {:>8.3}{:>8.3}{:>8.3}{:>6.2}{:>6.2}          {:>2}\n",
+            "ATOM",
+            index,
+            atom_type,
+            resname,
+            chain,
+            resid,
+            coordinates[0],
+            coordinates[1],
+            coordinates[2],
+            0.0,
+            0.0,
+            atom_type
+        );        
+        write!(f, "{}", line).expect("Unable to write data");
+        // fs::write(fname, line).expect("Unable to write file");
+    }
+}
+
 pub fn timeit<F: Fn() -> T, T>(f: F) -> T {
     let start = SystemTime::now();
     let result = f();

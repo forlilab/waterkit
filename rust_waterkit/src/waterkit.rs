@@ -10,9 +10,12 @@ use rayon::prelude::*;
 use crate::anchor_point::AnchorPoint;
 use crate::atom::Atom;
 use crate::energy::energy_for_real_water;
+use crate::geometry;
+use crate::geometry::dihedral;
 use crate::grid::Grid3D;
 use crate::grid::ProbeType;
 use crate::consts;
+use crate::monte_carlo;
 use crate::optimizer::optimize;
 use crate::optimizer::optimize_using_grids;
 use crate::sampling::sample_using_grids;
@@ -21,7 +24,7 @@ use crate::utils::to_pdb;
 use crate::utils::plot_optimization;
 use crate::water::WaterMolecule;
 use crate::energy;
-
+use crate::utils;
 
 fn run_single_waterkit_with_grids(receptor_points: &[Atom], 
     water_configurations: &Vec<[f64; 6]>, 
@@ -43,10 +46,16 @@ fn run_single_waterkit_with_grids(receptor_points: &[Atom],
     // let waters: Vec<Atom> = receptor_map.iter().filter(|x| x.atom_type() == "OW" || x.atom_type() == "HW").cloned().collect();
     let mut waters: Vec<Atom> = Vec::with_capacity(new_water_molecules.len() * 3);
     // for w in new_water_molecules.iter() {
-    //     waters.extend(w.as_vec().into_iter());
-    //     receptor_map.extend(w.as_vec().into_iter());
+        // waters.extend(w.as_vec().into_iter());
+        // receptor_map.extend(w.as_vec().into_iter());
     // } 
-    // utils::to_pdb(&waters, &format!("test/water_{epoch}_unoptimized.pdb"));
+    let mut  unoptimized_waters = Vec::with_capacity(new_water_molecules.len() * 3);
+    for water in new_water_molecules.iter() {
+        for atom in water.as_vec() {
+            unoptimized_waters.push(atom);
+        }
+    }
+    utils::to_pdb(&unoptimized_waters, &format!("test/water_{epoch}_unoptimized.pdb"));
     // waters
 
     // let optimized_waters = optimize_water_network(&mut receptor_map, &new_water_molecules, &mut grid, &format!("test/water_{epoch}_optimized.pdb"));
@@ -77,58 +86,58 @@ pub fn optimize_water_nw_with_grids_sa(new_waters: &mut Vec<WaterMolecule>, rece
 
     let mut rng = thread_rng();
     let cooling_rate = 0.98;
-    let mut starting_temp = 1200.;
+    let mut starting_temp = 2000.;
     let final_temp = 0.001;
     
     // Reannealing
     // let reanneal_threshold = 5000;  // Steps before checking for stagnation
-    let reanneal_factor = 0.995 ;      // Reset temp to 50% of current if stagnation occurs
-    let mut rejection_counter = 0;
-    let max_rejections = 1000;
+    // let reanneal_factor = 1.5;      // Reset temp to 50% of current if stagnation occurs
+    // let mut rejection_counter = 0;
+    // let max_rejections = 1000;
     
     // For the plot
-    let mut waters_energies = Vec::with_capacity((num_steps/100) as usize);
-    let mut receptor_energies = Vec::with_capacity((num_steps/100) as usize);
-    let mut total_energies = Vec::with_capacity((num_steps/100) as usize);
-    let (waters_energy, receptor_energy) = energy::get_system_energy(new_waters, receptor_atoms);
-    let mut initial_energy = waters_energy + receptor_energy;
-    let mut upper_b = initial_energy.max(waters_energy).max(receptor_energy);
-    let mut lower_b = initial_energy.min(waters_energy).min(receptor_energy);
-    waters_energies.push(waters_energy);
-    receptor_energies.push(receptor_energy); 
-    total_energies.push(initial_energy);
+    // let mut waters_energies = Vec::with_capacity((num_steps/100) as usize);
+    // let mut receptor_energies = Vec::with_capacity((num_steps/100) as usize);
+    // let mut total_energies = Vec::with_capacity((num_steps/100) as usize);
+    // let (waters_energy, receptor_energy) = energy::get_system_energy(new_waters, receptor_atoms);
+    // let mut initial_energy = waters_energy + receptor_energy;
+    // let mut upper_b = initial_energy.max(waters_energy).max(receptor_energy);
+    // let mut lower_b = initial_energy.min(waters_energy).min(receptor_energy);
+    // waters_energies.push(waters_energy);
+    // receptor_energies.push(receptor_energy); 
+    // total_energies.push(initial_energy);
 
     for step in 0..num_steps {
         if let Some(water) = new_waters.choose_mut(&mut rng) {
             let accepted = optimize_using_grids(water, grid, optimization_steps, starting_temp);
 
             // Track rejected moves
-            if accepted {
-                rejection_counter = 0;  // Reset if a move is accepted
-            } else {
-                rejection_counter += 1;
-            }
+            // if accepted {
+            //     rejection_counter = 0;  // Reset if a move is accepted
+            // } else {
+            //     rejection_counter += 1;
+            // }
 
-            // Check for reannealing
-            if rejection_counter >= max_rejections {
-                starting_temp = (starting_temp * reanneal_factor);
-                rejection_counter = 0;  // Reset counter after reannealing
-                println!("Reannealing at step {}: Reset temp to {:.2}", step, starting_temp);
-            }
+            // // Check for reannealing
+            // if rejection_counter >= max_rejections {
+            //     starting_temp = (starting_temp * reanneal_factor);
+            //     rejection_counter = 0;  // Reset counter after reannealing
+            //     println!("Reannealing at step {}: Reset temp to {:.2}", step, starting_temp);
+            // }
 
             // Cooling schedule
             if step % 10 == 0 {
 
                 // For the plot
-                let (new_water_energy, new_receptor_energy) = energy::get_system_energy(new_waters, receptor_atoms);
-                let new_energy = new_water_energy + new_receptor_energy;
-                upper_b = upper_b.max(new_energy).max(new_water_energy).max(new_receptor_energy);
-                lower_b = lower_b.min(new_energy).min(new_water_energy).min(new_receptor_energy);
-                waters_energies.push(new_water_energy);
-                receptor_energies.push(new_receptor_energy);
-                total_energies.push(new_energy);
-                // println!("Old energy: {initial_systems_energy}, new energy: {new_energy}");
-                initial_energy = new_energy;
+                // let (new_water_energy, new_receptor_energy) = energy::get_system_energy(new_waters, receptor_atoms);
+                // let new_energy = new_water_energy + new_receptor_energy;
+                // upper_b = upper_b.max(new_energy).max(new_water_energy).max(new_receptor_energy);
+                // lower_b = lower_b.min(new_energy).min(new_water_energy).min(new_receptor_energy);
+                // waters_energies.push(new_water_energy);
+                // receptor_energies.push(new_receptor_energy);
+                // total_energies.push(new_energy);
+                // // println!("Old energy: {initial_systems_energy}, new energy: {new_energy}");
+                // initial_energy = new_energy;
                 
                 starting_temp *= cooling_rate;
                 if starting_temp < final_temp {
@@ -140,7 +149,7 @@ pub fn optimize_water_nw_with_grids_sa(new_waters: &mut Vec<WaterMolecule>, rece
             // println!("Temp: {starting_temp}");
         }
     }
-    let plot = plot_optimization(&total_energies, &waters_energies, &receptor_energies, lower_b, upper_b, num_steps as usize, optimization_steps as usize);
+    // let plot = plot_optimization(&total_energies, &waters_energies, &receptor_energies, lower_b, upper_b, num_steps as usize, optimization_steps as usize);
 }
 
 pub fn optimize_water_network(receptor_map: &mut Vec<Atom>, new_waters: &Vec<WaterMolecule>, grid: &mut Grid3D, filename: &str) -> Vec<Atom> {
@@ -190,6 +199,57 @@ pub fn optimize_water_network(receptor_map: &mut Vec<Atom>, new_waters: &Vec<Wat
     waters
 
     // to_pdb(&receptor_map.iter().filter(|x| x.atom_type() == "OW" || x.atom_type() == "HW").cloned().collect::<Vec<Atom>>(), filename);
+}
+
+
+#[pyfunction]
+pub fn optimize_disordered_hydrogens(mut receptor_points: Vec<Atom>,
+                                    mut anchor_points: Vec<AnchorPoint>,
+                                    mut grid: Grid3D) -> Vec<Atom> {
+    // let mut anchor_points_updated = Vec::new();
+    for anchor_point in anchor_points.iter_mut() {
+        if let Some(disordered_hydrogen) = anchor_point.disordered_hydrogens() {
+            let anchor_vector = anchor_point.anchor_vectors();
+            let atom_i_xyz = disordered_hydrogen.atom_i_xyz();
+            let atom_j_xyz = disordered_hydrogen.atom_j_xyz();
+            let atom_k_xyz = disordered_hydrogen.atom_k_xyz();
+            let atom_l_xyz = disordered_hydrogen.atom_l_xyz();
+
+            let actual_angle = geometry::dihedral(&atom_i_xyz, 
+                &atom_j_xyz, 
+                &atom_k_xyz, 
+                &atom_l_xyz);
+
+            let (sampled_anchor_points, sampled_anchor_vectors) = disordered_hydrogen.sample_rotatable_hydrogen(*anchor_vector);
+            let mut energies: Vec<f64> = Vec::with_capacity(sampled_anchor_points.len());
+            for index in 0..sampled_anchor_points.len() {
+                // Select the optimal based on the energy and Boltzmann sampling
+                // Then look at the atom_j_xyz, if that is part of anchor points as well,
+                // Rotate those anchor points of the same angle
+                if let Some(energy) = grid.trilinear_interpolation(sampled_anchor_vectors[index], ProbeType::ODa) {
+                    energies.push(energy);
+                } else {
+                    energies.push(0.0);
+                }
+            }
+            let choice = monte_carlo::boltzmann_choices(&energies, None)[0];
+            let optimized_hydrogen = sampled_anchor_points[choice];
+            let optimized_anchor_vector = sampled_anchor_vectors[choice];
+            let expected_angle = geometry::dihedral(&optimized_hydrogen, 
+                &atom_j_xyz, 
+                &atom_k_xyz, 
+                &atom_l_xyz);
+            let rotation_angle = geometry::caclulate_angle_to_apply(&actual_angle, &expected_angle);
+            anchor_point.set_anchor_point_xyz(optimized_hydrogen);
+            anchor_point.set_anchor_vector_xyz(optimized_anchor_vector);
+
+            // Update receptor's coordinates
+            receptor_points.iter_mut().filter(|x| x.coords() == atom_i_xyz).next().unwrap().set_coords(optimized_anchor_vector);
+        }
+    }
+
+    utils::receptor_to_pdb(&receptor_points, "new_receptor.pdb");
+    receptor_points
 }
 
 
