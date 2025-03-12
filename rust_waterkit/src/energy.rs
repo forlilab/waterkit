@@ -197,6 +197,21 @@ pub fn update_grid_energies(atoms_1: &Vec<Atom>, sphere_center: &[f64; 3]) -> (f
     (total_oda_energy, total_ow_energy, total_q_energy)
 }
 
+
+pub fn set_waters_energies(water_molecules: &mut Vec<WaterMolecule>, receptor_atoms: &Vec<Atom>) {
+    let waters_clone = water_molecules.clone();
+    for (water_idx, water) in water_molecules.iter_mut().enumerate() {
+        let other_waters: Vec<&WaterMolecule> = waters_clone.iter().filter(|x| *x != water).collect();
+        let mut water_energy = 0.0;
+        let water_atoms = water.as_vec();
+        water_energy += energy_for_real_water(receptor_atoms, &water_atoms);
+        for other_water in other_waters {
+            water_energy += energy_for_real_water(&water_atoms, &other_water.as_vec());
+        }
+        water.set_energy(water_energy);
+    }
+}
+
 pub fn get_system_energy(water_molecules: &Vec<WaterMolecule>, receptor_atoms: &Vec<Atom>) -> (f64, f64) {
     let mut total_energy = 0.0;
     let mut water_energy = 0.0;

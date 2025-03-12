@@ -3,7 +3,7 @@ use crate::atom::Atom;
 use crate::geometry;
 use crate::consts;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 // #[pyclass]
 /// Water Molecule defined by three atoms.
 /// Electrostatics and charges are assigned
@@ -13,7 +13,8 @@ pub struct WaterMolecule {
     hydrogen_1: Atom,
     hydrogen_2: Atom,
     hydrogen_bonds: Vec<AnchorPoint>,
-    res_number: i32
+    res_number: i32,
+    energy: f64,
 }
 
 // #[pymethods]
@@ -61,7 +62,8 @@ impl WaterMolecule {
                 hydrogen_1: hydrogen_1,
                 hydrogen_2: hydrogen_2,
                 hydrogen_bonds: Vec::new(),
-                res_number: res_number
+                res_number: res_number,
+                energy: 0.0
             }
         }
     pub fn as_vec(&self) -> Vec<Atom> {
@@ -119,19 +121,27 @@ impl WaterMolecule {
         let lp2_xyz = geometry::rotate_point(&v, &oxygen_xyz, &r, angle_lp2);
         let lp2_resized = geometry::resize_vector(&lp2_xyz, &hb_length, &oxygen_xyz);
 
-        let ap1 = AnchorPoint::new("donor".to_string(), oxygen_xyz, lp1_resized, None);
+        let ap1 = AnchorPoint::new(0, "donor".to_string(), oxygen_xyz, lp1_resized, None);
         self.hydrogen_bonds.push(ap1);
 
-        let ap2 = AnchorPoint::new("donor".to_string(), oxygen_xyz, lp2_resized, None);
+        let ap2 = AnchorPoint::new(1, "donor".to_string(), oxygen_xyz, lp2_resized, None);
         self.hydrogen_bonds.push(ap2);
 
         let r_h1 = geometry::resize_vector(&h1.coords(), &2.8, &oxygen_atom.coords());
-        let ap3 = AnchorPoint::new("acceptor".to_string(), oxygen_xyz, r_h1, None);
+        let ap3 = AnchorPoint::new(2, "acceptor".to_string(), oxygen_xyz, r_h1, None);
         self.hydrogen_bonds.push(ap3);
 
         let r_h2 = geometry::resize_vector(&h2.coords(), &2.8, &oxygen_atom.coords());
-        let ap4 = AnchorPoint::new("acceptor".to_string(), oxygen_xyz, r_h2, None);
+        let ap4 = AnchorPoint::new(3, "acceptor".to_string(), oxygen_xyz, r_h2, None);
         self.hydrogen_bonds.push(ap4);
+    }
+
+    pub fn set_energy(&mut self, energy: f64) {
+        self.energy = energy
+    }
+
+    pub fn get_energy(&self) -> f64 {
+        self.energy
     }
 }
 

@@ -31,11 +31,12 @@ impl Iterator for FloatRange {
     }
 }
 
-pub fn to_pdb(atoms: &Vec<Atom>, fname: &str) {
+pub fn to_pdb(atoms: &Vec<Atom>, fname: &str, energies: Option<Vec<f64>>) {
     let mut cnt = 0;
     let mut h_index = 1;
     let f = std::fs::File::create(fname).expect("unable to create file");
     let mut f = BufWriter::new(f);
+    let include_energies = energies.is_some();
     for (index, point) in atoms.iter().enumerate() {
         if index % 3 == 0 {
             cnt += 1;
@@ -43,6 +44,10 @@ pub fn to_pdb(atoms: &Vec<Atom>, fname: &str) {
         let coordinates = point.coords();
         let mut line = String::new();
         let mut h_type = "";
+        let mut energy = 0.0;
+        if include_energies {
+            energy = energies.as_ref().unwrap()[cnt-1];
+        }
         if point.atom_type() == "HW" {
             if h_index < 2 {
                 h_type = "H1";
@@ -64,7 +69,7 @@ pub fn to_pdb(atoms: &Vec<Atom>, fname: &str) {
                 coordinates[1],
                 coordinates[2],
                 0.0,
-                0.0,
+                energy,
                 "H"
             );
         }
@@ -81,7 +86,7 @@ pub fn to_pdb(atoms: &Vec<Atom>, fname: &str) {
                 coordinates[1],
                 coordinates[2],
                 0.0,
-                0.0,
+                energy,
                 "O"
             );
         }
@@ -94,6 +99,7 @@ pub fn to_pdb(atoms: &Vec<Atom>, fname: &str) {
         write!(f, "{}", line).expect("Unable to write data");
         // fs::write(fname, line).expect("Unable to write file");
     }
+    write!(f, "{}", format!("TER")).expect("Unable to write data");
 }
 
 

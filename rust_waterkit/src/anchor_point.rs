@@ -6,6 +6,7 @@ use crate::rotatable_bond::RotatableBond;
 
 #[pyclass]
 pub struct AnchorPoint {
+    idx: usize,
     hb_type: String,
     anchor_xyz: [f64; 3],
     vector_xyz: [f64; 3],
@@ -15,13 +16,18 @@ pub struct AnchorPoint {
 #[pymethods]
 impl AnchorPoint {
     #[new]
-    pub fn new(hb_type: String, anchor_xyz: [f64; 3], vector_xyz: [f64; 3], disorderd_hydrogens: Option<RotatableBond>) -> AnchorPoint {
+    pub fn new(idx: usize, hb_type: String, anchor_xyz: [f64; 3], vector_xyz: [f64; 3], disorderd_hydrogens: Option<RotatableBond>) -> AnchorPoint {
         Self {
+            idx: idx,
             hb_type: hb_type.clone(),
             anchor_xyz: anchor_xyz.clone(),
             vector_xyz: vector_xyz.clone(),
             disordered_hydrogens: disorderd_hydrogens
         }
+    }
+
+    pub fn get_idx(&self) -> usize {
+        self.idx
     }
 
     pub fn anchor_vectors(&self) -> &[f64; 3] {

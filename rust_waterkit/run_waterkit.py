@@ -1,8 +1,5 @@
 import numpy as np
-import prody
-import re
-import multiprocessing as mp
-from tqdm import tqdm
+import time
 import sys
 import os
 import meeko
@@ -24,7 +21,7 @@ def load_anchor_points(filename, rotatable_hydrogens):
                 rotatable_bond = rotatable_hydrogens[h_idx]
         vector_xyz = [float(line[3]), float(line[4]), float(line[5])]
         hb_type = line[-1]
-        ap = rust_waterkit.AnchorPoint(hb_type, anchor_xyz, vector_xyz, rotatable_bond)
+        ap = rust_waterkit.AnchorPoint(idx, hb_type, anchor_xyz, vector_xyz, rotatable_bond)
         anchor_points.append(ap)
     return anchor_points
 
@@ -33,36 +30,36 @@ def get_data_form_meeko(wanted_residues, pdb_file, save=True):
     rotatable_bonds = parse_rotatable_hydrogens()
     surface_atoms = list()
     box_boundaries = list()
-    # with open(pdb_file) as fi:
-    #     pdbstring = fi.read()
+    with open(pdb_file) as fi:
+        pdbstring = fi.read()
         
-    # # # blunt_ends = [("A:1", 0)]
-    # mk_prep = meeko.MoleculePreparation(
-    #     merge_these_atom_types=[],
-    #     load_atom_params=["vina_params", "openff"],
-    #     charge_model="espaloma",
-    # )
+    # # blunt_ends = [("A:1", 0)]
+    mk_prep = meeko.MoleculePreparation(
+        merge_these_atom_types=[],
+        load_atom_params=["vina_params", "openff"],
+        charge_model="espaloma",
+    )
     
-    # templates = meeko.ResidueChemTemplates.create_from_defaults()
-    # polymer = meeko.Polymer.from_pdb_string(pdb_string=pdbstring,
-    #                                         chem_templates=templates,
-    #                                         mk_prep=mk_prep,
-    #                                         allow_bad_res=True,
-    #                                         default_altloc="A",)
-    #                                         # blunt_ends=blunt_ends)
-    # json_s = polymer.to_json()
-    # with open("target.json", "w") as fo:
-    #     fo.write(json_s)
+    templates = meeko.ResidueChemTemplates.create_from_defaults()
+    polymer = meeko.Polymer.from_pdb_string(pdb_string=pdbstring,
+                                            chem_templates=templates,
+                                            mk_prep=mk_prep,
+                                            allow_bad_res=True,
+                                            default_altloc="A",)
+                                            # blunt_ends=blunt_ends)
+    json_s = polymer.to_json()
+    with open("target.json", "w") as fo:
+        fo.write(json_s)
 
     # if save:
     #     pdb_f = polymer.to_pdb()
     #     with open("meeko.pdb", "w") as fo:
     #         fo.write(pdb_f)
-    with open("/data/phd/waterkit/target.json") as fi:
+    # with open("/data/phd/waterkit/target.json") as fi:
     # with open("/home/niccolo/phd/waterkit/rust_waterkit/target.json") as fi:
-        json_string = fi.read()
+        # json_string = fi.read()
 
-    polymer = meeko.Polymer.from_json(json_string)
+    # polymer = meeko.Polymer.from_json(json_string)
 
     for res_id, monomer in polymer.get_valid_monomers().items():
         unique_id = f"{res_id.split(':')[0]}:{monomer.input_resname}:{res_id.split(':')[-1]}"
@@ -81,17 +78,7 @@ def get_data_form_meeko(wanted_residues, pdb_file, save=True):
                                                                    atom_k_xyz=atom_k_xyz,
                                                                    atom_l_xyz=atom_l_xyz))
                 break
-        # atom_i_xyz, atom_j_xyz, atom_k_xyz, atom_l_xyz = None, None, None, None
         for atom in monomer.molsetup.atoms:
-            # if len(matching_atoms_rotatable) > 0:
-            #     if atom.index == matching_atoms_rotatable[0][0]:
-            #         atom_i_xyz = atom.coord
-            #     elif atom.index == matching_atoms_rotatable[0][1]:
-            #         atom_j_xyz = atom.coord
-            #     elif atom.index == matching_atoms_rotatable[0][2]:
-            #         atom_k_xyz = atom.coord
-            #     elif atom.index == matching_atoms_rotatable[0][3]:
-            #         atom_l_xyz = atom.coord
             if atom.is_ignore:
                 continue
             rmin_half = monomer.molsetup.atom_params["rmin_half"][atom.index]
@@ -117,11 +104,6 @@ def get_data_form_meeko(wanted_residues, pdb_file, save=True):
             surface_atoms.append(new_atom)
             if wanted_residues is not None and unique_id in wanted_residues:
                 box_boundaries.append(atom.coord)
-        # if atom_i_xyz is not None and atom_j_xyz is not None and atom_k_xyz is not None and atom_l_xyz is not None:  
-        #     rotatable_hydrogens.append(rust_waterkit.RotatableBond(atom_i_xyz=atom_i_xyz,
-        #                                                            atom_j_xyz=atom_j_xyz,
-        #                                                            atom_k_xyz=atom_k_xyz,
-        #                                                            atom_l_xyz=atom_l_xyz))
     try:
         box_boundaries = np.array(box_boundaries)
         min_box_boundaries = [np.min(box_boundaries[:, 0]), np.min(box_boundaries[:, 1]), np.min(box_boundaries[:, 2])]
@@ -171,19 +153,26 @@ if __name__ == "__main__":
                            "A:PHE:138", "A:TYR:139", "A:VAL:150",
                            "A:TRP:162", "A:THR:184"]
         # wanted_residues = list()
-        parametrized_atoms, min_box_boundaries, max_box_boundaries, rotatable_hydrogens = get_data_form_meeko(wanted_residues, "/data/phd/waterkit/rust_waterkit/waterkit_data/1uyg_prepared.pdb")
+        parametrized_atoms, min_box_boundaries, max_box_boundaries, rotatable_hydrogens = get_data_form_meeko(wanted_residues, "/data/phd/waterkit/protein_prepared.pdb")
         # parametrized_atoms, min_box_boundaries, max_box_boundaries = get_data_form_meeko(wanted_residues, "/home/niccolo/phd/waterkit/example/1uyg_no_ligand.pdb")
 
         waters = load_waters_orientations()
-        anchor_points = load_anchor_points("/data/phd/waterkit/rust_waterkit/anchor_points.txt", rotatable_hydrogens)
+        anchor_points = load_anchor_points("/data/phd/waterkit/anchor_points_translated.txt", rotatable_hydrogens)
         # anchor_points = load_anchor_points("/home/niccolo/phd/waterkit/rust_waterkit/anchor_points.txt")
+        # with open("anchor_points.xyz", "w") as fo:
+        #     fo.write(f"{len(anchor_points)}\n\n")
+        #     for anchor_point in anchor_points:
+        #         ap_xyz = anchor_point.anchor_point()
+        #         fo.write(f"H {ap_xyz[0]} {ap_xyz[1]} {ap_xyz[2]}\n")
+        
         spacing = 0.375
-        center = [2.7, 11.45, 24.80]
+        # center = [2.7, 11.45, 24.80]
+        center = [32.610, 28.188, 36.505]
         x_size, y_size, z_size = 24.0, 24.0, 24.0
 
         
 
-        # print("Starting waterkit!")
+        print("Starting waterkit!")
         aps = anchor_points
         n_frames = 1000
 
@@ -191,17 +180,24 @@ if __name__ == "__main__":
         # optimization_steps = [1, 10, 100, 1000, 10000]
         
         # # Setup grids at the beginning
+        start = time.time()
         grid = rust_waterkit.setup_system(parametrized_atoms, x_size, y_size, z_size, spacing, center)
-        receptor_points = rust_waterkit.optimize_disordered_hydrogens(parametrized_atoms, aps, grid)
-        for point in receptor_points:
-            coords = point.coords()
-            print(f"{point.atom_type()} {coords[0]} {coords[1]} {coords[2]}")
-        grid = rust_waterkit.setup_system(receptor_points, x_size, y_size, z_size, spacing, center)
+        # optimized_receptor, new_anchor_points = rust_waterkit.optimize_disordered_hydrogens(parametrized_atoms, aps, grid)
+        # with open("new_anchor_points.xyz", "w") as fo:
+        #     fo.write(f"{len(anchor_points)}\n\n")
+        #     for anchor_point in new_anchor_points:
+        #         ap_xyz = anchor_point.anchor_point()
+        #         fo.write(f"H {ap_xyz[0]} {ap_xyz[1]} {ap_xyz[2]}\n")
+        # for point in optimized_receptor:
+        #     coords = point.coords()
+        #     print(f"{point.atom_type()} {coords[0]} {coords[1]} {coords[2]}")
+        # grid = rust_waterkit.setup_system(optimized_receptor, x_size, y_size, z_size, spacing, center)
 
-        # # for n_steps in num_steps:
-        # #     for o_steps in optimization_steps:
-        # n_steps = 30000
-        # o_steps = 1000
-        # save_path = f"test"
-        # os.makedirs(save_path, exist_ok=True)
-        # rust_waterkit.run_parallel_waterkit(parametrized_atoms, waters, anchor_points, grid, n_frames, n_steps, o_steps, save_path)
+        # for n_steps in num_steps:
+        #     for o_steps in optimization_steps:
+        n_steps = 1000
+        o_steps = 100
+        save_path = f"test"
+        os.makedirs(save_path, exist_ok=True)
+        rust_waterkit.run_parallel_waterkit(parametrized_atoms, waters, aps, grid, n_frames, n_steps, o_steps, save_path)
+        print(f"Time necessary for the rust part: {time.time() - start}")

@@ -13,7 +13,10 @@ pub struct RotatableBond {
 #[pymethods]
 impl RotatableBond {
     #[new]
-    pub fn new(atom_i_xyz: [f64; 3], atom_j_xyz: [f64; 3], atom_k_xyz: [f64; 3], atom_l_xyz: [f64; 3]) -> RotatableBond {
+    pub fn new(atom_i_xyz: [f64; 3], 
+        atom_j_xyz: [f64; 3],
+        atom_k_xyz: [f64; 3],
+        atom_l_xyz: [f64; 3]) -> RotatableBond {
         Self {
             atom_i_xyz: atom_i_xyz,
             atom_j_xyz: atom_j_xyz,

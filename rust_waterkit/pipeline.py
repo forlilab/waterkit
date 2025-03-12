@@ -22,7 +22,7 @@ if __name__ == "__main__":
         # cd_cmd = f"cd {os.path.join(base_path, 'test/optimized/')}"
         os.chdir(f"{os.path.join(base_path, 'test/optimized/')}")
         
-        make_traj_command = f"wk_make_trajectory.py -r {os.path.join(base_path, 'waterkit_data/1uyg_prepared.pdb')} -w traj/ -o 1uyg_optimized"
+        make_traj_command = f"wk_make_trajectory.py -r {os.path.join(base_path, '../protein_prepared.pdb')} -w traj/ -o 1uyg_optimized"
         process = subprocess.run(make_traj_command, shell=True, capture_output=True, text=True)
         if process.returncode == 0:
             print("Command executed successfully:")
@@ -81,7 +81,7 @@ if __name__ == "__main__":
         # subprocess.run(f"cd {os.path.join(base_path, 'test/unoptimized/')}", shell=True, capture_output=True, text=True)
         os.chdir(f"{os.path.join(base_path, 'test/unoptimized/')}")
         
-        make_traj_command = f"wk_make_trajectory.py -r {os.path.join(base_path, 'waterkit_data/1uyg_prepared.pdb')} -w traj/ -o 1uyg_unoptimized"
+        make_traj_command = f"wk_make_trajectory.py -r {os.path.join(base_path, '../protein_prepared.pdb')} -w traj/ -o 1uyg_unoptimized"
         process = subprocess.run(make_traj_command, shell=True, capture_output=True, text=True)
         if process.returncode == 0:
             print("Command executed successfully:")
