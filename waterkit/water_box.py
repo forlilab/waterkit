@@ -288,8 +288,8 @@ class WaterBox():
             for index, row in molecule.hydrogen_bonds.iterrows():
                 # Add water molecule only if it's in the map
                 anchor_xyz = molecule.coordinates(row.atom_i)[0]
-                if self.number_of_shells() == 0: 
-                    print(f"{anchor_xyz[0]} {anchor_xyz[1]} {anchor_xyz[2]} {row.vector_xyz[0]} {row.vector_xyz[1]} {row.vector_xyz[2]} {row.anchor_type}")
+                # if self.number_of_shells() == 0: 
+                #     print(f"{anchor_xyz[0]} {anchor_xyz[1]} {anchor_xyz[2]} {row.vector_xyz[0]} {row.vector_xyz[1]} {row.vector_xyz[2]} {row.anchor_type}")
                 if self.map.is_in_map(anchor_xyz):
                     w = Water(row.vector_xyz, atom_type, partial_charge, anchor_xyz, row.vector_xyz, row.anchor_type)
                     # if self.number_of_shells() == 0:
