@@ -9,6 +9,7 @@ use crate::consts;
 /// Electrostatics and charges are assigned
 /// according to TIP3P forcefield.
 pub struct WaterMolecule {
+    layer_id: usize,
     oxygen: Atom,
     hydrogen_1: Atom,
     hydrogen_2: Atom,
@@ -58,6 +59,7 @@ impl WaterMolecule {
             );
             let res_number: i32 = oxygen.residue_number;
             WaterMolecule {
+                layer_id: 0,
                 oxygen: oxygen,
                 hydrogen_1: hydrogen_1,
                 hydrogen_2: hydrogen_2,
@@ -71,6 +73,10 @@ impl WaterMolecule {
         atoms
     }
 
+    pub fn set_layer_id(&mut self, layer_id: usize) {
+        self.layer_id = layer_id
+    }
+    
     pub fn get_res_number(&self) -> i32 {
         self.res_number
     }

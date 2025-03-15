@@ -78,7 +78,8 @@ fn optimize_poistion_grid(grid: &Grid3D, point: &AnchorPoint) -> [f64; 3] {
     *point.anchor_point()
 }
 
-pub fn sample_using_grids(grid: &mut Grid3D,  
+pub fn sample_using_grids(layer_id: usize,
+        grid: &mut Grid3D,  
         anchor_points: &mut Vec<AnchorPoint>, 
         water_configurations: &Vec<[f64; 6]>,
         new_water_molecules: &mut Vec<WaterMolecule>,
@@ -119,6 +120,7 @@ pub fn sample_using_grids(grid: &mut Grid3D,
 
             if placed {
                 // let start = SystemTime::now();
+                water.set_layer_id(layer_id + 1);
                 water.guess_new_hydrogen_bonds();
                 for hb in water.hydrogen_bonds().into_iter() {
                     new_anchor_points.push(hb);
