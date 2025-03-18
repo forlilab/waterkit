@@ -13,7 +13,9 @@ use crate::waterkit_system;
 use crate::waterkit_system::System;
 
 use core::f64;
+use std::collections::HashMap;
 use std::f64::consts::PI;
+use std::thread::current;
 use rand::prelude::*;
 
 /// The main idea behind the optimizer is that we want to 
@@ -300,9 +302,11 @@ impl<'a> SimulatedAnnealing<'a> {
                         neighbor_atom.rmin_half(),
                         water_atom.rmin_half());
                     e_lj += lj_energy;
+                    // println!("LJ: {lj_energy}");
                 }
                 let electrostatics_energy = energy::coulomb_energy(neighbor_atom.charge(), water_atom.charge(), distance);
                 e_elec += electrostatics_energy;
+                // println!("Q: {electrostatics_energy}");
             }
         }
         e_elec + e_lj
@@ -311,30 +315,28 @@ impl<'a> SimulatedAnnealing<'a> {
     // Perturb a water molecule (translate and rotate)
     fn perturb_water(&self, water: &WaterMolecule) -> WaterMolecule {
         let mut rng = rand::thread_rng();
-        let axis = geometry::normalize(&[
-            rng.gen_range(-1.0_f64..1.0_f64),
-            rng.gen_range(-1.0_f64..1.0_f64),
-            rng.gen_range(-1.0_f64..1.0_f64),
-        ]);;
+        let axis = geometry::normalize(&[rng.gen(), rng.gen(), rng.gen()]);
         let mut new_water = water.clone();
         
 
         // Small random translation (e.g., max 0.2 Å in each direction)
-        let delta = 0.2;
+        let delta = 0.1;
         let trans = [
             rng.gen_range(-delta..delta),
             rng.gen_range(-delta..delta),
             rng.gen_range(-delta..delta),
         ];
+
         let mut new_oxygen_coords = new_water.oxygen.coords();
         let mut new_h1_coords = new_water.hydrogen_1.coords();
         let mut new_h2_coords = new_water.hydrogen_2.coords();
 
         new_oxygen_coords = geometry::sum_points(&new_oxygen_coords, &trans);
+        new_h1_coords = geometry::sum_points(&new_h1_coords, &trans);
+        new_h2_coords = geometry::sum_points(&new_h2_coords, &trans);
 
-        // Small random rotation around oxygen (e.g., max 5 degrees)
-        // let angle = rng.gen_range(0.0..PI);
-        let angle = rng.gen_range(-5.0_f64..5.0_f64).to_radians();
+        let angle = rng.gen_range(0.0..PI);
+        // let angle = rng.gen_range(-5.0_f64..5.0_f64).to_radians();
         let cos_theta = angle.cos();
         let sin_theta = angle.sin();
     
@@ -372,12 +374,15 @@ impl<'a> SimulatedAnnealing<'a> {
     }
 
     pub fn run(&mut self) {
+        let mut acceptance_rate = 0;
         let mut rng = rand::thread_rng();
         let mut cnt = 0;
         while self.temperature > self.temp_min {
             // Randomly select a water molecule
             let water_idx = rng.gen_range(0..self.waters.len());
             let current_water = &self.waters[water_idx];
+            let base_idx = water_idx * 3;
+            let exclude = [base_idx, base_idx + 1, base_idx + 2];
 
             // Get current neighbors and energy
             let water_positions = [
@@ -385,8 +390,10 @@ impl<'a> SimulatedAnnealing<'a> {
                 current_water.hydrogen_1.coords(),
                 current_water.hydrogen_2.coords(),
             ];
-            let neighbors = waterkit_system::get_neighbors(&self.system.rtree, &water_positions, self.cutoff);
+            let neighbors = waterkit_system::get_neighbors(&self.system.rtree, &water_positions, self.cutoff, Some(&exclude));
             let current_energy = self.calculate_energy(current_water, &neighbors);
+
+            // Remove the waters from the tree to be able to avoid clashes
 
             // Perturb the water molecule
             let new_water = self.perturb_water(current_water);
@@ -395,14 +402,21 @@ impl<'a> SimulatedAnnealing<'a> {
                 new_water.hydrogen_1.coords(),
                 new_water.hydrogen_2.coords(),
             ];
-            let new_neighbors = waterkit_system::get_neighbors(&self.system.rtree, &new_positions, self.cutoff);
+
+
+            let new_neighbors = waterkit_system::get_neighbors(&self.system.rtree, &new_positions, self.cutoff, Some(&exclude));
             let new_energy = self.calculate_energy(&new_water, &new_neighbors);
 
             // Acceptance criterion
             // println!("Old energy: {}", current_energy);
             // println!("New energy: {}\n", new_energy);
             let delta_energy = new_energy - current_energy;
+            // println!("Displacement: old_energy = {}, new_energy = {}, delta_u = {}", current_energy, new_energy, delta_energy);
             if monte_carlo::boltzmann_acceptance_rejection(&new_energy, &current_energy, &self.temperature, &consts::BOLTZMANN_K) {
+                // if current_energy > 0. {
+                //     println!("Old energy: {current_energy}\nNew energy: {new_energy}\nAccepted!\n\n");
+                // }
+                acceptance_rate += 1;
                 self.update_system(water_idx, new_water);
             }
 
@@ -414,5 +428,16 @@ impl<'a> SimulatedAnnealing<'a> {
             cnt += 1;
             // println!("Steps: {cnt}");
         }
+        println!("Acceptance rate: {}%", acceptance_rate as f64/100.0);
+    }
+
+    pub fn run_by_layer(&mut self) {
+        let mut group_by_layers: HashMap<usize, Vec<&WaterMolecule>> = HashMap::new();
+        for water_idx in 0..self.waters.len() {
+            let water = &self.waters[water_idx];
+            group_by_layers.entry(water.layer_id).or_insert_with(Vec::new).push(water);
+        }
+
+        
     }
 }

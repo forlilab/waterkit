@@ -9,7 +9,7 @@ use crate::consts;
 /// Electrostatics and charges are assigned
 /// according to TIP3P forcefield.
 pub struct WaterMolecule {
-    layer_id: usize,
+    pub layer_id: usize,
     pub oxygen: Atom,
     pub hydrogen_1: Atom,
     pub hydrogen_2: Atom,
