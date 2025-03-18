@@ -83,7 +83,7 @@ pub fn sample_using_grids(layer_id: usize,
         anchor_points: &mut Vec<AnchorPoint>, 
         water_configurations: &Vec<[f64; 6]>,
         new_water_molecules: &mut Vec<WaterMolecule>,
-        last_residue_number: &mut i32) -> bool {
+        last_residue_number: &mut usize) -> bool {
     
     let mut new_anchor_points = Vec::new();
     let placement: bool = false;
@@ -149,7 +149,7 @@ pub fn sample_using_grids(layer_id: usize,
 pub fn sample_waters_with_grids(oxygen_atom: &[f64; 3],
     water_configurations: &Vec<[f64; 6]>,
     grid: &Grid3D,
-    last_residue_number: &mut i32) -> (bool, WaterMolecule) {
+    last_residue_number: &mut usize) -> (bool, WaterMolecule) {
     let oxygen_position = *oxygen_atom;
     let lj_oxygen = grid.trilinear_interpolation(oxygen_position, ProbeType::OW).unwrap_or(f64::INFINITY);
 

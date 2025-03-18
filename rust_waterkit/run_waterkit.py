@@ -195,8 +195,8 @@ if __name__ == "__main__":
 
         # for n_steps in num_steps:
         #     for o_steps in optimization_steps:
-        n_steps = 5000
-        o_steps = 1000
+        n_steps = 10000
+        o_steps = 1
         save_path = f"test"
         os.makedirs(save_path, exist_ok=True)
         rust_waterkit.run_parallel_waterkit(parametrized_atoms, waters, aps, grid, n_frames, n_steps, o_steps, save_path)

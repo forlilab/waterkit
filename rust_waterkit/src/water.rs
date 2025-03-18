@@ -10,11 +10,11 @@ use crate::consts;
 /// according to TIP3P forcefield.
 pub struct WaterMolecule {
     layer_id: usize,
-    oxygen: Atom,
-    hydrogen_1: Atom,
-    hydrogen_2: Atom,
+    pub oxygen: Atom,
+    pub hydrogen_1: Atom,
+    pub hydrogen_2: Atom,
     hydrogen_bonds: Vec<AnchorPoint>,
-    res_number: i32,
+    res_number: usize,
     energy: f64,
 }
 
@@ -25,7 +25,7 @@ impl WaterMolecule {
                 hydrogen_1_coords: [f64; 3],
                 hydrogen_2_coords: [f64; 3],
                 chain: String,
-                resnumber: i32) -> Self {
+                resnumber: usize) -> Self {
             let oxygen = Atom::new("OW".to_string(),
                 format!("{chain}:HOH:{resnumber}:0"),
                 oxygen_coords,
@@ -57,7 +57,7 @@ impl WaterMolecule {
                 false,
                 false
             );
-            let res_number: i32 = oxygen.residue_number;
+            let res_number: usize = oxygen.residue_number;
             WaterMolecule {
                 layer_id: 0,
                 oxygen: oxygen,
@@ -77,7 +77,7 @@ impl WaterMolecule {
         self.layer_id = layer_id
     }
     
-    pub fn get_res_number(&self) -> i32 {
+    pub fn get_res_number(&self) -> usize {
         self.res_number
     }
 

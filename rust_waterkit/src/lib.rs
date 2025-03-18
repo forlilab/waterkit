@@ -8,6 +8,7 @@ pub mod anchor_point;
 pub mod rotatable_bond;
 pub mod atom;
 pub mod water;
+pub mod waterkit_system;
 pub mod energy;
 pub mod monte_carlo;
 pub mod optimizer;

@@ -43,7 +43,6 @@ pub fn coulomb_energy(q1: f64, q2: f64, r: f64) -> f64 {
     coulomb
 }
 
-
 pub fn energy(atoms_1: &Vec<Atom>, atoms_2: &Vec<Atom>) -> f64 {
     let mut total_energy = 0.0;
     for atom_1 in atoms_1.iter() {
@@ -83,6 +82,10 @@ pub fn energy_for_real_water(atoms_1: &Vec<Atom>, atoms_2: &Vec<Atom>) -> f64 {
         let atom_1_coords = atom_1.coords().clone();
         // Atoms2 are the water's atoms
         for atom_2 in atoms_2.iter() {
+            if atom_1.residue_number == atom_2.residue_number {
+                continue
+            }
+
             let atom_2_coords = atom_2.coords().clone();
             // Calculate distance avoiding division by 0
             let distance = f64::max(geometry::euclidean_distance(&atom_1_coords,

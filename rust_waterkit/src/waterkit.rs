@@ -17,8 +17,10 @@ use crate::grid::Grid3D;
 use crate::grid::ProbeType;
 use crate::consts;
 use crate::monte_carlo;
+use crate::optimizer;
 use crate::optimizer::optimize;
 use crate::optimizer::optimize_using_grids;
+use crate::optimizer::SimulatedAnnealing;
 use crate::sampling::sample_using_grids;
 use crate::setup::setup_grid;
 use crate::utils::to_pdb;
@@ -26,6 +28,7 @@ use crate::utils::plot_optimization;
 use crate::water::WaterMolecule;
 use crate::energy;
 use crate::utils;
+use crate::waterkit_system;
 
 fn run_single_waterkit_with_grids(receptor_points: &[Atom], 
     water_configurations: &Vec<[f64; 6]>, 
@@ -35,8 +38,8 @@ fn run_single_waterkit_with_grids(receptor_points: &[Atom],
     num_steps: i32, 
     optimization_steps: i32) -> (Vec<Atom>, Vec<Atom>) {
     
-    let mut receptor_map = receptor_points.to_vec();
-    let mut last_residue_number = receptor_map.iter().map(|n| n.residue_number).max().unwrap_or(1);
+    // let mut receptor_map = receptor_points.to_vec();
+    let mut last_residue_number = receptor_points.iter().map(|n| n.residue_number).max().unwrap_or(1);
 
     let mut mutable_anchor_points = anchor_points.to_vec();
     let mut new_water_molecules = Vec::new();
@@ -44,40 +47,36 @@ fn run_single_waterkit_with_grids(receptor_points: &[Atom],
         sample_using_grids(_i, &mut grid, &mut mutable_anchor_points, &water_configurations, &mut new_water_molecules, &mut last_residue_number);
     }
 
-    // let waters: Vec<Atom> = receptor_map.iter().filter(|x| x.atom_type() == "OW" || x.atom_type() == "HW").cloned().collect();
     let mut waters: Vec<Atom> = Vec::with_capacity(new_water_molecules.len() * 3);
-    // for w in new_water_molecules.iter() {
-        // waters.extend(w.as_vec().into_iter());
-        // receptor_map.extend(w.as_vec().into_iter());
-    // } 
     let mut  unoptimized_water_atoms = Vec::with_capacity(new_water_molecules.len() * 3);
+    let mut system_atoms = receptor_points.to_vec();
     for water in new_water_molecules.iter() {
         for atom in water.as_vec() {
+            system_atoms.push(atom.clone());
             unoptimized_water_atoms.push(atom);
         }
     }
-    // energy::set_waters_energies(&mut new_water_molecules, &receptor_map);
-    // utils::to_pdb(&unoptimized_water_atoms, &format!("test/water_{epoch}_unoptimized.pdb"), Some(new_water_molecules.iter().map(|x| x.get_energy()).collect::<Vec<f64>>()));
-    // utils::to_pdb(&unoptimized_water_atoms, &format!("test/water_{epoch}_unoptimized.pdb"), None);
+    let system = waterkit_system::System::new(&mut system_atoms);
 
-    // unoptimized_water_atoms
+    let mut sa = optimizer::SimulatedAnnealing::new(
+        system,
+        new_water_molecules,
+        1200.0,
+        1.0,
+        0.99,
+        12.0
+    );
 
-    // let optimized_waters = optimize_water_network(&mut receptor_map, &new_water_molecules, &mut grid, &format!("test/water_{epoch}_optimized.pdb"));
-    // let optimized_waters = optimize_water_nw_with_grids(&mut new_water_molecules, &mut grid);
-    // optimized_waters
-    optimize_water_nw_with_grids_sa(&mut new_water_molecules, &receptor_map, &mut grid, num_steps, optimization_steps);
+    sa.run();
+    // optimize_water_nw_with_grids_sa(&mut new_water_molecules, &receptor_map, &mut grid, num_steps, optimization_steps);
     
-    for w in new_water_molecules.into_iter() {
-        waters.extend(w.as_vec().into_iter());
+    // for w in new_water_molecules.into_iter() {
+    //     waters.extend(w.as_vec().into_iter());
+    // }
+    for w in sa.waters {
+        waters.extend(w.as_vec());
     }
 
-    // let old_energies: Vec<f64> = new_water_molecules.iter().map(|x| x.get_energy()).collect();
-    // energy::set_waters_energies(&mut new_water_molecules, &receptor_map);
-    // let new_energies: Vec<f64> = new_water_molecules.iter().map(|x| x.get_energy()).collect();
-    // for (idx, water) in new_water_molecules.iter_mut().enumerate() {
-    //     water.set_energy(new_energies[idx] - old_energies[idx]);
-    // }
-    // utils::to_pdb(&waters, &format!("test/water_{epoch}_optimized.pdb"), Some(new_water_molecules.iter().map(|x| x.get_energy()).collect::<Vec<f64>>()));
     (unoptimized_water_atoms, waters)
 }
 
@@ -170,7 +169,7 @@ pub fn optimize_water_nw_with_grids_sa(new_waters: &mut Vec<WaterMolecule>, rece
 pub fn optimize_water_network(receptor_map: &mut Vec<Atom>, new_waters: &Vec<WaterMolecule>, grid: &mut Grid3D, filename: &str) -> Vec<Atom> {
     // let start = SystemTime::now();
     let mut rng = thread_rng();
-    let mut waters_res_number: Vec<i32> = new_waters.iter()
+    let mut waters_res_number: Vec<usize> = new_waters.iter()
         .map(|w| w.get_res_number())
         .collect::<HashSet<_>>() // Collect unique values first
         .into_iter()

@@ -10,7 +10,7 @@ pub struct Atom {
     atom_id: String,
 
     // Atom number 
-    pub residue_number: i32,
+    pub residue_number: usize,
 
     // 3D coordinates of the atom
     coords: [f64; 3],
@@ -63,7 +63,7 @@ impl Atom {
     pub fn set_atom_number(&mut self) {
         let splitted: Vec<&str> = self.atom_id().split(":").collect();
         self.residue_number = splitted[2]
-            .parse::<i32>()
+            .parse::<usize>()
             .expect("Failed to parse atom number")
     }
 
