@@ -257,6 +257,7 @@ pub fn optimize_using_grids(water_molecule: &mut WaterMolecule, grid: &mut Grid3
 pub struct SimulatedAnnealing<'a> {
     pub system: System<'a>,
     pub waters: Vec<WaterMolecule>,
+    pub waters_by_layer: HashMap<usize, Vec<WaterMolecule>>,
     temperature: f64,
     temp_min: f64,
     cooling_rate: f64,
@@ -272,9 +273,15 @@ impl<'a> SimulatedAnnealing<'a> {
         cooling_rate: f64,
         cutoff: f64,
     ) -> Self {
+        let mut waters_by_layer: HashMap<usize, Vec<WaterMolecule>> = HashMap::new();
+        for water_idx in 0..waters.len() {
+            let water = &waters[water_idx];
+            waters_by_layer.entry(water.layer_id).or_insert_with(Vec::new).push(water.clone());
+        }
         Self {
             system,
             waters,
+            waters_by_layer,
             temperature: initial_temp,
             temp_min,
             cooling_rate,
@@ -421,7 +428,7 @@ impl<'a> SimulatedAnnealing<'a> {
             }
 
             // Cool down
-            if cnt % 10 == 0 {
+            if cnt % 100 == 0 {
                 self.temperature *= self.cooling_rate;
             }
 
@@ -431,13 +438,4 @@ impl<'a> SimulatedAnnealing<'a> {
         println!("Acceptance rate: {}%", acceptance_rate as f64/100.0);
     }
 
-    pub fn run_by_layer(&mut self) {
-        let mut group_by_layers: HashMap<usize, Vec<&WaterMolecule>> = HashMap::new();
-        for water_idx in 0..self.waters.len() {
-            let water = &self.waters[water_idx];
-            group_by_layers.entry(water.layer_id).or_insert_with(Vec::new).push(water);
-        }
-
-        
-    }
 }
