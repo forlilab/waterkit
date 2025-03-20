@@ -78,9 +78,10 @@ fn get_energy(oxygen_pos: [f64; 3], h1_pos: [f64; 3], h2_pos: [f64; 3], grid: &G
     f64::INFINITY
 }
 
-pub fn optimize(water: &mut Vec<Atom>, system_atoms: &Vec<Atom>, grid: &mut Grid3D) -> WaterMolecule {   
-    let res_number = water[0].residue_number;
+pub fn optimize(water_molecule: &mut WaterMolecule, system_atoms: &Vec<Atom>, grid: &mut Grid3D) {   
     let mut update_grids = false;
+    let water = water_molecule.as_vec();
+    let res_number = water[0].residue_number;
     
     // Extract initial coordinates
     let mut original_oxygen_coords = water[0].coords();
@@ -88,7 +89,7 @@ pub fn optimize(water: &mut Vec<Atom>, system_atoms: &Vec<Atom>, grid: &mut Grid
     let mut original_h2_coords = water[2].coords();
 
     // Monte Carlo parameters
-    let num_steps = 1000;
+    let num_steps = 1;
     let mut max_disp = 0.2;
     let mut accepted_moves = 0;
     
@@ -153,19 +154,16 @@ pub fn optimize(water: &mut Vec<Atom>, system_atoms: &Vec<Atom>, grid: &mut Grid
         }
     }
 
-    let optimized_water = WaterMolecule::new(original_oxygen_coords, original_h1_coords, original_h2_coords, "".to_string(), res_number);
+    // let optimized_water = WaterMolecule::new(original_oxygen_coords, original_h1_coords, original_h2_coords, "".to_string(), res_number);
 
     // Update grid if needed
     if update_grids {
         grid.remove_points(&water);
-        water[0].set_coords(original_oxygen_coords);
-        water[1].set_coords(original_h1_coords);
-        water[2].set_coords(original_h2_coords);
-        grid.update_energies(&optimized_water.as_vec());    
+        water_molecule.update_coords(original_oxygen_coords, original_h1_coords, original_h2_coords);
+        grid.update_energies(&water_molecule.as_vec());    
     }
     // grid.update_energies(&optimized_water.as_vec());
 
-    optimized_water
 }
 
 pub fn optimize_using_grids(water_molecule: &mut WaterMolecule, grid: &mut Grid3D, num_steps: i32, temp: f64) -> bool {   
@@ -372,21 +370,25 @@ impl<'a> SimulatedAnnealing<'a> {
 
         // Assuming water atoms in self.system.atoms are contiguous and in order: O, H1, H2
         let base_idx = water_idx * 3; // Each water has 3 atoms
-        self.system.update_atom_position(base_idx, water_atoms[0].coords());
-        self.system.update_atom_position(base_idx + 1, water_atoms[1].coords());
-        self.system.update_atom_position(base_idx + 2, water_atoms[2].coords());
+        self.system.update_water(base_idx, &water_atoms);
 
         // Update the water in the waters vector
         self.waters[water_idx] = new_water;
     }
 
-    pub fn run(&mut self) {
+    pub fn run(&mut self, indices_to_optimize: Option<Vec<usize>>) {
         let mut acceptance_rate = 0;
         let mut rng = rand::thread_rng();
         let mut cnt = 0;
+        let mut indices;
+        if indices_to_optimize.is_some() {
+            indices = indices_to_optimize.unwrap();
+        } else {
+            indices = (0..self.waters.len()).collect::<Vec<usize>>();
+        }
         while self.temperature > self.temp_min {
             // Randomly select a water molecule
-            let water_idx = rng.gen_range(0..self.waters.len());
+            let water_idx = indices.choose(&mut rng).unwrap().clone();
             let current_water = &self.waters[water_idx];
             let base_idx = water_idx * 3;
             let exclude = [base_idx, base_idx + 1, base_idx + 2];
@@ -428,7 +430,7 @@ impl<'a> SimulatedAnnealing<'a> {
             }
 
             // Cool down
-            if cnt % 100 == 0 {
+            if cnt % 10 == 0 {
                 self.temperature *= self.cooling_rate;
             }
 

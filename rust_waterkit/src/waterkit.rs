@@ -37,14 +37,35 @@ fn run_single_waterkit_with_grids(receptor_points: &[Atom],
     epoch: usize, 
     num_steps: i32, 
     optimization_steps: i32) -> (Vec<Atom>, Vec<Atom>) {
-    
-    // let mut receptor_map = receptor_points.to_vec();
+    let mut rng = thread_rng();
+    let mut receptor_map = receptor_points.to_vec();
     let mut last_residue_number = receptor_points.iter().map(|n| n.residue_number).max().unwrap_or(1);
 
     let mut mutable_anchor_points = anchor_points.to_vec();
     let mut new_water_molecules = Vec::new();
     for _i in 0..4 {
-        sample_using_grids(_i, &mut grid, &mut mutable_anchor_points, &water_configurations, &mut new_water_molecules, &mut last_residue_number);
+        // println!("Hydration layer: {}", _i);
+        sample_using_grids(_i, &mut grid, &mut mutable_anchor_points, &water_configurations, &mut new_water_molecules, &mut last_residue_number, &mut receptor_map);
+        let indices_waters_to_optimize: Vec<usize> = new_water_molecules.iter().enumerate().filter(|(idx, x)| x.layer_id == _i).map(|(idx, x)| idx ).collect();
+        if indices_waters_to_optimize.len() < 1 {
+            // println!("No waters to optimize in layer {}", _i);
+            continue;
+        } else {
+            for _j in 0..1000 {
+                let water_idx = indices_waters_to_optimize.choose(&mut rng).unwrap().clone();
+                let water = &mut new_water_molecules[water_idx];
+                // println!("Indices: {:?}", indices_waters_to_optimize);
+                // let accepted = optimize_using_grids(water, &mut grid, optimization_steps, 300.0);
+                optimize(water, &receptor_map, &mut grid);
+            }
+            mutable_anchor_points.clear();
+            for mut water in new_water_molecules.iter_mut() {
+                water.guess_new_hydrogen_bonds();
+                for hb in water.hydrogen_bonds().into_iter() {
+                    mutable_anchor_points.push(hb);
+                }
+            }
+        }
     }
 
     let mut waters: Vec<Atom> = Vec::with_capacity(new_water_molecules.len() * 3);
@@ -56,26 +77,26 @@ fn run_single_waterkit_with_grids(receptor_points: &[Atom],
             unoptimized_water_atoms.push(atom);
         }
     }
-    let system = waterkit_system::System::new(&mut system_atoms);
+    // let system = waterkit_system::System::new(&mut system_atoms);
 
-    let mut sa = optimizer::SimulatedAnnealing::new(
-        system,
-        new_water_molecules,
-        1200.0,
-        1.0,
-        0.99,
-        12.0
-    );
+    // let mut sa = optimizer::SimulatedAnnealing::new(
+    //     system,
+    //     new_water_molecules,
+    //     1200.0,
+    //     1.0,
+    //     0.99,
+    //     12.0
+    // );
 
-    sa.run();
+    // sa.run(None);
     // optimize_water_nw_with_grids_sa(&mut new_water_molecules, &receptor_map, &mut grid, num_steps, optimization_steps);
     
-    // for w in new_water_molecules.into_iter() {
-    //     waters.extend(w.as_vec().into_iter());
-    // }
-    for w in sa.waters {
-        waters.extend(w.as_vec());
+    for w in new_water_molecules.into_iter() {
+        waters.extend(w.as_vec().into_iter());
     }
+    // for w in sa.waters {
+    //     waters.extend(w.as_vec());
+    // }
 
     (unoptimized_water_atoms, waters)
 }
@@ -166,54 +187,54 @@ pub fn optimize_water_nw_with_grids_sa(new_waters: &mut Vec<WaterMolecule>, rece
     // let plot = plot_optimization(&total_energies, &waters_energies, &receptor_energies, lower_b, upper_b, num_steps as usize, optimization_steps as usize);
 }
 
-pub fn optimize_water_network(receptor_map: &mut Vec<Atom>, new_waters: &Vec<WaterMolecule>, grid: &mut Grid3D, filename: &str) -> Vec<Atom> {
-    // let start = SystemTime::now();
-    let mut rng = thread_rng();
-    let mut waters_res_number: Vec<usize> = new_waters.iter()
-        .map(|w| w.get_res_number())
-        .collect::<HashSet<_>>() // Collect unique values first
-        .into_iter()
-        .collect();
+// pub fn optimize_water_network(receptor_map: &mut Vec<Atom>, new_waters: &Vec<WaterMolecule>, grid: &mut Grid3D, filename: &str) -> Vec<Atom> {
+//     // let start = SystemTime::now();
+//     let mut rng = thread_rng();
+//     let mut waters_res_number: Vec<usize> = new_waters.iter()
+//         .map(|w| w.get_res_number())
+//         .collect::<HashSet<_>>() // Collect unique values first
+//         .into_iter()
+//         .collect();
 
-    waters_res_number.shuffle(&mut rng);
-    for res_number in waters_res_number.iter() {
-        // println!("{}", res_number);
-        let mut filtered = Vec::new();
+//     waters_res_number.shuffle(&mut rng);
+//     for res_number in waters_res_number.iter() {
+//         // println!("{}", res_number);
+//         let mut filtered = Vec::new();
 
-        receptor_map
-            .retain(|atom| {
-                if atom.residue_number == *res_number {
-                    filtered.push(atom.clone());
-                    false
-                } else {
-                    true
-                }
-            });
+//         receptor_map
+//             .retain(|atom| {
+//                 if atom.residue_number == *res_number {
+//                     filtered.push(atom.clone());
+//                     false
+//                 } else {
+//                     true
+//                 }
+//             });
 
-        // Here I optimize
-        optimize(&mut filtered, &receptor_map, grid);
+//         // Here I optimize
+//         optimize(&mut filtered, &receptor_map, grid);
 
-        receptor_map.extend(filtered);
-    }
+//         receptor_map.extend(filtered);
+//     }
     
-    let mut waters = Vec::new();
-    receptor_map.retain(|x| {
-        if x.atom_type() == "OW" || x.atom_type() == "HW" {
-            waters.push(x.clone());
-            false // Remove this element from receptor_map
-        } else {
-            true // Keep this element in receptor_map
-        }
-    });
+//     let mut waters = Vec::new();
+//     receptor_map.retain(|x| {
+//         if x.atom_type() == "OW" || x.atom_type() == "HW" {
+//             waters.push(x.clone());
+//             false // Remove this element from receptor_map
+//         } else {
+//             true // Keep this element in receptor_map
+//         }
+//     });
 
-    // let end = SystemTime::now();
-    // let duration = end.duration_since(start).unwrap();
-    // println!("MC Optimization took {} ms", duration.as_millis());
+//     // let end = SystemTime::now();
+//     // let duration = end.duration_since(start).unwrap();
+//     // println!("MC Optimization took {} ms", duration.as_millis());
     
-    waters
+//     waters
 
-    // to_pdb(&receptor_map.iter().filter(|x| x.atom_type() == "OW" || x.atom_type() == "HW").cloned().collect::<Vec<Atom>>(), filename);
-}
+//     // to_pdb(&receptor_map.iter().filter(|x| x.atom_type() == "OW" || x.atom_type() == "HW").cloned().collect::<Vec<Atom>>(), filename);
+// }
 
 
 #[pyfunction]

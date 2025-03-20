@@ -3,6 +3,7 @@ use core::f64;
 use rand::Rng;
 
 use crate::anchor_point::AnchorPoint;
+use crate::atom::Atom;
 use crate::{geometry, monte_carlo as mc};
 use crate::grid::{Grid3D, ProbeType};
 use crate::consts::*;
@@ -83,7 +84,8 @@ pub fn sample_using_grids(layer_id: usize,
         anchor_points: &mut Vec<AnchorPoint>, 
         water_configurations: &Vec<[f64; 6]>,
         new_water_molecules: &mut Vec<WaterMolecule>,
-        last_residue_number: &mut usize) -> bool {
+        last_residue_number: &mut usize,
+        receptor_map: &mut Vec<Atom>) -> bool {
     
     let mut new_anchor_points = Vec::new();
     let placement: bool = false;
@@ -135,7 +137,10 @@ pub fn sample_using_grids(layer_id: usize,
                 // let end = SystemTime::now();
                 // let duration = end.duration_since(start).unwrap();
                 // println!("Grid's update took {} ms", duration.as_millis());
-                new_water_molecules.push(water);           
+                new_water_molecules.push(water);
+                for atom in atoms_to_update {
+                    receptor_map.push(atom);
+                }           
             }
         }
     }

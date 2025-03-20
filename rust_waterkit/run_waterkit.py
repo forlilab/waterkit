@@ -34,32 +34,32 @@ def get_data_form_meeko(wanted_residues, pdb_file, save=True):
         pdbstring = fi.read()
         
     # # blunt_ends = [("A:1", 0)]
-    mk_prep = meeko.MoleculePreparation(
-        merge_these_atom_types=[],
-        load_atom_params=["vina_params", "openff"],
-        charge_model="espaloma",
-    )
+    # mk_prep = meeko.MoleculePreparation(
+    #     merge_these_atom_types=[],
+    #     load_atom_params=["vina_params", "openff"],
+    #     charge_model="espaloma",
+    # )
     
-    templates = meeko.ResidueChemTemplates.create_from_defaults()
-    polymer = meeko.Polymer.from_pdb_string(pdb_string=pdbstring,
-                                            chem_templates=templates,
-                                            mk_prep=mk_prep,
-                                            allow_bad_res=True,
-                                            default_altloc="A",)
-                                            # blunt_ends=blunt_ends)
-    json_s = polymer.to_json()
-    with open("target.json", "w") as fo:
-        fo.write(json_s)
+    # templates = meeko.ResidueChemTemplates.create_from_defaults()
+    # polymer = meeko.Polymer.from_pdb_string(pdb_string=pdbstring,
+    #                                         chem_templates=templates,
+    #                                         mk_prep=mk_prep,
+    #                                         allow_bad_res=True,
+    #                                         default_altloc="A",)
+    #                                         # blunt_ends=blunt_ends)
+    # json_s = polymer.to_json()
+    # with open("target.json", "w") as fo:
+    #     fo.write(json_s)
 
     # if save:
     #     pdb_f = polymer.to_pdb()
     #     with open("meeko.pdb", "w") as fo:
     #         fo.write(pdb_f)
     # with open("/data/phd/waterkit/target.json") as fi:
-    # with open("/home/niccolo/phd/waterkit/rust_waterkit/target.json") as fi:
-        # json_string = fi.read()
+    with open("/home/niccolo/phd/waterkit/rust_waterkit/target.json") as fi:
+        json_string = fi.read()
 
-    # polymer = meeko.Polymer.from_json(json_string)
+    polymer = meeko.Polymer.from_json(json_string)
 
     for res_id, monomer in polymer.get_valid_monomers().items():
         unique_id = f"{res_id.split(':')[0]}:{monomer.input_resname}:{res_id.split(':')[-1]}"
@@ -175,7 +175,7 @@ if __name__ == "__main__":
 
         print("Starting waterkit!")
         aps = anchor_points
-        n_frames = 1
+        n_frames = 1000
 
         # num_steps = [1, 10, 100, 1000, 10000]
         # optimization_steps = [1, 10, 100, 1000, 10000]

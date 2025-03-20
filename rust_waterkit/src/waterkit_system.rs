@@ -10,7 +10,7 @@ pub struct SpatialAtom {
 
 impl PartialEq for SpatialAtom {
     fn eq(&self, other: &Self) -> bool {
-        self.coords == other.coords
+        self.index == other.index && self.coords == other.coords
     }
 }
 
@@ -111,25 +111,24 @@ impl<'a> System<'a> {
         Self { atoms, rtree }
     }
 
-    pub fn update_atom_position(&mut self, index: usize, new_position: [f64; 3]) {
-        // Update the atom's position
-        let old_coords = self.atoms[index].coords();
-        self.atoms[index].set_coords(new_position);
-        // self.rtree = build_spatial_index(self.atoms);
-        // // Remove the old atom from the tree
-        let old_atom = SpatialAtom {
-            index,
-            coords: old_coords,
-        };
-        if self.rtree.remove(&old_atom).is_none() {
-            eprintln!("Warning: Failed to remove atom at index {}", index);
-        }
-
-        // Insert the updated atom into the tree
-        let new_atom = SpatialAtom {
-            index,
-            coords: new_position,
-        };
-        self.rtree.insert(new_atom);
+    pub fn update_water(&mut self, base_idx: usize, water_atoms: &Vec<Atom>) {
+        // Update atom positions in the Vec<Atom>
+        self.atoms[base_idx].set_coords(water_atoms[0].coords());
+        self.atoms[base_idx + 1].set_coords(water_atoms[1].coords());
+        self.atoms[base_idx + 2].set_coords(water_atoms[2].coords());
+        // Rebuild the entire R*-tree
+        self.rtree = build_spatial_index(self.atoms);
     }
+
+    // pub fn update_atom_position(&mut self, index: usize, new_position: [f64; 3]) {
+    //     let old_coords = self.atoms[index].coords();
+    //     println!("Updating atom {}: old_coords={:?}, new_position={:?}", index, old_coords, new_position);
+    //     self.atoms[index].set_coords(new_position);
+    //     let old_atom = SpatialAtom { index, coords: old_coords };
+    //     if self.rtree.remove(&old_atom).is_none() {
+    //         eprintln!("Failed to remove atom: index={}, coords={:?}", index, old_coords);
+    //     }
+    //     let new_atom = SpatialAtom { index, coords: new_position };
+    //     self.rtree.insert(new_atom);
+    // }
 }
