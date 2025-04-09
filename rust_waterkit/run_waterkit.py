@@ -30,36 +30,36 @@ def get_data_form_meeko(wanted_residues, pdb_file, save=True):
     rotatable_bonds = parse_rotatable_hydrogens()
     surface_atoms = list()
     box_boundaries = list()
-    with open(pdb_file) as fi:
-        pdbstring = fi.read()
+    # with open(pdb_file) as fi:
+    #     pdbstring = fi.read()
         
-    # # blunt_ends = [("A:1", 0)]
-    mk_prep = meeko.MoleculePreparation(
-        merge_these_atom_types=[],
-        load_atom_params=["vina_params", "openff"],
-        charge_model="espaloma",
-    )
+    # # # blunt_ends = [("A:1", 0)]
+    # mk_prep = meeko.MoleculePreparation(
+    #     merge_these_atom_types=[],
+    #     load_atom_params=["vina_params", "openff"],
+    #     charge_model="espaloma",
+    # )
     
-    templates = meeko.ResidueChemTemplates.create_from_defaults()
-    polymer = meeko.Polymer.from_pdb_string(pdb_string=pdbstring,
-                                            chem_templates=templates,
-                                            mk_prep=mk_prep,
-                                            allow_bad_res=True,
-                                            default_altloc="A",)
-                                            # blunt_ends=blunt_ends)
-    json_s = polymer.to_json()
-    with open("target.json", "w") as fo:
-        fo.write(json_s)
+    # templates = meeko.ResidueChemTemplates.create_from_defaults()
+    # polymer = meeko.Polymer.from_pdb_string(pdb_string=pdbstring,
+    #                                         chem_templates=templates,
+    #                                         mk_prep=mk_prep,
+    #                                         allow_bad_res=True,
+    #                                         default_altloc="A",)
+    #                                         # blunt_ends=blunt_ends)
+    # json_s = polymer.to_json()
+    # with open("target.json", "w") as fo:
+    #     fo.write(json_s)
 
     # if save:
     #     pdb_f = polymer.to_pdb()
     #     with open("meeko.pdb", "w") as fo:
     #         fo.write(pdb_f)
     # with open("/data/phd/waterkit/target.json") as fi:
-    # with open("/home/niccolo/phd/waterkit/rust_waterkit/target.json") as fi:
-        # json_string = fi.read()
+    with open("/Users/niccolobruciaferri/phd/waterkit/rust_waterkit/target.json") as fi:
+        json_string = fi.read()
 
-    # polymer = meeko.Polymer.from_json(json_string)
+    polymer = meeko.Polymer.from_json(json_string)
 
     for res_id, monomer in polymer.get_valid_monomers().items():
         unique_id = f"{res_id.split(':')[0]}:{monomer.input_resname}:{res_id.split(':')[-1]}"
@@ -114,7 +114,7 @@ def get_data_form_meeko(wanted_residues, pdb_file, save=True):
     return surface_atoms, min_box_boundaries, max_box_boundaries, rotatable_hydrogens
 
 # def parse_rotatable_hydrogens(path="/data/phd/waterkit/rust_waterkit/disordered_hydrogens.par"):
-def parse_rotatable_hydrogens(path="/home/niccolo/phd/waterkit/rust_waterkit/disordered_hydrogens.par"):
+def parse_rotatable_hydrogens(path="/Users/niccolobruciaferri/phd/waterkit/rust_waterkit/disordered_hydrogens.par"):
     rotatable_bonds_smarts = dict()
     with open(path) as f:
         lines = f.readlines()
@@ -134,7 +134,7 @@ def parse_rotatable_hydrogens(path="/home/niccolo/phd/waterkit/rust_waterkit/dis
 
 
 # def load_waters_orientations(orientations="/data/phd/waterkit/waterkit/data/water_orientations.txt"):
-def load_waters_orientations(orientations="/home/niccolo/phd/waterkit/waterkit/data/water_orientations.txt"):
+def load_waters_orientations(orientations="/Users/niccolobruciaferri/phd/waterkit/waterkit/data/water_orientations.txt"):
     usecols = [0, 1, 2, 3, 4, 5]
     water_orientations = np.loadtxt(orientations, usecols=usecols)
     return water_orientations
@@ -155,11 +155,11 @@ if __name__ == "__main__":
                            "A:TRP:162", "A:THR:184"]
         # wanted_residues = list()
         # parametrized_atoms, min_box_boundaries, max_box_boundaries, rotatable_hydrogens = get_data_form_meeko(wanted_residues, "/data/phd/waterkit/protein_prepared.pdb")
-        parametrized_atoms, min_box_boundaries, max_box_boundaries, rotatable_hydrogens = get_data_form_meeko(wanted_residues, "/home/niccolo/phd/waterkit/protein_prepared.pdb")
+        parametrized_atoms, min_box_boundaries, max_box_boundaries, rotatable_hydrogens = get_data_form_meeko(wanted_residues, "/Users/niccolobruciaferri/phd/waterkit/protein_prepared.pdb")
 
         waters = load_waters_orientations()
         # anchor_points = load_anchor_points("/data/phd/waterkit/anchor_points_translated.txt", rotatable_hydrogens)
-        anchor_points = load_anchor_points("/home/niccolo/phd/waterkit/anchor_points_translated.txt", rotatable_hydrogens)
+        anchor_points = load_anchor_points("/Users/niccolobruciaferri/phd/waterkit/anchor_points_translated.txt", rotatable_hydrogens)
         # with open("anchor_points.xyz", "w") as fo:
         #     fo.write(f"{len(anchor_points)}\n\n")
         #     for anchor_point in anchor_points:
@@ -175,7 +175,7 @@ if __name__ == "__main__":
 
         print("Starting waterkit!")
         aps = anchor_points
-        n_frames = 1
+        n_frames = 7
 
         # num_steps = [1, 10, 100, 1000, 10000]
         # optimization_steps = [1, 10, 100, 1000, 10000]

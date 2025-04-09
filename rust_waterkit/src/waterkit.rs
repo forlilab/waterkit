@@ -63,7 +63,7 @@ fn run_single_waterkit_with_grids(receptor_points: &[Atom],
         new_water_molecules,
         1200.0,
         1.0,
-        0.99,
+        0.98,
         12.0
     );
 
