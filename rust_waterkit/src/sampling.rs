@@ -1,4 +1,5 @@
 use core::f64;
+use std::collections::HashMap;
 
 use rand::Rng;
 
@@ -84,10 +85,12 @@ pub fn sample_using_grids(layer_id: usize,
         anchor_points: &mut Vec<AnchorPoint>, 
         water_configurations: &Vec<[f64; 6]>,
         new_water_molecules: &mut Vec<WaterMolecule>,
+        // layers_map: &mut HashMap<usize, Vec<usize>>,
         last_residue_number: &mut usize,
-        receptor_map: &mut Vec<Atom>) -> bool {
-    
-    let mut new_anchor_points = Vec::new();
+        // receptor_map: &mut Vec<Atom>
+    ) -> usize {
+    let mut n_waters_added: usize = 0;
+    // let mut new_anchor_points = Vec::new();
     let placement: bool = false;
     let mut receptor_points_on_the_grid = Vec::new();
     for point in anchor_points.into_iter() {
@@ -123,10 +126,10 @@ pub fn sample_using_grids(layer_id: usize,
             if placed {
                 // let start = SystemTime::now();
                 water.set_layer_id(layer_id + 1);
-                water.guess_new_hydrogen_bonds();
-                for hb in water.hydrogen_bonds().into_iter() {
-                    new_anchor_points.push(hb);
-                }
+                // water.guess_new_hydrogen_bonds();
+                // for hb in water.hydrogen_bonds().into_iter() {
+                //     new_anchor_points.push(hb);
+                // }
                 // let end = SystemTime::now();
                 // let duration = end.duration_since(start).unwrap();
                 // println!("New Hydrogen's bond guessing took {} ms", duration.as_millis());
@@ -138,17 +141,21 @@ pub fn sample_using_grids(layer_id: usize,
                 // let duration = end.duration_since(start).unwrap();
                 // println!("Grid's update took {} ms", duration.as_millis());
                 new_water_molecules.push(water);
-                for atom in atoms_to_update {
-                    receptor_map.push(atom);
-                }           
+                n_waters_added += 1;
+                // layers_map.entry(layer_id + 1)
+                //     .or_insert(Vec::new())
+                //     .push(new_water_molecules.len());
+                // for atom in atoms_to_update {
+                //     receptor_map.push(atom);
+                // }           
             }
         }
     }
-    anchor_points.clear();
-    for p in new_anchor_points.into_iter() {
-        anchor_points.push(p);
-    }
-    placement
+    // anchor_points.clear();
+    // for p in new_anchor_points.into_iter() {
+    //     anchor_points.push(p);
+    // }
+    n_waters_added
 }
 
 pub fn sample_waters_with_grids(oxygen_atom: &[f64; 3],

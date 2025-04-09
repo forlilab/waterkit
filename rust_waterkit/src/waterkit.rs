@@ -1,5 +1,7 @@
 use core::f64;
+use std::collections::HashMap;
 use std::collections::HashSet;
+use std::time::Instant;
 use std::time::SystemTime;
 use pyo3::prelude::*;
 use rand::seq::SliceRandom;
@@ -17,8 +19,10 @@ use crate::grid::Grid3D;
 use crate::grid::ProbeType;
 use crate::consts;
 use crate::monte_carlo;
+use crate::monte_carlo::boltzmann_acceptance_rejection;
 use crate::optimizer;
 use crate::optimizer::optimize;
+// use crate::optimizer::optimize;
 use crate::optimizer::optimize_using_grids;
 use crate::optimizer::SimulatedAnnealing;
 use crate::sampling::sample_using_grids;
@@ -30,162 +34,187 @@ use crate::energy;
 use crate::utils;
 use crate::waterkit_system;
 
-fn run_single_waterkit_with_grids(receptor_points: &[Atom], 
-    water_configurations: &Vec<[f64; 6]>, 
-    anchor_points: &[AnchorPoint], 
+fn run_single_waterkit_with_grids(receptor_points: &[Atom],
+    water_configurations: &Vec<[f64; 6]>,
+    anchor_points: &[AnchorPoint],
     mut grid: Grid3D,
-    epoch: usize, 
-    num_steps: i32, 
+    epoch: usize,
+    num_steps: i32,
     optimization_steps: i32) -> (Vec<Atom>, Vec<Atom>) {
+    // let start = Instant::now();
     let mut rng = thread_rng();
     let mut receptor_map = receptor_points.to_vec();
     let mut last_residue_number = receptor_points.iter().map(|n| n.residue_number).max().unwrap_or(1);
 
     let mut mutable_anchor_points = anchor_points.to_vec();
     let mut new_water_molecules = Vec::new();
+
+    // let sampling_start = Instant::now();
     for _i in 0..4 {
-        // println!("Hydration layer: {}", _i);
-        sample_using_grids(_i, &mut grid, &mut mutable_anchor_points, &water_configurations, &mut new_water_molecules, &mut last_residue_number, &mut receptor_map);
-        let indices_waters_to_optimize: Vec<usize> = new_water_molecules.iter().enumerate().filter(|(idx, x)| x.layer_id == _i).map(|(idx, x)| idx ).collect();
-        if indices_waters_to_optimize.len() < 1 {
-            // println!("No waters to optimize in layer {}", _i);
-            continue;
-        } else {
-            for _j in 0..1000 {
-                let water_idx = indices_waters_to_optimize.choose(&mut rng).unwrap().clone();
-                let water = &mut new_water_molecules[water_idx];
-                // println!("Indices: {:?}", indices_waters_to_optimize);
-                // let accepted = optimize_using_grids(water, &mut grid, optimization_steps, 300.0);
-                optimize(water, &receptor_map, &mut grid);
+        // let n_waters_added = sample_using_grids(_i, &mut grid, &mut mutable_anchor_points, &water_configurations, &mut new_water_molecules, &mut last_residue_number, &mut receptor_map);
+        let n_waters_added = sample_using_grids(_i, &mut grid, &mut mutable_anchor_points, &water_configurations, &mut new_water_molecules, &mut last_residue_number);
+        let indices_waters_to_optimize = (0..new_water_molecules.len() - n_waters_added).collect::<Vec<usize>>();
+        if indices_waters_to_optimize.len() > 1 {
+            // let mut modified_waters: Vec<Atom> = Vec::with_capacity(100 * 3);
+            // let mut original_waters: Vec<Atom> = Vec::with_capacity(100 * 3);
+            for _j in 0..200 {
+                let water_idx = indices_waters_to_optimize.choose(&mut rng).unwrap();
+                let water = &mut new_water_molecules[*water_idx];
+                // for atom in water.as_vec() {
+                //     original_waters.push(atom);
+                // }
+                optimize_using_grids(water, &mut grid, 1000, 300.0, &mut rng);
+                // optimize(water, &mut receptor_map, 1000, &mut rng);
+                // for atom in water.as_vec() {
+                //     modified_waters.push(atom);
+                // }
             }
-            mutable_anchor_points.clear();
-            for mut water in new_water_molecules.iter_mut() {
-                water.guess_new_hydrogen_bonds();
-                for hb in water.hydrogen_bonds().into_iter() {
-                    mutable_anchor_points.push(hb);
-                }
+            // grid.remove_points(&original_waters);
+            // grid.update_energies(&modified_waters);
+        }
+        mutable_anchor_points.clear();
+        for mut water in new_water_molecules.iter_mut() {
+            water.guess_new_hydrogen_bonds();
+            for hb in water.hydrogen_bonds().into_iter() {
+                mutable_anchor_points.push(hb);
             }
         }
     }
 
+    // let sampling_time = sampling_start.elapsed().as_secs_f64();
+
+    // let post_processing_start = Instant::now();
+
+    // let indices = (0..new_water_molecules.len()).collect::<Vec<usize>>();
+    // for _ in 0..600 {
+    //     let water_idx = indices.choose(&mut rng).unwrap();
+    //     let water = &mut new_water_molecules[*water_idx];
+    //     optimize(water, &mut receptor_map, 1000, &mut rng);
+    //     // optimize_using_grids(water, &mut grid, 1000, 300.0, &mut rng);
+    // }
+
     let mut waters: Vec<Atom> = Vec::with_capacity(new_water_molecules.len() * 3);
-    let mut  unoptimized_water_atoms = Vec::with_capacity(new_water_molecules.len() * 3);
-    let mut system_atoms = receptor_points.to_vec();
-    for water in new_water_molecules.iter() {
-        for atom in water.as_vec() {
-            system_atoms.push(atom.clone());
-            unoptimized_water_atoms.push(atom);
-        }
-    }
+    let mut  unoptimized_water_atoms: Vec<Atom> = Vec::with_capacity(new_water_molecules.len() * 3);
+    // let mut system_atoms = receptor_points.to_vec();
+    // for water in new_water_molecules.iter() {
+    //     for atom in water.as_vec() {
+    //         system_atoms.push(atom.clone());
+    //         unoptimized_water_atoms.push(atom);
+    //     }
+    // }
     // let system = waterkit_system::System::new(&mut system_atoms);
 
     // let mut sa = optimizer::SimulatedAnnealing::new(
     //     system,
     //     new_water_molecules,
-    //     1200.0,
-    //     1.0,
-    //     0.99,
+    //     800.0,
+    //     250.0,
+    //     0.98,
     //     12.0
     // );
 
     // sa.run(None);
-    // optimize_water_nw_with_grids_sa(&mut new_water_molecules, &receptor_map, &mut grid, num_steps, optimization_steps);
-    
+    // // optimize_water_nw_with_grids_sa(&mut new_water_molecules, &receptor_map, &mut grid, num_steps, optimization_steps);
+
     for w in new_water_molecules.into_iter() {
         waters.extend(w.as_vec().into_iter());
     }
     // for w in sa.waters {
     //     waters.extend(w.as_vec());
     // }
+    // let post_processing_time = post_processing_start.elapsed().as_secs_f64();
 
+    // let total_time = start.elapsed().as_secs_f64();
+    // println!("Epoch {}: Total {:.3}s, Sampling {:.3}s, Post-processing {:.3}s",
+    //          epoch, total_time, sampling_time, post_processing_time);
     (unoptimized_water_atoms, waters)
 }
 
-pub fn optimize_water_nw_with_grids(new_waters: &mut Vec<WaterMolecule>, grid: &mut Grid3D, num_steps: i32, optimization_steps: i32) {
-    // let mut optimized_waters = Vec::new();
-    let mut rng = thread_rng();
+// pub fn optimize_water_nw_with_grids(new_waters: &mut Vec<WaterMolecule>, grid: &mut Grid3D, num_steps: i32, optimization_steps: i32) {
+//     // let mut optimized_waters = Vec::new();
+//     let mut rng = thread_rng();
 
-    for step in 0..num_steps {
-        if let Some(water) = new_waters.choose_mut(&mut rng) {
-            optimize_using_grids(water, grid, optimization_steps, consts::TEMPERATURE);
-        }
-    }
-}
+//     for step in 0..num_steps {
+//         if let Some(water) = new_waters.choose_mut(&mut rng) {
+//             optimize_using_grids(water, grid, optimization_steps, consts::TEMPERATURE);
+//         }
+//     }
+// }
 
-pub fn optimize_water_nw_with_grids_sa(new_waters: &mut Vec<WaterMolecule>, receptor_atoms: &Vec<Atom>, grid: &mut Grid3D, num_steps: i32, optimization_steps: i32) {
-    // Worth trying reannealing after there's no acceptance for x epochs
-    
-    let plot_energies = false;
+// pub fn optimize_water_nw_with_grids_sa(new_waters: &mut Vec<WaterMolecule>, receptor_atoms: &Vec<Atom>, grid: &mut Grid3D, num_steps: i32, optimization_steps: i32) {
+//     // Worth trying reannealing after there's no acceptance for x epochs
 
-    let mut rng = thread_rng();
-    let cooling_rate = 0.98;
-    let mut starting_temp = 1200.;
-    let final_temp = 0.001;
-    
-    // Reannealing
-    // let reanneal_threshold = 5000;  // Steps before checking for stagnation
-    // let reanneal_factor = 1.5;      // Reset temp to 50% of current if stagnation occurs
-    // let mut rejection_counter = 0;
-    // let max_rejections = 1000;
-    
-    // For the plot
-    // let mut waters_energies = Vec::with_capacity((num_steps/100) as usize);
-    // let mut receptor_energies = Vec::with_capacity((num_steps/100) as usize);
-    // let mut total_energies = Vec::with_capacity((num_steps/100) as usize);
-    // let (waters_energy, receptor_energy) = energy::get_system_energy(new_waters, receptor_atoms);
-    // let mut initial_energy = waters_energy + receptor_energy;
-    // let mut upper_b = initial_energy.max(waters_energy).max(receptor_energy);
-    // let mut lower_b = initial_energy.min(waters_energy).min(receptor_energy);
-    // waters_energies.push(waters_energy);
-    // receptor_energies.push(receptor_energy); 
-    // total_energies.push(initial_energy);
+//     let plot_energies = false;
 
-    for step in 0..num_steps {
-        if let Some(water) = new_waters.choose_mut(&mut rng) {
-            // if monte_carlo::boltzmann_acceptance_rejection(&water.get_energy(), &consts::BOLTZMANN_ENERGY_CUTOFF, &starting_temp, &consts::BOLTZMANN_K){
-                let accepted = optimize_using_grids(water, grid, optimization_steps, starting_temp);
-            // }
+//     let mut rng = thread_rng();
+//     let cooling_rate = 0.98;
+//     let mut starting_temp = 1200.;
+//     let final_temp = 0.001;
 
-            // Track rejected moves
-            // if accepted {
-            //     rejection_counter = 0;  // Reset if a move is accepted
-            // } else {
-            //     rejection_counter += 1;
-            // }
+//     // Reannealing
+//     // let reanneal_threshold = 5000;  // Steps before checking for stagnation
+//     // let reanneal_factor = 1.5;      // Reset temp to 50% of current if stagnation occurs
+//     // let mut rejection_counter = 0;
+//     // let max_rejections = 1000;
 
-            // // Check for reannealing
-            // if rejection_counter >= max_rejections {
-            //     starting_temp = (starting_temp * reanneal_factor);
-            //     rejection_counter = 0;  // Reset counter after reannealing
-            //     println!("Reannealing at step {}: Reset temp to {:.2}", step, starting_temp);
-            // }
+//     // For the plot
+//     // let mut waters_energies = Vec::with_capacity((num_steps/100) as usize);
+//     // let mut receptor_energies = Vec::with_capacity((num_steps/100) as usize);
+//     // let mut total_energies = Vec::with_capacity((num_steps/100) as usize);
+//     // let (waters_energy, receptor_energy) = energy::get_system_energy(new_waters, receptor_atoms);
+//     // let mut initial_energy = waters_energy + receptor_energy;
+//     // let mut upper_b = initial_energy.max(waters_energy).max(receptor_energy);
+//     // let mut lower_b = initial_energy.min(waters_energy).min(receptor_energy);
+//     // waters_energies.push(waters_energy);
+//     // receptor_energies.push(receptor_energy);
+//     // total_energies.push(initial_energy);
 
-            // Cooling schedule
-            if step % 10 == 0 {
+//     for step in 0..num_steps {
+//         if let Some(water) = new_waters.choose_mut(&mut rng) {
+//             // if monte_carlo::boltzmann_acceptance_rejection(&water.get_energy(), &consts::BOLTZMANN_ENERGY_CUTOFF, &starting_temp, &consts::BOLTZMANN_K){
+//                 let accepted = optimize_using_grids(water, grid, optimization_steps, starting_temp);
+//             // }
 
-                // For the plot
-                // let (new_water_energy, new_receptor_energy) = energy::get_system_energy(new_waters, receptor_atoms);
-                // let new_energy = new_water_energy + new_receptor_energy;
-                // upper_b = upper_b.max(new_energy).max(new_water_energy).max(new_receptor_energy);
-                // lower_b = lower_b.min(new_energy).min(new_water_energy).min(new_receptor_energy);
-                // waters_energies.push(new_water_energy);
-                // receptor_energies.push(new_receptor_energy);
-                // total_energies.push(new_energy);
-                // // println!("Old energy: {initial_systems_energy}, new energy: {new_energy}");
-                // initial_energy = new_energy;
-                
-                starting_temp *= cooling_rate;
-                if starting_temp < final_temp {
-                    println!("Temperature reached at step {step}");
-                    break;
-                }
-            }
-            // starting_temp *= cooling_rate;
-            // println!("Temp: {starting_temp}");
-        }
-    }
-    // let plot = plot_optimization(&total_energies, &waters_energies, &receptor_energies, lower_b, upper_b, num_steps as usize, optimization_steps as usize);
-}
+//             // Track rejected moves
+//             // if accepted {
+//             //     rejection_counter = 0;  // Reset if a move is accepted
+//             // } else {
+//             //     rejection_counter += 1;
+//             // }
+
+//             // // Check for reannealing
+//             // if rejection_counter >= max_rejections {
+//             //     starting_temp = (starting_temp * reanneal_factor);
+//             //     rejection_counter = 0;  // Reset counter after reannealing
+//             //     println!("Reannealing at step {}: Reset temp to {:.2}", step, starting_temp);
+//             // }
+
+//             // Cooling schedule
+//             if step % 10 == 0 {
+
+//                 // For the plot
+//                 // let (new_water_energy, new_receptor_energy) = energy::get_system_energy(new_waters, receptor_atoms);
+//                 // let new_energy = new_water_energy + new_receptor_energy;
+//                 // upper_b = upper_b.max(new_energy).max(new_water_energy).max(new_receptor_energy);
+//                 // lower_b = lower_b.min(new_energy).min(new_water_energy).min(new_receptor_energy);
+//                 // waters_energies.push(new_water_energy);
+//                 // receptor_energies.push(new_receptor_energy);
+//                 // total_energies.push(new_energy);
+//                 // // println!("Old energy: {initial_systems_energy}, new energy: {new_energy}");
+//                 // initial_energy = new_energy;
+
+//                 starting_temp *= cooling_rate;
+//                 if starting_temp < final_temp {
+//                     println!("Temperature reached at step {step}");
+//                     break;
+//                 }
+//             }
+//             // starting_temp *= cooling_rate;
+//             // println!("Temp: {starting_temp}");
+//         }
+//     }
+//     // let plot = plot_optimization(&total_energies, &waters_energies, &receptor_energies, lower_b, upper_b, num_steps as usize, optimization_steps as usize);
+// }
 
 // pub fn optimize_water_network(receptor_map: &mut Vec<Atom>, new_waters: &Vec<WaterMolecule>, grid: &mut Grid3D, filename: &str) -> Vec<Atom> {
 //     // let start = SystemTime::now();
@@ -216,7 +245,7 @@ pub fn optimize_water_nw_with_grids_sa(new_waters: &mut Vec<WaterMolecule>, rece
 
 //         receptor_map.extend(filtered);
 //     }
-    
+
 //     let mut waters = Vec::new();
 //     receptor_map.retain(|x| {
 //         if x.atom_type() == "OW" || x.atom_type() == "HW" {
@@ -230,7 +259,7 @@ pub fn optimize_water_nw_with_grids_sa(new_waters: &mut Vec<WaterMolecule>, rece
 //     // let end = SystemTime::now();
 //     // let duration = end.duration_since(start).unwrap();
 //     // println!("MC Optimization took {} ms", duration.as_millis());
-    
+
 //     waters
 
 //     // to_pdb(&receptor_map.iter().filter(|x| x.atom_type() == "OW" || x.atom_type() == "HW").cloned().collect::<Vec<Atom>>(), filename);
@@ -251,9 +280,9 @@ pub fn optimize_disordered_hydrogens(mut receptor_points: Vec<Atom>,
             let atom_k_xyz = disordered_hydrogen.atom_k_xyz();
             let atom_l_xyz = disordered_hydrogen.atom_l_xyz();
 
-            let actual_angle = geometry::dihedral(&atom_i_xyz, 
-                &atom_j_xyz, 
-                &atom_k_xyz, 
+            let actual_angle = geometry::dihedral(&atom_i_xyz,
+                &atom_j_xyz,
+                &atom_k_xyz,
                 &atom_l_xyz);
 
             let (sampled_anchor_points, sampled_anchor_vectors) = disordered_hydrogen.sample_rotatable_hydrogen(*anchor_vector);
@@ -271,12 +300,12 @@ pub fn optimize_disordered_hydrogens(mut receptor_points: Vec<Atom>,
             let choice = monte_carlo::boltzmann_choices(&energies, None)[0];
             let optimized_hydrogen = sampled_anchor_points[choice];
             let optimized_anchor_vector = sampled_anchor_vectors[choice];
-            let expected_angle = geometry::dihedral(&optimized_hydrogen, 
-                &atom_j_xyz, 
-                &atom_k_xyz, 
+            let expected_angle = geometry::dihedral(&optimized_hydrogen,
+                &atom_j_xyz,
+                &atom_k_xyz,
                 &atom_l_xyz);
             let rotation_angle = geometry::caclulate_angle_to_apply(&actual_angle, &expected_angle);
-            
+
             // println!("Before: {:?}", anchor_points_updated[idx].anchor_point());
             anchor_points_updated[idx].set_anchor_point_xyz(optimized_hydrogen);
             // println!("After: {:?}", anchor_points_updated[idx].anchor_point());
@@ -305,17 +334,20 @@ pub fn optimize_disordered_hydrogens(mut receptor_points: Vec<Atom>,
 
 
 #[pyfunction]
-pub fn run_parallel_waterkit(receptor_points: Vec<Atom>, 
-    water_configurations: Vec<[f64; 6]>, 
-    anchor_points: Vec<AnchorPoint>, 
+pub fn run_parallel_waterkit(receptor_points: Vec<Atom>,
+    water_configurations: Vec<[f64; 6]>,
+    anchor_points: Vec<AnchorPoint>,
     grid: Grid3D,
     epochs: usize,
     num_steps: i32,
     optimization_steps: i32,
     save_path: String) {
+    // let grids: Vec<Grid3D> = (0..epochs).map(|_| grid.clone()).collect();
 
     let waters: (Vec<Vec<Atom>>, Vec<Vec<Atom>>) = (0..epochs).into_par_iter()
-        .map(|epoch| run_single_waterkit_with_grids(
+        .map(|epoch| {
+            // let mut grid = grids[epoch].clone();
+            run_single_waterkit_with_grids(
                 &receptor_points,
                 &water_configurations,
                 &anchor_points,
@@ -323,10 +355,11 @@ pub fn run_parallel_waterkit(receptor_points: Vec<Atom>,
                 epoch,
                 num_steps,
                 optimization_steps
-            )).collect();
-            
+            )}
+        ).collect();
+
     println!("Done sampling...saving results!");
-    
+
     waters.par_iter().enumerate()
         .for_each(|(idx, (unoptimized_system, optimized_system))| {
             to_pdb(&unoptimized_system, &format!("{save_path}/water_{idx}_unoptimized.pdb"), None);
@@ -338,9 +371,9 @@ pub fn run_parallel_waterkit(receptor_points: Vec<Atom>,
 
 
 #[pyfunction]
-pub fn get_energies_for_system(receptor_points: Vec<Atom>, 
+pub fn get_energies_for_system(receptor_points: Vec<Atom>,
     waters: Vec<[Atom; 3]>, center: [f64; 3], x: f64, y: f64, z: f64) {
-    
+
     let grid_receptor = setup_grid(&receptor_points, x, y, z, 0.375, center);
 
     for (index, water) in waters.iter().enumerate() {

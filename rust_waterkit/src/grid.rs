@@ -117,7 +117,26 @@ impl Grid3D {
 }
 
 impl Grid3D {
+    
     pub fn update_energies(&mut self, new_points: &Vec<Atom>) { 
+        // let radius_sq = (12.0_f64).powf(2.); // Use squared distance for efficiency
+
+        // for atom in new_points {
+        //     // Find grid points within radius of this atom
+        //     let neighbors = self.kdtree.within(
+        //         &atom.coords(),
+        //         radius_sq,
+        //         &kdtree::distance::squared_euclidean,
+        //     ).unwrap();
+
+        //     for (_dist_sq, &idx) in neighbors {
+        //         let point = &mut self.data[idx];
+        //         let (oda_energy, ow_energy, q_energy) = energy::update_grid_energies(&vec![atom.clone()], &point.coords);
+        //         point.energy_oda += oda_energy;
+        //         point.energy_ow += ow_energy;
+        //         point.energy_hw += q_energy;
+        //     }
+        // }
         for point in self.all_points_mut() {
             let (oda_energy, ow_energy, q_energy) = energy::update_grid_energies(new_points, &point.coords);
             point.energy_oda += oda_energy;
@@ -127,6 +146,24 @@ impl Grid3D {
     }
 
     pub fn remove_points(&mut self, points_to_remove: &Vec<Atom>) {
+        // let radius_sq = (12.0_f64).powf(2.);
+
+        // for atom in points_to_remove {
+        //     let neighbors = self.kdtree.within(
+        //         &atom.coords(),
+        //         radius_sq,
+        //         &kdtree::distance::squared_euclidean,
+        //     ).unwrap();
+
+        //     for (_dist_sq, &idx) in neighbors {
+        //         let point = &mut self.data[idx];
+        //         let (oda_energy, ow_energy, q_energy) = energy::update_grid_energies(&vec![atom.clone()], &point.coords);
+        //         point.energy_oda -= oda_energy;
+        //         point.energy_ow -= ow_energy;
+        //         point.energy_hw -= q_energy;
+        //     }
+        // }
+        
         for point in self.all_points_mut() {
             let (oda_energy, ow_energy, q_energy) = energy::update_grid_energies(points_to_remove, &point.coords);
             point.energy_oda -= oda_energy;
@@ -134,6 +171,7 @@ impl Grid3D {
             point.energy_hw -= q_energy;
         }
     }
+
 
     pub fn all_points(&self) -> &Vec<GridPoint> {
         &self.data

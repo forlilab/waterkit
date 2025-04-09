@@ -111,6 +111,11 @@ impl<'a> System<'a> {
         Self { atoms, rtree }
     }
 
+    pub fn add_atoms(&mut self, atoms: &'a mut Vec<Atom>) {
+        self.atoms.extend_from_slice(atoms);
+        self.rtree = build_spatial_index(&self.atoms); 
+    }
+
     pub fn update_water(&mut self, base_idx: usize, water_atoms: &Vec<Atom>) {
         // Update atom positions in the Vec<Atom>
         self.atoms[base_idx].set_coords(water_atoms[0].coords());
