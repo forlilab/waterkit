@@ -1,5 +1,6 @@
 use core::f64;
 
+use kiddo::{KdTree, SquaredEuclidean};
 use rand::Rng;
 
 use crate::anchor_point::AnchorPoint;
@@ -76,6 +77,69 @@ fn optimize_poistion_grid(grid: &Grid3D, point: &AnchorPoint) -> [f64; 3] {
         return geometry::sum_points(&new_point.coords, &displacement);
     }
     *point.anchor_point()
+}
+
+fn build_kd_tree(receptor_points_on_the_grid: &Vec<AnchorPoint>) -> KdTree<f64, 3> {
+    let mut tree = KdTree::new();
+    for point in receptor_points_on_the_grid {
+        tree.add(point.anchor_point(), 0); // Item is irrelevant for distance queries
+    }
+    tree
+}
+
+fn min_distance_to_protein(anchor: &AnchorPoint, tree: &KdTree<f64, 3>) -> f64 {
+    let nearest = tree.nearest_one::<SquaredEuclidean>(&anchor.anchor_point());
+    nearest.distance.sqrt() // Convert squared distance to Euclidean distance
+}
+
+pub fn sample_without_layers(grid: &mut Grid3D,  
+        anchor_points: &mut Vec<AnchorPoint>, 
+        water_configurations: &Vec<[f64; 6]>,
+        new_water_molecules: &mut Vec<WaterMolecule>,
+        last_residue_number: &mut usize,
+        distance_cutoff: f64) -> bool {
+    let placement: bool = false;
+    let mut receptor_points_on_the_grid = Vec::new();
+    for point in anchor_points.into_iter() {
+        if grid.in_box(point.anchor_point()){
+            receptor_points_on_the_grid.push(point.clone());
+        }
+    }
+    let tree = build_kd_tree(&receptor_points_on_the_grid);
+    let early_stop = 70;
+    let mut cnt = 0;
+    while !receptor_points_on_the_grid.is_empty() && cnt <= early_stop {
+        // println!("CNT: {}", cnt);
+        // println!("Anchor points: {}", receptor_points_on_the_grid.len());
+        // Sample with Boltzmann the neighbors and the actual point and based on Metropolis 
+        // acceptance criteria then these are the starting anchor points
+        let decisions = optimize_placement_order_grid(grid, &receptor_points_on_the_grid);
+
+        for (_idx, decision) in decisions.iter().enumerate() {
+            receptor_points_on_the_grid.retain(|ap| ap.anchor_point() != decision.anchor_point());
+            let new_point = optimize_poistion_grid(grid, decision);
+            let point_energy = grid.trilinear_interpolation(new_point, ProbeType::ODa).unwrap();
+            if mc::boltzmann_acceptance_rejection(&point_energy, &BOLTZMANN_ENERGY_CUTOFF, &TEMPERATURE, &BOLTZMANN_K) {
+                let (placed, mut water) = sample_waters_with_grids(&new_point, water_configurations, grid, last_residue_number);
+                if placed {
+                    water.guess_new_hydrogen_bonds();
+                    receptor_points_on_the_grid.extend(water.hydrogen_bonds().into_iter().filter(|anchor| {
+                            min_distance_to_protein(anchor, &tree) <= distance_cutoff
+                    }));
+                    let atoms_to_update = water.as_vec();
+                    
+                    grid.update_energies(&atoms_to_update);
+                    new_water_molecules.push(water);
+                    cnt = 0;           
+                } else {
+                    cnt += 1;
+                }
+            } else {
+                cnt += 1;
+            }
+        }
+    }
+    true
 }
 
 pub fn sample_using_grids(layer_id: usize,
