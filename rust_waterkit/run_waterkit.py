@@ -175,7 +175,7 @@ if __name__ == "__main__":
 
         print("Starting waterkit!")
         aps = anchor_points
-        n_frames = 7
+        n_frames = 100
 
         # num_steps = [1, 10, 100, 1000, 10000]
         # optimization_steps = [1, 10, 100, 1000, 10000]
@@ -196,7 +196,7 @@ if __name__ == "__main__":
 
         # for n_steps in num_steps:
         #     for o_steps in optimization_steps:
-        n_steps = 10000
+        n_steps = 1000
         o_steps = 1
         save_path = f"test"
         os.makedirs(save_path, exist_ok=True)

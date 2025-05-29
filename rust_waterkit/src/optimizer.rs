@@ -255,347 +255,19 @@ pub fn optimize_using_grids(water_molecule: &mut WaterMolecule, grid: &mut Grid3
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // // Simulated annealing
-// pub struct SimulatedAnnealing<'a> {
-//     pub system: System<'a>,
-//     pub waters: Vec<WaterMolecule>,
-//     pub waters_by_layer: HashMap<usize, Vec<WaterMolecule>>,
-//     temperature: f64,
-//     temp_min: f64,
-//     cooling_rate: f64,
-//     cutoff: f64, // Distance cutoff for neighbor interactions
-// }
-
-// impl<'a> SimulatedAnnealing<'a> {
-//     pub fn new(
-//         system: System<'a>,
-//         waters: Vec<WaterMolecule>,
-//         initial_temp: f64,
-//         temp_min: f64,
-//         cooling_rate: f64,
-//         cutoff: f64,
-//     ) -> Self {
-//         let mut waters_by_layer: HashMap<usize, Vec<WaterMolecule>> = HashMap::new();
-//         for water_idx in 0..waters.len() {
-//             let water = &waters[water_idx];
-//             waters_by_layer.entry(water.layer_id).or_insert_with(Vec::new).push(water.clone());
-//         }
-//         Self {
-//             system,
-//             waters,
-//             waters_by_layer,
-//             temperature: initial_temp,
-//             temp_min,
-//             cooling_rate,
-//             cutoff,
-//         }
-//     }
-
-//     // Placeholder energy function (replace with your actual energy calculation)
-//     fn calculate_energy(&self, water: &WaterMolecule, neighbors: &[usize]) -> f64 {
-//         let water_atoms = water.as_vec();
-//         let mut e_lj = 0.0;
-//         let mut e_elec = 0.0;
-//         for &idx in neighbors {
-//             let neighbor_atom = &self.system.atoms[idx];
-//             for water_atom in &water_atoms {
-//                 if neighbor_atom.residue_number == water_atom.residue_number {
-//                     continue
-//                 }
-//                 // Calculate distance avoiding division by 0
-//                 let distance = f64::max(geometry::euclidean_distance(&neighbor_atom.coords(), &water_atom.coords()), 1e-8_f64);
-//                 if neighbor_atom.atom_type() != &"HW".to_string() && water_atom.atom_type() != &"HW".to_string() {
-//                     let lj_energy = energy::lennard_jones_rmin_half(neighbor_atom.epsilon(),
-//                         water_atom.epsilon(), 
-//                         distance,
-//                         neighbor_atom.rmin_half(),
-//                         water_atom.rmin_half());
-//                     e_lj += lj_energy;
-//                     // println!("LJ: {lj_energy}");
-//                 }
-//                 let electrostatics_energy = energy::coulomb_energy(neighbor_atom.charge(), water_atom.charge(), distance);
-//                 e_elec += electrostatics_energy;
-//                 // println!("Q: {electrostatics_energy}");
-//             }
-//         }
-//         e_elec + e_lj
-//     }
-
-//     // Perturb a water molecule (translate and rotate)
-//     fn perturb_water(&self, water: &WaterMolecule) -> WaterMolecule {
-//         let mut rng = rand::thread_rng();
-//         let axis = geometry::normalize(&[rng.gen(), rng.gen(), rng.gen()]);
-//         let mut new_water = water.clone();
-        
-
-//         // Small random translation (e.g., max 0.2 Å in each direction)
-//         let delta = 0.1;
-//         let trans = [
-//             rng.gen_range(-delta..delta),
-//             rng.gen_range(-delta..delta),
-//             rng.gen_range(-delta..delta),
-//         ];
-
-//         let mut new_oxygen_coords = new_water.oxygen.coords();
-//         let mut new_h1_coords = new_water.hydrogen_1.coords();
-//         let mut new_h2_coords = new_water.hydrogen_2.coords();
-
-//         new_oxygen_coords = geometry::sum_points(&new_oxygen_coords, &trans);
-//         new_h1_coords = geometry::sum_points(&new_h1_coords, &trans);
-//         new_h2_coords = geometry::sum_points(&new_h2_coords, &trans);
-
-//         let angle = rng.gen_range(0.0..PI);
-//         // let angle = rng.gen_range(-5.0_f64..5.0_f64).to_radians();
-//         let cos_theta = angle.cos();
-//         let sin_theta = angle.sin();
-    
-//         let k_cross = |v: [f64; 3]| geometry::cross(&axis, &v);
-//         let k_dot_v = |v: [f64; 3]| geometry::scale_point(&axis, &geometry::dot(&axis, &v));
-    
-//         let rotate = |v: [f64; 3]| {
-//             let v_rel = geometry::subtract_points(&v, &new_oxygen_coords);
-//             let term1 = geometry::scale_point(&v_rel, &cos_theta);
-//             let term2 = geometry::scale_point(&k_cross(v_rel), &sin_theta);
-//             let term3 = geometry::scale_point(&k_dot_v(v_rel), &(1.0 - cos_theta));
-//             geometry::sum_points(&&geometry::sum_points(&&geometry::sum_points(&term1, &term2), &term3), &new_oxygen_coords)
-//         };
-
-//         new_h1_coords = rotate(new_h1_coords);
-//         new_h2_coords = rotate(new_h2_coords);
-
-//         new_water.update_coords(new_oxygen_coords, new_h1_coords, new_h2_coords);
-//         new_water
-//     }
-
-//     // Update the system with new water coordinates
-//     fn update_system(&mut self, water_idx: usize, new_water: WaterMolecule) {
-//         let water_atoms = new_water.as_vec();
-//         let original_atoms = self.waters[water_idx].as_vec();
-
-//         // Assuming water atoms in self.system.atoms are contiguous and in order: O, H1, H2
-//         let base_idx = water_idx * 3; // Each water has 3 atoms
-//         self.system.update_atom_position(base_idx, water_atoms[0].coords());
-//         self.system.update_atom_position(base_idx + 1, water_atoms[1].coords());
-//         self.system.update_atom_position(base_idx + 2, water_atoms[2].coords());
-
-//         // Update the water in the waters vector
-//         self.waters[water_idx] = new_water;
-//     }
-
-//     pub fn run(&mut self) {
-//         let mut acceptance_rate = 0;
-//         let mut rng = rand::thread_rng();
-//         let mut cnt = 0;
-//         while self.temperature > self.temp_min {
-//             // Randomly select a water molecule
-//             let water_idx = rng.gen_range(0..self.waters.len());
-//             let current_water = &self.waters[water_idx];
-//             let base_idx = water_idx * 3;
-//             let exclude = [base_idx, base_idx + 1, base_idx + 2];
-
-//             // Get current neighbors and energy
-//             let water_positions = [
-//                 current_water.oxygen.coords(),
-//                 current_water.hydrogen_1.coords(),
-//                 current_water.hydrogen_2.coords(),
-//             ];
-//             let neighbors = waterkit_system::get_neighbors(&self.system.rtree, &water_positions, self.cutoff, Some(&exclude));
-//             let current_energy = self.calculate_energy(current_water, &neighbors);
-
-//             // Remove the waters from the tree to be able to avoid clashes
-
-//             // Perturb the water molecule
-//             let new_water = self.perturb_water(current_water);
-//             let new_positions = [
-//                 new_water.oxygen.coords(),
-//                 new_water.hydrogen_1.coords(),
-//                 new_water.hydrogen_2.coords(),
-//             ];
-
-
-//             let new_neighbors = waterkit_system::get_neighbors(&self.system.rtree, &new_positions, self.cutoff, Some(&exclude));
-//             let new_energy = self.calculate_energy(&new_water, &new_neighbors);
-
-//             // Acceptance criterion
-//             // println!("Old energy: {}", current_energy);
-//             // println!("New energy: {}\n", new_energy);
-//             let delta_energy = new_energy - current_energy;
-//             // println!("Displacement: old_energy = {}, new_energy = {}, delta_u = {}", current_energy, new_energy, delta_energy);
-//             if monte_carlo::boltzmann_acceptance_rejection(&new_energy, &current_energy, &self.temperature, &consts::BOLTZMANN_K) {
-//                 // if current_energy > 0. {
-//                 //     println!("Old energy: {current_energy}\nNew energy: {new_energy}\nAccepted!\n\n");
-//                 // }
-//                 acceptance_rate += 1;
-//                 self.update_system(water_idx, new_water);
-//             }
-
-//             // Cool down
-//             if cnt % 100 == 0 {
-//                 self.temperature *= self.cooling_rate;
-//             }
-
-//             cnt += 1;
-//             // println!("Steps: {cnt}");
-//         }
-//         println!("Acceptance rate: {}%", acceptance_rate as f64/100.0);
-//     }
-
-// }
-
-// New function to identify water clusters
-pub fn find_water_clusters(
-    waters: &[WaterMolecule],
-    distance_cutoff: f64,
-    angle_cutoff: f64,
-) -> Vec<Vec<usize>> {
-    let mut clusters: Vec<Vec<usize>> = Vec::new();
-    let mut visited: Vec<bool> = vec![false; waters.len()];
-
-    for i in 0..waters.len() {
-        if visited[i] {
-            continue;
-        }
-
-        let mut cluster = Vec::new();
-        let mut stack = vec![i];
-
-        while let Some(current) = stack.pop() {
-            if visited[current] {
-                continue;
-            }
-
-            visited[current] = true;
-            cluster.push(current);
-
-            let o1 = waters[current].oxygen.coords();
-            let h1 = waters[current].hydrogen_1.coords();
-            let h2 = waters[current].hydrogen_2.coords();
-
-            for j in 0..waters.len() {
-                if !visited[j] && i != j {
-                    let o2 = waters[j].oxygen.coords();
-                    let dist = geometry::euclidean_distance(&o1, &o2);
-
-                    if dist <= distance_cutoff {
-                        let mut is_hbonded = false;
-                        // Check O1's H to O2
-                        for &h in &[h1, h2] {
-                            let angle = geometry::calculate_angle(&o1, &h, &o2);
-                            if angle >= angle_cutoff {
-                                is_hbonded = true;
-                                break;
-                            }
-                        }
-                        // Check O2's H to O1
-                        if !is_hbonded {
-                            let h1_j = waters[j].hydrogen_1.coords();
-                            let h2_j = waters[j].hydrogen_2.coords();
-                            for &h in &[h1_j, h2_j] {
-                                let angle = geometry::calculate_angle(&o2, &h, &o1);
-                                if angle >= angle_cutoff {
-                                    is_hbonded = true;
-                                    break;
-                                }
-                            }
-                        }
-
-                        if is_hbonded {
-                            stack.push(j);
-                        }
-                    }
-                }
-            }
-        }
-
-        if !cluster.is_empty() {
-            clusters.push(cluster);
-        }
-    }
-
-    clusters
-}
-
-// New function to perturb a cluster collectively
-fn perturb_cluster(
-    waters: &[WaterMolecule],
-    cluster: &[usize],
-    max_trans: f64,
-    max_angle: f64,
-) -> Vec<WaterMolecule> {
-    let mut rng = rand::thread_rng();
-    let mut new_waters: Vec<WaterMolecule> = waters.to_vec();
-
-    // Compute cluster centroid (based on oxygens)
-    let centroid = cluster.iter().fold([0.0; 3], |acc, &idx| {
-        let o = waters[idx].oxygen.coords();
-        [acc[0] + o[0], acc[1] + o[1], acc[2] + o[2]]
-    });
-    let centroid = [
-        centroid[0] / cluster.len() as f64,
-        centroid[1] / cluster.len() as f64,
-        centroid[2] / cluster.len() as f64,
-    ];
-    // println!("Cluster {:?} centroid: {:?}", cluster, centroid);
-
-    // Random translation
-    let trans = [
-        rng.gen_range(-max_trans..max_trans),
-        rng.gen_range(-max_trans..max_trans),
-        rng.gen_range(-max_trans..max_trans),
-    ];
-    // Random rotation
-    let axis = geometry::normalize(&[rng.gen(), rng.gen(), rng.gen()]);
-    let angle = rng.gen_range(-max_angle..max_angle);
-    let cos_theta = angle.cos();
-    let sin_theta = angle.sin();
-
-    let k_cross = |v: [f64; 3]| geometry::cross(&axis, &v);
-    let k_dot_v = |v: [f64; 3]| geometry::scale_point(&axis, &geometry::dot(&axis, &v));
-
-    for &idx in cluster {
-        let mut water = waters[idx].clone();
-        let o = water.oxygen.coords();
-        let h1 = water.hydrogen_1.coords();
-        let h2 = water.hydrogen_2.coords();
-
-        // Step 1: Translate the oxygen
-        let new_o = geometry::sum_points(&o, &trans);
-        let mut new_h1 = geometry::sum_points(&h1, &trans);
-        let mut new_h2 = geometry::sum_points(&h2, &trans);
-
-        // Step 2: Rotate the oxygen around centroid
-        let rotate = |v: [f64; 3]| {
-            let v_rel = geometry::subtract_points(&v, &centroid);
-            let term1 = geometry::scale_point(&v_rel, &cos_theta);
-            let term2 = geometry::scale_point(&k_cross(v_rel), &sin_theta);
-            let term3 = geometry::scale_point(&k_dot_v(v_rel), &(1.0 - cos_theta));
-            geometry::sum_points(&geometry::sum_points(&geometry::sum_points(&term1, &term2), &term3), &centroid)
-        };
-        let rot_o = rotate(new_o);
-
-        new_h1 = rotate(new_h1);
-        new_h2 = rotate(new_h2);
-
-        // Step 5: Update water with new coordinates
-        water.update_coords(rot_o, new_h1, new_h2);
-        new_waters[idx] = water;
-    }
-
-    new_waters
-}
-
-pub struct SimulatedAnnealing<'a> {
-    pub system: System<'a>,
+pub struct SimulatedAnnealing {
+    pub system: System,
     pub waters: Vec<WaterMolecule>,
     pub waters_by_layer: HashMap<usize, Vec<WaterMolecule>>,
     temperature: f64,
     temp_min: f64,
     cooling_rate: f64,
-    cutoff: f64,
+    cutoff: f64, // Distance cutoff for neighbor interactions
 }
 
-impl<'a> SimulatedAnnealing<'a> {
+impl<'a> SimulatedAnnealing {
     pub fn new(
-        system: System<'a>,
+        system: System,
         waters: Vec<WaterMolecule>,
         initial_temp: f64,
         temp_min: f64,
@@ -603,10 +275,10 @@ impl<'a> SimulatedAnnealing<'a> {
         cutoff: f64,
     ) -> Self {
         let mut waters_by_layer: HashMap<usize, Vec<WaterMolecule>> = HashMap::new();
-        for water_idx in 0..waters.len() {
-            let water = &waters[water_idx];
-            waters_by_layer.entry(water.layer_id).or_insert_with(Vec::new).push(water.clone());
-        }
+        // for water_idx in 0..waters.len() {
+        //     let water = &waters[water_idx];
+        //     waters_by_layer.entry(water.layer_id).or_insert_with(Vec::new).push(water.clone());
+        // }
         Self {
             system,
             waters,
@@ -625,50 +297,37 @@ impl<'a> SimulatedAnnealing<'a> {
         for &idx in neighbors {
             let neighbor_atom = &self.system.atoms[idx];
             for water_atom in &water_atoms {
-                if neighbor_atom.residue_number == water_atom.residue_number {
-                    continue;
+                if neighbor_atom.residue_number() == water_atom.residue_number {
+                    continue
                 }
+                // Calculate distance avoiding division by 0
                 let distance = f64::max(geometry::euclidean_distance(&neighbor_atom.coords(), &water_atom.coords()), 1e-8_f64);
-                if neighbor_atom.atom_type() != &"HW".to_string() && water_atom.atom_type() != &"HW".to_string() {
-                    let lj_energy = energy::lennard_jones_rmin_half(
-                        neighbor_atom.epsilon(),
-                        water_atom.epsilon(),
+                if neighbor_atom.atom.atom_type() != &"HW".to_string() && water_atom.atom_type() != &"HW".to_string() {
+                    let lj_energy = energy::lennard_jones_rmin_half(neighbor_atom.atom.epsilon(),
+                        water_atom.epsilon(), 
                         distance,
-                        neighbor_atom.rmin_half(),
-                        water_atom.rmin_half(),
-                    );
+                        neighbor_atom.atom.rmin_half(),
+                        water_atom.rmin_half());
                     e_lj += lj_energy;
+                    // println!("LJ: {lj_energy}");
                 }
-                let electrostatics_energy = energy::coulomb_energy(neighbor_atom.charge(), water_atom.charge(), distance);
+                let electrostatics_energy = energy::coulomb_energy(neighbor_atom.atom.charge(), water_atom.charge(), distance);
                 e_elec += electrostatics_energy;
+                // println!("Q: {electrostatics_energy}");
             }
         }
         e_elec + e_lj
     }
 
-    fn calculate_cluster_energy(&self, cluster: &[usize], waters: &[WaterMolecule]) -> f64 {
-        let mut total_energy = 0.0;
-        for &idx in cluster {
-            let water = &waters[idx];
-            let positions = [
-                water.oxygen.coords(),
-                water.hydrogen_1.coords(),
-                water.hydrogen_2.coords(),
-            ];
-            let base_idx = idx * 3;
-            let exclude = [base_idx, base_idx + 1, base_idx + 2];
-            let neighbors = waterkit_system::get_neighbors(&self.system.rtree, &positions, self.cutoff, Some(&exclude));
-            total_energy += self.calculate_energy(water, &neighbors);
-        }
-        total_energy
-    }
-
+    // Perturb a water molecule (translate and rotate)
     fn perturb_water(&self, water: &WaterMolecule) -> WaterMolecule {
         let mut rng = rand::thread_rng();
         let axis = geometry::normalize(&[rng.gen(), rng.gen(), rng.gen()]);
         let mut new_water = water.clone();
+        
 
-        let delta = 0.1;
+        // Small random translation (e.g., max 0.2 Å in each direction)
+        let delta = 0.3;
         let trans = [
             rng.gen_range(-delta..delta),
             rng.gen_range(-delta..delta),
@@ -684,18 +343,19 @@ impl<'a> SimulatedAnnealing<'a> {
         new_h2_coords = geometry::sum_points(&new_h2_coords, &trans);
 
         let angle = rng.gen_range(0.0..PI);
+        // let angle = rng.gen_range(-5.0_f64..5.0_f64).to_radians();
         let cos_theta = angle.cos();
         let sin_theta = angle.sin();
-
+    
         let k_cross = |v: [f64; 3]| geometry::cross(&axis, &v);
         let k_dot_v = |v: [f64; 3]| geometry::scale_point(&axis, &geometry::dot(&axis, &v));
-
+    
         let rotate = |v: [f64; 3]| {
             let v_rel = geometry::subtract_points(&v, &new_oxygen_coords);
             let term1 = geometry::scale_point(&v_rel, &cos_theta);
             let term2 = geometry::scale_point(&k_cross(v_rel), &sin_theta);
             let term3 = geometry::scale_point(&k_dot_v(v_rel), &(1.0 - cos_theta));
-            geometry::sum_points(&geometry::sum_points(&geometry::sum_points(&term1, &term2), &term3), &new_oxygen_coords)
+            geometry::sum_points(&&geometry::sum_points(&&geometry::sum_points(&term1, &term2), &term3), &new_oxygen_coords)
         };
 
         new_h1_coords = rotate(new_h1_coords);
@@ -705,92 +365,78 @@ impl<'a> SimulatedAnnealing<'a> {
         new_water
     }
 
+    // Update the system with new water coordinates
     fn update_system(&mut self, water_idx: usize, new_water: WaterMolecule) {
         let water_atoms = new_water.as_vec();
-        let base_idx = water_idx * 3;
-        self.system.update_atom_position(base_idx, water_atoms[0].coords());
-        self.system.update_atom_position(base_idx + 1, water_atoms[1].coords());
-        self.system.update_atom_position(base_idx + 2, water_atoms[2].coords());
-        self.waters[water_idx] = new_water;
-    }
+        let water_coords: [[f64; 3]; 3] = [water_atoms[0].coords(), water_atoms[1].coords(), water_atoms[2].coords()];
+        let original_atoms = self.waters[water_idx].as_vec();
 
-    fn update_cluster(&mut self, cluster: &[usize], new_waters: Vec<WaterMolecule>) {
-        for &idx in cluster.iter()  {
-            self.update_system(idx, new_waters[idx].clone());
-        }
+        // Assuming water atoms in self.system.atoms are contiguous and in order: O, H1, H2
+        self.system.update_water_position(water_idx, water_coords);
+
+        // Update the water in the waters vector
+        self.waters[water_idx] = new_water;
     }
 
     pub fn run(&mut self) {
         let mut acceptance_rate = 0;
         let mut rng = rand::thread_rng();
         let mut cnt = 0;
-
-        // Cluster parameters
-        let distance_cutoff = 3.5; // Å, typical O-O H-bond distance
-        let angle_cutoff = 135.0 * PI / 180.0; // Radians, typical O-H…O angle
-        let cluster_move_prob = 0.3; // 30% chance of cluster move vs single move
-        let max_trans_cluster = 0.2; // Max translation for cluster move
-        let max_angle_cluster = PI / 6.0;
-
         while self.temperature > self.temp_min {
-        // for _ in 0..200 {
-            // Decide between single water or cluster move
-            if rng.gen::<f64>() < cluster_move_prob && self.waters.len() > 1 {
-                // Cluster move
-                let clusters = find_water_clusters(&self.waters, distance_cutoff, angle_cutoff);
-                if !clusters.is_empty() {
-                    let cluster_idx = rng.gen_range(0..clusters.len());
-                    let cluster = &clusters[cluster_idx];
-                    // println!("Cluster: {:?}", cluster);
-                    let current_energy = self.calculate_cluster_energy(cluster, &self.waters);
+            // Randomly select a water molecule
+            let water_idx = rng.gen_range(0..self.waters.len());
+            let current_water = &self.waters[water_idx];
+            let base_idx = water_idx * 3;
+            let exclude = [base_idx, base_idx + 1, base_idx + 2];
 
-                    let new_waters = perturb_cluster(&self.waters, cluster, max_trans_cluster, max_angle_cluster);
-                    let new_energy = self.calculate_cluster_energy(cluster, &new_waters);
+            // Get current neighbors and energy
+            let water_positions = [
+                current_water.oxygen.coords(),
+                current_water.hydrogen_1.coords(),
+                current_water.hydrogen_2.coords(),
+            ];
+            let neighbors = self.system.get_neighbors(water_positions[0], self.cutoff, &exclude);
+            let current_energy = self.calculate_energy(current_water, &neighbors);
 
-                    let delta_energy = new_energy - current_energy;
-                    if monte_carlo::boltzmann_acceptance_rejection(&new_energy, &current_energy, &self.temperature, &BOLTZMANN_K) {
-                        acceptance_rate += 1;
-                        self.update_cluster(cluster, new_waters);
-                    }
-                }
-            } else {
-                // Single water move
-                let water_idx = rng.gen_range(0..self.waters.len());
-                let current_water = &self.waters[water_idx];
-                let base_idx = water_idx * 3;
-                let exclude = [base_idx, base_idx + 1, base_idx + 2];
+            // Remove the waters from the tree to be able to avoid clashes
 
-                let water_positions = [
-                    current_water.oxygen.coords(),
-                    current_water.hydrogen_1.coords(),
-                    current_water.hydrogen_2.coords(),
-                ];
-                let neighbors = waterkit_system::get_neighbors(&self.system.rtree, &water_positions, self.cutoff, Some(&exclude));
-                let current_energy = self.calculate_energy(current_water, &neighbors);
+            // Perturb the water molecule
+            let new_water = self.perturb_water(current_water);
+            let new_positions = [
+                new_water.oxygen.coords(),
+                new_water.hydrogen_1.coords(),
+                new_water.hydrogen_2.coords(),
+            ];
 
-                let new_water = self.perturb_water(current_water);
-                let new_positions = [
-                    new_water.oxygen.coords(),
-                    new_water.hydrogen_1.coords(),
-                    new_water.hydrogen_2.coords(),
-                ];
-                let new_neighbors = waterkit_system::get_neighbors(&self.system.rtree, &new_positions, self.cutoff, Some(&exclude));
-                let new_energy = self.calculate_energy(&new_water, &new_neighbors);
 
-                let delta_energy = new_energy - current_energy;
-                if monte_carlo::boltzmann_acceptance_rejection(&new_energy, &current_energy, &self.temperature, &BOLTZMANN_K) {
-                    acceptance_rate += 1;
-                    self.update_system(water_idx, new_water);
-                }
+            let new_neighbors = self.system.get_neighbors(new_positions[0], self.cutoff, &exclude);
+            let new_energy = self.calculate_energy(&new_water, &new_neighbors);
+
+            // Acceptance criterion
+            // println!("Old energy: {}", current_energy);
+            // println!("New energy: {}\n", new_energy);
+            let delta_energy = new_energy - current_energy;
+            if delta_energy < 0.0 {
+            // println!("Displacement: old_energy = {}, new_energy = {}, delta_u = {}", current_energy, new_energy, delta_energy);
+            // if monte_carlo::sa_acceptance_rejection(&new_energy, &current_energy, &self.temperature) {
+                // if current_energy > 0. {
+                //     println!("Old energy: {current_energy}\nNew energy: {new_energy}\nAccepted!\n\n");
+                // }
+                acceptance_rate += 1;
+                self.update_system(water_idx, new_water);
             }
 
             // Cool down
-            if cnt % 100 == 0 {
+            if cnt % 50 == 0 {
                 self.temperature *= self.cooling_rate;
+                // println!("{}", self.temperature);
             }
 
             cnt += 1;
+            // println!("Steps: {cnt}");
         }
-        println!("Acceptance rate: {}%", acceptance_rate as f64 / cnt as f64 * 100.0);
+        println!("Acceptance rate: {}%", acceptance_rate as f64/100.0);
     }
+
 }
+

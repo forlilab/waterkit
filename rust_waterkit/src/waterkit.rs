@@ -22,6 +22,7 @@ use crate::optimizer::optimize;
 use crate::optimizer::optimize_using_grids;
 use crate::optimizer::SimulatedAnnealing;
 use crate::sampling::sample_using_grids;
+use crate::sampling::sample_without_layers;
 use crate::setup::setup_grid;
 use crate::utils::to_pdb;
 use crate::utils::plot_optimization;
@@ -29,6 +30,9 @@ use crate::water::WaterMolecule;
 use crate::energy;
 use crate::utils;
 use crate::waterkit_system;
+use crate::waterkit_system::AtomSystem;
+use crate::waterkit_system::AtomType;
+use crate::waterkit_system::WaterSystem;
 
 fn run_single_waterkit_with_grids(receptor_points: &[Atom], 
     water_configurations: &Vec<[f64; 6]>, 
@@ -43,30 +47,52 @@ fn run_single_waterkit_with_grids(receptor_points: &[Atom],
 
     let mut mutable_anchor_points = anchor_points.to_vec();
     let mut new_water_molecules = Vec::new();
-    for _i in 0..4 {
-        sample_using_grids(_i, &mut grid, &mut mutable_anchor_points, &water_configurations, &mut new_water_molecules, &mut last_residue_number);
-    }
-
-    let mut waters: Vec<Atom> = Vec::with_capacity(new_water_molecules.len() * 3);
-    let mut  unoptimized_water_atoms = Vec::with_capacity(new_water_molecules.len() * 3);
-    let mut system_atoms = receptor_points.to_vec();
-    for water in new_water_molecules.iter() {
-        for atom in water.as_vec() {
-            system_atoms.push(atom.clone());
-            unoptimized_water_atoms.push(atom);
+    let use_layers = false;
+    if use_layers {
+        for _i in 0..3 {
+            sample_using_grids(_i, &mut grid, &mut mutable_anchor_points, &water_configurations, &mut new_water_molecules, &mut last_residue_number);
         }
+    } else {
+        let distance_cutoff = 12.0;
+        let placement = sample_without_layers(&mut grid, &mut mutable_anchor_points, water_configurations, &mut new_water_molecules, &mut last_residue_number, distance_cutoff);
     }
-    let system = waterkit_system::System::new(&mut system_atoms);
-
+    println!("Done sampling!");
+    // let mut system_waters: Vec<Atom> = Vec::with_capacity(new_water_molecules.len() * 3);
+    let mut system_waters: Vec<WaterSystem> = Vec::with_capacity(new_water_molecules.len());
+    let mut  unoptimized_water_atoms = Vec::with_capacity(new_water_molecules.len() * 3);
+    let mut system_atoms = Vec::new();
+    
+    let mut cnt = 0;
+    for water in new_water_molecules.iter() {
+        let water_vec = water.as_vec();
+        for atom in water_vec {
+            let atom_type = match atom.atom_type().as_str() {
+                "HW" => AtomType::WaterH,
+                "OW" => AtomType::WaterO,
+                _ => panic!("Unknown atom type: {}", atom.atom_type()),
+            };
+            unoptimized_water_atoms.push(atom.clone());
+            system_atoms.push(AtomSystem::new(atom, atom_type));
+            // system_atoms.push(atom.clone());
+        }
+        system_waters.push(WaterSystem::new(cnt, cnt+1, cnt+2));
+        cnt += 3;
+    }
+    for atom in receptor_points {
+        system_atoms.push(AtomSystem::new(atom.clone(), AtomType::Protein))
+    }
+    let system = waterkit_system::System::new(system_atoms, system_waters);
+    // let system = waterkit_system::System::new(&mut system_atoms);
+    let mut waters = Vec::with_capacity(new_water_molecules.len() * 3);
     let mut sa = optimizer::SimulatedAnnealing::new(
         system,
         new_water_molecules,
         1200.0,
-        1.0,
+        0.01,
         0.98,
-        12.0
+        12.0,
     );
-
+    // println!("Starting to optimize!");
     sa.run();
     // optimize_water_nw_with_grids_sa(&mut new_water_molecules, &receptor_map, &mut grid, num_steps, optimization_steps);
     

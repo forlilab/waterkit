@@ -1,6 +1,6 @@
 use rand::prelude::*;
 use rand::distributions::WeightedIndex;
-use crate::consts::{BOLTZMANN_K, TEMPERATURE};
+use crate::{consts::{BOLTZMANN_K, TEMPERATURE}, energy};
 
 pub fn boltzmann_probabilities(energies: &[f64]) -> Vec<f64> {
     // Compute the Boltzmann factor for each energy
@@ -151,4 +151,21 @@ pub fn boltzmann_acceptance_rejection(
     }
 
     false
+}
+
+pub fn sa_acceptance_rejection(
+    new_energies: &f64,
+    old_energies: &f64,
+    temperature: &f64
+) -> bool {
+    if new_energies <= old_energies {
+        // Accept if new solution is better (lower cost)
+        true
+    } else {
+        // Calculate acceptance probability for worse solution
+        let delta_cost = new_energies - old_energies;
+        let acceptance_probability = (-delta_cost / temperature).exp();
+        // Accept with probability based on temperature and cost difference
+        random::<f64>() < acceptance_probability
+    }
 }

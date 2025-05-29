@@ -5,7 +5,8 @@ import shutil
 
 if __name__ == "__main__":
     # base_path = "/home/niccolo/phd/waterkit/rust_waterkit/"
-    base_path = "/data/phd/waterkit/rust_waterkit/"
+    # base_path = "/data/phd/waterkit/rust_waterkit/"
+    base_path = "/Users/niccolobruciaferri/phd/waterkit/rust_waterkit"
     analysis_t = sys.argv[1]
     
     
