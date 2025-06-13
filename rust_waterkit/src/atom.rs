@@ -67,6 +67,10 @@ impl Atom {
             .expect("Failed to parse atom number")
     }
 
+    pub fn set_residue_number(&mut self, res_number: usize) {
+        self.residue_number = res_number
+    }
+
     pub fn coords(&self) -> [f64; 3] {
         self.coords
     }

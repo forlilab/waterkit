@@ -16,6 +16,7 @@ pub mod setup;
 pub mod sampling;
 pub mod grid;
 pub mod waterkit;
+pub mod gcmc;
 pub mod python_wrapper;
 
 #[cfg(test)]

@@ -32,3 +32,5 @@ pub const VINA_REPULSION_W: f64 = 0.840245;
 pub const VINA_HB_W: f64 = -0.587439;
 pub const VINA_GAUSS2_W: f64 = -0.005156;
 // pub const VINA_HYDROPHOBIC_W: f64 = -0.035069;
+
+pub const USE_DIELECTRIC: bool = false;

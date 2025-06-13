@@ -1,9 +1,12 @@
 use crate::atom::Atom;
 use crate::geometry;
 use crate::consts;
+use crate::utils;
 use crate::vina_ff;
 use crate::water;
 use crate::water::WaterMolecule;
+
+use rayon::prelude::*;
 
 
 /// Calculate the Lennard-Jones interaction energy
@@ -40,6 +43,28 @@ pub fn coulomb_energy(q1: f64, q2: f64, r: f64) -> f64 {
     let k_e = 332.0636; // Electrostatic constant in kcal·Å/(mol·e^2)
     // let dielectric = 1.0; // Dielectric constant of the medium (default: 1.0)
     let coulomb = k_e * (q1 * q2) / r;
+    coulomb
+}
+
+pub fn dielectric(q1: f64, q2: f64, r: f64) -> f64{
+    // self.diel_A = -8.5525
+    // self.diel_wat = 78.4
+    // self.diel_B = self.diel_wat - self.diel_A
+    // self.diel_lambda = 0.003627
+    // self.diel_k = 7.7839 
+    // self.diel_lB = self.diel_lambda * self.diel_B
+    // diels = self.diel_A + (self.diel_B / (1 + self.diel_k * np.exp(
+    //     -self.diel_lB * distances)))
+    // energies = np.array(qij / distances / diels)
+    let k_e = 332.0636;
+    let diel_A = -8.5525;
+    let diel_wat = 78.4;
+    let diel_B = diel_wat - diel_A;
+    let diel_lambda = 0.003627;
+    let diel_k = 7.7839;
+    let diel_lB = diel_lambda * diel_B;
+    let dielectric = diel_A + (diel_B / (1.0 + diel_k * (-diel_lB * r).exp()));
+    let coulomb = k_e * (q1 * q2) / r / dielectric;
     coulomb
 }
 
@@ -99,11 +124,16 @@ pub fn energy_for_real_water(atoms_1: &Vec<Atom>, atoms_2: &Vec<Atom>) -> f64 {
                         atom_2.rmin_half());
                     e_lj += lj_energy;
                 }
-                let electrostatics_energy = coulomb_energy(atom_1.charge(), atom_2.charge(), distance);
+                let mut electrostatics_energy = 0.0;
+                if !consts::USE_DIELECTRIC {
+                    electrostatics_energy = coulomb_energy(atom_1.charge(), atom_2.charge(), distance);
+                } else {
+                    electrostatics_energy = dielectric(atom_1.charge(), atom_2.charge(), distance);
+                }
                 e_elec += electrostatics_energy;
-            // }
+            }
         }
-    }
+    // }
     e_elec + e_lj
 }
 
@@ -151,8 +181,13 @@ pub fn get_q_energy(atoms_1: &Vec<Atom>, sphere_center: &[f64; 3]) -> f64 {
             sphere_center), 1e-8_f64);
 
         // if distance < consts::ELECTROSTATICS_CUTOFF {
-            let electrostatics = coulomb_energy(atom_1.charge(), 1.0, distance);
-            total_energy += electrostatics;
+        let mut electrostatics = 0.0;
+        if !consts::USE_DIELECTRIC {
+            electrostatics = coulomb_energy(atom_1.charge(), 1.0, distance);
+        } else {
+            electrostatics = dielectric(atom_1.charge(), 1.0, distance);
+        }    
+        total_energy += electrostatics;
         // }
     }
     total_energy
@@ -176,8 +211,12 @@ pub fn update_grid_energies(atoms_1: &Vec<Atom>, sphere_center: &[f64; 3]) -> (f
             consts::RMIN_HALF_WATER_TIP3PFB);
             total_ow_energy += lj_energy;
         }
-
-        let electrostatics = coulomb_energy(atom_1.charge(), 1.0, distance);
+        let mut electrostatics = 0.0;
+        if !consts::USE_DIELECTRIC {
+            let electrostatics = coulomb_energy(atom_1.charge(), 1.0, distance);
+        } else {
+            let electrostatics = dielectric(atom_1.charge(), 1.0, distance);
+        }
         total_q_energy += electrostatics;
 
         if distance < consts::VINA_DISTANCE_CUTOFF {
@@ -215,18 +254,45 @@ pub fn set_waters_energies(water_molecules: &mut Vec<WaterMolecule>, receptor_at
     }
 }
 
+// pub fn get_system_energy(water_molecules: &Vec<WaterMolecule>, receptor_atoms: &Vec<Atom>) -> (f64, f64) {
+//     let mut total_energy = 0.0;
+//     let mut water_energy = 0.0;
+//     let mut receptor_energy = 0.0;
+//     let n_waters = water_molecules.len();
+//     for index_1 in 0..n_waters {
+//         let water_1_atoms = &water_molecules[index_1].as_vec();
+//         for index_2 in index_1+1..n_waters {
+//             let water_2_atoms = &water_molecules[index_2].as_vec();
+//             water_energy += energy_for_real_water(&water_1_atoms, &water_2_atoms);
+//         }
+//         receptor_energy += energy_for_real_water(receptor_atoms, water_1_atoms);
+//     }
+//     (utils::round(water_energy), utils::round(receptor_energy))
+// }
+
 pub fn get_system_energy(water_molecules: &Vec<WaterMolecule>, receptor_atoms: &Vec<Atom>) -> (f64, f64) {
-    let mut total_energy = 0.0;
-    let mut water_energy = 0.0;
-    let mut receptor_energy = 0.0;
-    let n_waters = water_molecules.len();
-    for index_1 in 0..n_waters {
-        let water_1_atoms = &water_molecules[index_1].as_vec();
-        for index_2 in index_1+1..n_waters {
-            let water_2_atoms = &water_molecules[index_2].as_vec();
-            water_energy += energy_for_real_water(&water_1_atoms, &water_2_atoms);
-        }
-        receptor_energy += energy_for_real_water(receptor_atoms, water_1_atoms);
-    }
-    (water_energy, receptor_energy)
+    let (water_energy, receptor_energy): (f64, f64) = water_molecules
+        .par_iter()
+        .enumerate()
+        .map(|(index_1, water_1)| {
+            let water_1_atoms = water_1.as_vec();
+            let mut local_water_energy = 0.0;
+            let mut local_receptor_energy = 0.0;
+
+            // Water-water interactions
+            for water_2 in water_molecules.iter().skip(index_1 + 1) {
+                local_water_energy += energy_for_real_water(&water_1_atoms, &water_2.as_vec());
+            }
+            // Water-receptor interactions
+            local_receptor_energy += energy_for_real_water(&receptor_atoms, &water_1_atoms);
+
+            (local_water_energy, local_receptor_energy)
+        })
+        .reduce(
+            || (0.0, 0.0),
+            |(w1, r1), (w2, r2)| (w1 + w2, r1 + r2),
+        );
+
+    // Round to three decimal places
+    ((water_energy * 1000.0).round() / 1000.0, (receptor_energy * 1000.0).round() / 1000.0)
 }

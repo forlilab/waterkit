@@ -76,6 +76,13 @@ impl WaterMolecule {
     pub fn set_layer_id(&mut self, layer_id: usize) {
         self.layer_id = layer_id
     }
+
+    pub fn set_res_number(&mut self, resnumber: usize) {
+        self.res_number = resnumber;
+        self.oxygen.set_residue_number(resnumber); 
+        self.hydrogen_1.set_residue_number(resnumber);
+        self.hydrogen_2.set_residue_number(resnumber);
+    }
     
     pub fn get_res_number(&self) -> usize {
         self.res_number

@@ -4,6 +4,10 @@ use plotters::prelude::*;
 
 use crate::atom::Atom;
 
+pub fn round(value: f64) -> f64 {
+    (value * 1000.0).round() / 1000.0
+}
+
 // Helper to generate ranges with float step_size
 pub struct FloatRange {
     current: f64,
@@ -186,5 +190,61 @@ pub fn plot_optimization(data: &Vec<f64>, waters: &Vec<f64>, receptor: &Vec<f64>
 
     chart.configure_series_labels().draw()?;
     
+    Ok(())
+}
+
+pub fn plot_acceptance_rate(data: Vec<(usize, f64)>, num_iterations: usize, end_sa: usize) -> Result<(), Box<dyn std::error::Error>> {
+    // Create scatter plot
+    let output_file = "monte_carlo_acceptance.png";
+    let root = BitMapBackend::new(output_file, (800, 600)).into_drawing_area();
+    root.fill(&WHITE)?;
+
+    let mut chart = ChartBuilder::on(&root)
+        .caption("Monte Carlo Acceptance Rate vs. Iteration", ("sans-serif", 20))
+        .margin(10)
+        .x_label_area_size(40)
+        .y_label_area_size(40)
+        .build_cartesian_2d(0..num_iterations, 0.0..100.0)?;
+
+    chart
+        .configure_mesh()
+        .x_desc("Iteration")
+        .y_desc("Acceptance Rate")
+        .axis_desc_style(("sans-serif", 15))
+        .draw()?;
+
+    // Plot scatter points
+    chart.draw_series(
+        data.iter()
+            .map(|&(iter, rate)| Circle::new((iter, rate), 0.1, BLUE.filled())),
+    )?;
+
+    // Draw vertical red dashed line at specified epoch
+    chart
+        .draw_series(LineSeries::new(
+            vec![(end_sa, 0.0), (end_sa, 100.0)],
+            ShapeStyle {
+                color: RED.into(),
+                filled: false,
+                stroke_width: 1,
+            }
+        ))?
+        .label(format!("SA eneded at Epoch {}", end_sa))
+        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], ShapeStyle{
+            color: RED.into(),
+            filled: false,
+            stroke_width: 2,
+        }));
+
+    chart
+        .configure_series_labels()
+        .border_style(BLACK)
+        .background_style(WHITE.mix(0.8))
+        .draw()?;
+
+    root.present()?;
+
+    println!("Scatter plot saved to '{}'", output_file);
+
     Ok(())
 }

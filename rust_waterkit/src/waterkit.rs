@@ -1,19 +1,23 @@
 use core::f64;
 use std::collections::HashSet;
 use std::time::SystemTime;
+use ncollide3d::shape::FeatureId;
 use pyo3::prelude::*;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 use rand::Rng;
 use rayon::prelude::*;
+use kiddo::{KdTree, SquaredEuclidean};
 
 use crate::anchor_point::AnchorPoint;
 use crate::atom::Atom;
 use crate::energy::energy;
 use crate::energy::energy_for_real_water;
+use crate::gcmc::GCMC;
 use crate::geometry;
 use crate::geometry::dihedral;
 use crate::grid::Grid3D;
+use crate::grid::GridPoint;
 use crate::grid::ProbeType;
 use crate::consts;
 use crate::monte_carlo;
@@ -21,8 +25,10 @@ use crate::optimizer;
 use crate::optimizer::optimize;
 use crate::optimizer::optimize_using_grids;
 use crate::optimizer::SimulatedAnnealing;
+use crate::sampling::build_kd_tree;
 use crate::sampling::sample_using_grids;
 use crate::sampling::sample_without_layers;
+use crate::sampling::sample_without_layers_without_anchor_points;
 use crate::setup::setup_grid;
 use crate::utils::to_pdb;
 use crate::utils::plot_optimization;
@@ -40,70 +46,171 @@ fn run_single_waterkit_with_grids(receptor_points: &[Atom],
     mut grid: Grid3D,
     epoch: usize, 
     num_steps: i32, 
-    optimization_steps: i32) -> (Vec<Atom>, Vec<Atom>) {
+    optimization_steps: i32) -> (Vec<Atom>, Vec<Vec<Atom>>) {
     
-    // let mut receptor_map = receptor_points.to_vec();
+    let mut receptor_map = receptor_points.to_vec();
     let mut last_residue_number = receptor_points.iter().map(|n| n.residue_number).max().unwrap_or(1);
 
     let mut mutable_anchor_points = anchor_points.to_vec();
     let mut new_water_molecules = Vec::new();
     let use_layers = false;
-    if use_layers {
-        for _i in 0..3 {
-            sample_using_grids(_i, &mut grid, &mut mutable_anchor_points, &water_configurations, &mut new_water_molecules, &mut last_residue_number);
+    let use_mc_sa = false;
+    let use_gcmc = true;
+    if !use_gcmc {
+        if use_layers {
+            for _i in 0..3 {
+                sample_using_grids(_i, &mut grid, &mut mutable_anchor_points, &water_configurations, &mut new_water_molecules, &mut last_residue_number);
+            }
+        } else if use_mc_sa {
+            println!("Starting to sample run {}!", epoch);
+            let distance_cutoff = 12.0;
+            let receptor_points_tree: kiddo::float::kdtree::KdTree<f64, u64, 3, 32, u32> = build_kd_tree(&receptor_map);
+            sample_without_layers_without_anchor_points(&mut grid, &None, water_configurations, &mut new_water_molecules, &mut last_residue_number, distance_cutoff);
+            // sample_without_layers(&mut grid, &receptor_points_tree,  &mut mutable_anchor_points, water_configurations, &mut new_water_molecules, &mut last_residue_number, distance_cutoff);
+            // sample_without_layers_without_anchor_points(&mut grid, &Some(receptor_points_tree), water_configurations, &mut new_water_molecules, &mut last_residue_number, distance_cutoff);
+        } 
+        println!("Done sampling run {}!", epoch);
+        // let mut system_waters: Vec<Atom> = Vec::with_capacity(new_water_molecules.len() * 3);
+        let mut system_waters: Vec<WaterSystem> = Vec::with_capacity(new_water_molecules.len());
+        let mut  unoptimized_water_atoms = Vec::with_capacity(new_water_molecules.len() * 3);
+        let mut system_atoms = Vec::new();
+        
+        let mut cnt = 0;
+        for water in new_water_molecules.iter() {
+            let water_vec = water.as_vec();
+            for atom in water_vec {
+                let atom_type = match atom.atom_type().as_str() {
+                    "HW" => AtomType::WaterH,
+                    "OW" => AtomType::WaterO,
+                    _ => panic!("Unknown atom type: {}", atom.atom_type()),
+                };
+                unoptimized_water_atoms.push(atom.clone());
+                system_atoms.push(AtomSystem::new(atom, atom_type));
+                // system_atoms.push(atom.clone());
+            }
+            system_waters.push(WaterSystem::new(cnt, cnt+1, cnt+2));
+            cnt += 3;
         }
+        for atom in receptor_points {
+            system_atoms.push(AtomSystem::new(atom.clone(), AtomType::Protein))
+        }
+        let system = waterkit_system::System::new(system_atoms, system_waters);
+        // let system = waterkit_system::System::new(&mut system_atoms);
+        // let mut waters = Vec::with_capacity(new_water_molecules.len() * 3);
+        let mut sa = optimizer::SimulatedAnnealing::new(
+            system,
+            new_water_molecules,
+            1200.0,
+            300.0,
+            0.995,
+            // 0.95,
+            12.0,
+        );
+        // println!("Starting to optimize!");
+        let acceptance_rate = sa.run();
+        println!("Acceptance rate run {}: {}%", epoch, acceptance_rate);
+        // optimize_water_nw_with_grids_sa(&mut new_water_molecules, &receptor_map, &mut grid, num_steps, optimization_steps);
+        
+        // for w in new_water_molecules.into_iter() {
+        //     waters.extend(w.as_vec().into_iter());
+        // }
+        // for w in sa.waters {
+        //     waters.extend(w.as_vec());
+        // }
+        let mut frames = Vec::with_capacity(sa.frames.len());
+        for (idx, frame) in sa.frames.into_iter().enumerate() {
+            let mut single_frame= Vec::with_capacity(frame.len() * 3);
+            for w in frame {
+                single_frame.extend(w.as_vec());
+            }
+            frames.push(single_frame);
+        }
+        return (unoptimized_water_atoms, frames);
     } else {
+        receptor_map.clear();
+        // Here we are testing the GCMC
         let distance_cutoff = 12.0;
-        let placement = sample_without_layers(&mut grid, &mut mutable_anchor_points, water_configurations, &mut new_water_molecules, &mut last_residue_number, distance_cutoff);
-    }
-    println!("Done sampling!");
-    // let mut system_waters: Vec<Atom> = Vec::with_capacity(new_water_molecules.len() * 3);
-    let mut system_waters: Vec<WaterSystem> = Vec::with_capacity(new_water_molecules.len());
-    let mut  unoptimized_water_atoms = Vec::with_capacity(new_water_molecules.len() * 3);
-    let mut system_atoms = Vec::new();
-    
-    let mut cnt = 0;
-    for water in new_water_molecules.iter() {
-        let water_vec = water.as_vec();
-        for atom in water_vec {
-            let atom_type = match atom.atom_type().as_str() {
-                "HW" => AtomType::WaterH,
-                "OW" => AtomType::WaterO,
-                _ => panic!("Unknown atom type: {}", atom.atom_type()),
-            };
-            unoptimized_water_atoms.push(atom.clone());
-            system_atoms.push(AtomSystem::new(atom, atom_type));
-            // system_atoms.push(atom.clone());
+        let mut receptor_points_tree = None;
+        if receptor_map.len() > 0 {
+            receptor_points_tree = Some(build_kd_tree(&receptor_map));
         }
-        system_waters.push(WaterSystem::new(cnt, cnt+1, cnt+2));
-        cnt += 3;
+        let mut gird_points_for_placement = Vec::new();
+        if receptor_points_tree.is_some() {
+            gird_points_for_placement.extend(grid.all_points().into_iter().filter(|p| 
+                {
+                    let d = distance_to_protein_grid(p, &receptor_points_tree.clone().unwrap());
+                    d <= distance_cutoff && d >= 1.5
+            }).map(|p| p.coords));
+        } else {
+            gird_points_for_placement.extend(grid.all_points().into_iter().map(|p| p.coords));
+        }
+        let bulk_water_density = 0.0334; // molecules/A^3
+        let voxel_volume = grid.spacing * grid.spacing * grid.spacing;
+        let total_volume = (voxel_volume * gird_points_for_placement.len() as f64);
+        println!("V: {}", total_volume);
+        let target_n_waters = (total_volume * bulk_water_density * 0.9) as usize;
+        println!("Target # of waters for cutoff {}A: {}", distance_cutoff, target_n_waters);
+        let min_max = find_min_max(&gird_points_for_placement);
+        if min_max.is_some() {
+            let (min, max) = min_max.unwrap();
+            let mut system_atoms = Vec::with_capacity(receptor_points.len());
+            for atom in receptor_map {
+                system_atoms.push(AtomSystem::new(atom.clone(), AtomType::Protein))
+            }
+            let system = waterkit_system::System::new(system_atoms, Vec::new());
+            let mut gcmc = GCMC::new(system, distance_cutoff, min[0], max[0], min[1], max[1], min[2], max[2]);
+            let water_configuration = WaterMolecule::new( 
+                [0.000, 0.000, 0.000], 
+                [0.000, 0.756, 0.586], 
+                [0.000, -0.756, 0.585],
+            "A".to_string(),
+        0);
+            let simulation = gcmc.gcmc_simulation(water_configuration, target_n_waters, total_volume);
+            if simulation.is_ok() {
+                let water_frames = simulation.unwrap();
+                let mut frames = Vec::with_capacity(water_frames.len());
+                for frame in water_frames {
+                    let mut atoms = Vec::with_capacity(frame.len() * 3);
+                    for mol in frame {
+                        atoms.push(mol.oxygen);
+                        atoms.push(mol.hydrogen_1);
+                        atoms.push(mol.hydrogen_2);
+                    }
+                    frames.push(atoms);
+                }
+                println!("{} frames generated!", frames.len());
+                return (Vec::new(), frames);
+            }
+        }
+        return (Vec::new(), Vec::new());
     }
-    for atom in receptor_points {
-        system_atoms.push(AtomSystem::new(atom.clone(), AtomType::Protein))
-    }
-    let system = waterkit_system::System::new(system_atoms, system_waters);
-    // let system = waterkit_system::System::new(&mut system_atoms);
-    let mut waters = Vec::with_capacity(new_water_molecules.len() * 3);
-    let mut sa = optimizer::SimulatedAnnealing::new(
-        system,
-        new_water_molecules,
-        1200.0,
-        0.01,
-        0.98,
-        12.0,
-    );
-    // println!("Starting to optimize!");
-    sa.run();
-    // optimize_water_nw_with_grids_sa(&mut new_water_molecules, &receptor_map, &mut grid, num_steps, optimization_steps);
-    
-    // for w in new_water_molecules.into_iter() {
-    //     waters.extend(w.as_vec().into_iter());
-    // }
-    for w in sa.waters {
-        waters.extend(w.as_vec());
+}
+
+fn find_min_max(coords: &[[f64; 3]]) -> Option<([f64; 3], [f64; 3])> {
+    if coords.is_empty() {
+        return None;
     }
 
-    (unoptimized_water_atoms, waters)
+    let mut min = coords[0];
+    let mut max = coords[0];
+
+    for point in coords.iter().skip(1) {
+        for i in 0..3 {
+            if point[i] < min[i] {
+                min[i] = point[i];
+            }
+            if point[i] > max[i] {
+                max[i] = point[i];
+            }
+        }
+    }
+
+    Some((min, max))
+}
+
+fn distance_to_protein_grid(point: &GridPoint, tree: &KdTree<f64, 3>) -> f64 {
+    let nearest = tree.nearest_one::<SquaredEuclidean>(&point.coords);
+    nearest.distance.sqrt() // Convert squared distance to Euclidean distance
 }
 
 pub fn optimize_water_nw_with_grids(new_waters: &mut Vec<WaterMolecule>, grid: &mut Grid3D, num_steps: i32, optimization_steps: i32) {
@@ -319,7 +426,7 @@ pub fn run_parallel_waterkit(receptor_points: Vec<Atom>,
     optimization_steps: i32,
     save_path: String) {
 
-    let waters: (Vec<Vec<Atom>>, Vec<Vec<Atom>>) = (0..epochs).into_par_iter()
+    let waters: (Vec<Vec<Atom>>, Vec<Vec<Vec<Atom>>>) = (0..epochs).into_par_iter()
         .map(|epoch| run_single_waterkit_with_grids(
                 &receptor_points,
                 &water_configurations,
@@ -332,11 +439,19 @@ pub fn run_parallel_waterkit(receptor_points: Vec<Atom>,
             
     println!("Done sampling...saving results!");
     
+    // waters.par_iter().enumerate()
+    //     .for_each(|(idx, (unoptimized_system, optimized_system))| {
+    //         to_pdb(&unoptimized_system, &format!("{save_path}/water_{idx}_unoptimized.pdb"), None);
+    //         to_pdb(&optimized_system, &format!("{save_path}/water_{idx}_optimized.pdb"), None)}
+    //     );
     waters.par_iter().enumerate()
-        .for_each(|(idx, (unoptimized_system, optimized_system))| {
-            to_pdb(&unoptimized_system, &format!("{save_path}/water_{idx}_unoptimized.pdb"), None);
-            to_pdb(&optimized_system, &format!("{save_path}/water_{idx}_optimized.pdb"), None)}
-        );
+            .for_each(|(i, (unoptimized_system, optimized_system))| {
+                to_pdb(unoptimized_system, &format!("{save_path}/water_{i}_unoptimized.pdb"), None);
+                optimized_system.iter().enumerate()
+                    .for_each(|(j, system)| {
+                        to_pdb(&system, &format!("{save_path}/water_{i}_{j}_optimized.pdb"), None)
+                    });
+            });
     // waters.par_iter().enumerate()
     //     .for_each(|(idx, system)| to_pdb(&system, &format!("/data/phd/waterkit/rust_waterkit/test/water_{idx}_unoptimized.pdb")));
 }

@@ -110,53 +110,55 @@ def get_molsetup_coords(molsetup):
     return coords
 
 if __name__ == "__main__":
-    polymer = get_data_form_meeko("/data/phd/waterkit/example/1uyg_no_ligand.pdb")
+    # polymer = get_data_form_meeko("/data/phd/waterkit/example/1uyg_no_ligand.pdb")
     
     # molsetups_names = ["/data/phd/waterkit/example/traj/water_000001.pdb",
-    for i in range(0, 100):
-        molsetups_names = [f"/data/phd/waterkit/rust_waterkit/test/water_{i}_unoptimized.pdb",
-                        f"/data/phd/waterkit/rust_waterkit/test/water_{i}_optimized.pdb"]
-        for name in molsetups_names:
-            molsetups = load_waters(name)
-            docksys = jova.DockingSystem(
-                    moving_molsetups=molsetups,
-                    parameters=PARAMS,
-                    static_molsetup=None,
-                    polymer=polymer,
-                    mapo=None,
-                    grid_desolv=None
-                )
+    # for i in range(0, 100):
+    # molsetups_names = [f"/data/phd/waterkit/rust_waterkit/test/water_{i}_unoptimized.pdb",
+    #                 f"/data/phd/waterkit/rust_waterkit/test/water_{i}_optimized.pdb"]
+    
+    molsetups_names = ["/data/phd/waterkit/rust_waterkit/water_0_0_optimized.pdb"]
+    for name in molsetups_names:
+        molsetups = load_waters(name)
+        docksys = jova.DockingSystem(
+                moving_molsetups=molsetups,
+                parameters=PARAMS,
+                static_molsetup=None,
+                polymer=None,
+                mapo=None,
+                grid_desolv=None
+            )
 
 
-            # print("Everything okay!")
-            energies = {}
-            g = docksys.get_current_genes()
-            e = docksys.eval(g, log=energies)
-            # print(energies)
-            # terms_of_interest = ["lj_12_6", "coulomb"]
-            # mapping = {0: "Receptor", 
-            #            1: f"Water at coords: {get_molsetup_coords(molsetups[0])}", 
-            #            2: f"Water at coords: {get_molsetup_coords(molsetups[1])}",
-            #            3: f"Water at coords: {get_molsetup_coords(molsetups[2])}",
-            #            4: f"Water at coords: {get_molsetup_coords(molsetups[3])}"}
-            # for term in terms_of_interest:
-            #     data = energies['direct']['terms'][term]
-            #     print(f"{term}")
-            #     for idx, value in enumerate(data):
-            #         print(f"\t{mapping[energies['direct']['pairs'][idx][0]]} - {mapping[energies['direct']['pairs'][idx][1]]}: {value}")
-            
-            # total_lj = 0
-            # total_elec = 0
-            # for idx, p in enumerate(energies['direct']['pairs']):
-            #     if 1 in p:
-            #         print(energies['direct']['terms']['lj_12_6'][idx])
-            #         total_lj += energies['direct']['terms']['lj_12_6'][idx]
-            #         total_elec += energies['direct']['terms']['coulomb'][idx]
-            # print(f"Total LJ for {mapping[1]}:\n")
-            # print(f"\t{total_lj}")
-            # print(f"Total Coulomb for {mapping[1]}:\n")
-            # print(f"\t{total_elec}")
-            print(f"Total Energy for {name.split('/')[-1]}: {energies['direct_sum']}")
+        # print("Everything okay!")
+        energies = {}
+        g = docksys.get_current_genes()
+        e = docksys.eval(g, log=energies)
+        # print(energies)
+        # terms_of_interest = ["lj_12_6", "coulomb"]
+        # mapping = {0: "Receptor", 
+        #            1: f"Water at coords: {get_molsetup_coords(molsetups[0])}", 
+        #            2: f"Water at coords: {get_molsetup_coords(molsetups[1])}",
+        #            3: f"Water at coords: {get_molsetup_coords(molsetups[2])}",
+        #            4: f"Water at coords: {get_molsetup_coords(molsetups[3])}"}
+        # for term in terms_of_interest:
+        #     data = energies['direct']['terms'][term]
+        #     print(f"{term}")
+        #     for idx, value in enumerate(data):
+        #         print(f"\t{mapping[energies['direct']['pairs'][idx][0]]} - {mapping[energies['direct']['pairs'][idx][1]]}: {value}")
+        
+        # total_lj = 0
+        # total_elec = 0
+        # for idx, p in enumerate(energies['direct']['pairs']):
+        #     if 1 in p:
+        #         print(energies['direct']['terms']['lj_12_6'][idx])
+        #         total_lj += energies['direct']['terms']['lj_12_6'][idx]
+        #         total_elec += energies['direct']['terms']['coulomb'][idx]
+        # print(f"Total LJ for {mapping[1]}:\n")
+        # print(f"\t{total_lj}")
+        # print(f"Total Coulomb for {mapping[1]}:\n")
+        # print(f"\t{total_elec}")
+        print(f"Total Energy for {name.split('/')[-1]}: {energies['direct_sum']}")
 
 
     #11760.157995647669

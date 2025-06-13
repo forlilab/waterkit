@@ -150,7 +150,7 @@ use nalgebra::Point3;
 use rand::Rng;
 use std::f64::consts::PI;
 
-use crate::atom::Atom;
+use crate::{atom::Atom, water::{self, WaterMolecule}};
 
 // Atom type (water H, water O, or protein atom)
 #[derive(Clone, Copy, Debug)]
@@ -244,18 +244,6 @@ impl System {
         let water = self.waters[water_idx];
         let indices = water.atom_indices();
 
-        // Validate coordinates
-        // for (i, &pos) in new_positions.iter().enumerate() {
-        //     for (j, &coord) in pos.iter().enumerate() {
-        //         if !coord.is_finite() || coord.abs() > 1e6 {
-        //             return Err(format!(
-        //                 "Invalid coordinate in water {} at atom {}: coord {} = {}",
-        //                 water_idx, i, j, coord
-        //             ));
-        //         }
-        //     }
-        // }
-
         // Update atom positions
         for (i, idx) in indices.iter().enumerate() {
             self.atoms[*idx].set_coords(new_positions[i]);
@@ -264,6 +252,28 @@ impl System {
         // Rebuild kdtree
         self.kdtree = Self::build_kdtree(&self.atoms);
         Ok(())
+    }
+
+    pub fn add_water_to_the_system(&mut self, water_indices: [usize; 3], water_mol: &WaterMolecule) {
+        let water_vec = water_mol.as_vec();
+        for atom in water_vec {
+            let atom_type = match atom.atom_type().as_str() {
+                "HW" => AtomType::WaterH,
+                "OW" => AtomType::WaterO,
+                _ => panic!("Unknown atom type: {}", atom.atom_type()),
+            };
+            self.atoms.push(AtomSystem::new(atom, atom_type));
+            // system_atoms.push(atom.clone());
+        }
+        self.waters.push(WaterSystem { o_index: water_indices[0], h1_index: water_indices[1], h2_index: water_indices[2] });
+        self.kdtree = Self::build_kdtree(&self.atoms);
+    }
+
+    pub fn delete_water_from_the_system(&mut self, water_indices: [usize; 3], res_number: usize) {
+        self.waters.retain(|x| x.atom_indices() != water_indices);
+        self.atoms.retain(|p| p.atom.residue_number != res_number);
+
+        self.kdtree = Self::build_kdtree(&self.atoms);
     }
 
     pub fn water_center(&self, water_idx: usize) -> [f64; 3] {

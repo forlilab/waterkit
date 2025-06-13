@@ -49,7 +49,7 @@ pub struct Grid3D {
     y_max: f64,
     z_max: f64,
 
-    spacing: f64, 
+    pub spacing: f64, 
 
     // tree: RTree<GridPoint>,
     pub kdtree: KdTree<f64, usize, [f64; 3]>,

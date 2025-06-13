@@ -8,6 +8,7 @@ use crate::grid::Grid3D;
 use crate::grid::ProbeType;
 use crate::monte_carlo;
 use crate::energy::energy_for_real_water;
+use crate::utils;
 use crate::water::WaterMolecule;
 use crate::waterkit_system;
 use crate::waterkit_system::System;
@@ -259,10 +260,12 @@ pub struct SimulatedAnnealing {
     pub system: System,
     pub waters: Vec<WaterMolecule>,
     pub waters_by_layer: HashMap<usize, Vec<WaterMolecule>>,
+    pub frames: Vec<Vec<WaterMolecule>>,
     temperature: f64,
     temp_min: f64,
     cooling_rate: f64,
     cutoff: f64, // Distance cutoff for neighbor interactions
+    final_temp_max_iter: usize,
 }
 
 impl<'a> SimulatedAnnealing {
@@ -275,18 +278,18 @@ impl<'a> SimulatedAnnealing {
         cutoff: f64,
     ) -> Self {
         let mut waters_by_layer: HashMap<usize, Vec<WaterMolecule>> = HashMap::new();
-        // for water_idx in 0..waters.len() {
-        //     let water = &waters[water_idx];
-        //     waters_by_layer.entry(water.layer_id).or_insert_with(Vec::new).push(water.clone());
-        // }
+        let final_temp_max_iter = 1000;
+        let frames = Vec::with_capacity(final_temp_max_iter/1000);
         Self {
             system,
             waters,
             waters_by_layer,
+            frames,
             temperature: initial_temp,
             temp_min,
             cooling_rate,
             cutoff,
+            final_temp_max_iter,
         }
     }
 
@@ -311,8 +314,13 @@ impl<'a> SimulatedAnnealing {
                     e_lj += lj_energy;
                     // println!("LJ: {lj_energy}");
                 }
-                let electrostatics_energy = energy::coulomb_energy(neighbor_atom.atom.charge(), water_atom.charge(), distance);
-                e_elec += electrostatics_energy;
+                if consts::USE_DIELECTRIC {
+                    let electrostatics_energy = energy::dielectric(neighbor_atom.atom.charge(), water_atom.charge(), distance);
+                    e_elec += electrostatics_energy;
+                } else {
+                    let electrostatics_energy = energy::coulomb_energy(neighbor_atom.atom.charge(), water_atom.charge(), distance);
+                    e_elec += electrostatics_energy;
+                }
                 // println!("Q: {electrostatics_energy}");
             }
         }
@@ -320,14 +328,14 @@ impl<'a> SimulatedAnnealing {
     }
 
     // Perturb a water molecule (translate and rotate)
-    fn perturb_water(&self, water: &WaterMolecule) -> WaterMolecule {
+    fn perturb_water(&self, water: &WaterMolecule, delta: f64, rotation_delta: f64) -> WaterMolecule {
         let mut rng = rand::thread_rng();
         let axis = geometry::normalize(&[rng.gen(), rng.gen(), rng.gen()]);
         let mut new_water = water.clone();
         
 
         // Small random translation (e.g., max 0.2 Å in each direction)
-        let delta = 0.3;
+        // let delta = 0.5;
         let trans = [
             rng.gen_range(-delta..delta),
             rng.gen_range(-delta..delta),
@@ -342,8 +350,8 @@ impl<'a> SimulatedAnnealing {
         new_h1_coords = geometry::sum_points(&new_h1_coords, &trans);
         new_h2_coords = geometry::sum_points(&new_h2_coords, &trans);
 
-        let angle = rng.gen_range(0.0..PI);
-        // let angle = rng.gen_range(-5.0_f64..5.0_f64).to_radians();
+        // let angle = rng.gen_range(0.0..rotation_delta);
+        let angle = rng.gen_range(-rotation_delta..rotation_delta).to_radians();
         let cos_theta = angle.cos();
         let sin_theta = angle.sin();
     
@@ -378,11 +386,24 @@ impl<'a> SimulatedAnnealing {
         self.waters[water_idx] = new_water;
     }
 
-    pub fn run(&mut self) {
+    pub fn run(&mut self) -> f64 { 
         let mut acceptance_rate = 0;
         let mut rng = rand::thread_rng();
         let mut cnt = 0;
-        while self.temperature > self.temp_min {
+        let mut final_temp_cnt = 0;
+
+        let equilibrate = false;
+        let production_temp = 300.0;
+        let mut start_equilibration = false;
+        let mut equilibration_done = false;
+        let mut accepted_production = 0;
+        let mut max_displacement = 0.5;
+        let mut rotational_displacement = 130.0;
+        let mut acceptance_vec = Vec::new();
+        let mut end_sa = 0;
+
+        // while self.temperature > self.temp_min || final_temp_cnt < self.final_temp_max_iter {
+        while final_temp_cnt < self.final_temp_max_iter {
             // Randomly select a water molecule
             let water_idx = rng.gen_range(0..self.waters.len());
             let current_water = &self.waters[water_idx];
@@ -401,7 +422,7 @@ impl<'a> SimulatedAnnealing {
             // Remove the waters from the tree to be able to avoid clashes
 
             // Perturb the water molecule
-            let new_water = self.perturb_water(current_water);
+            let new_water = self.perturb_water(current_water, max_displacement, rotational_displacement);
             let new_positions = [
                 new_water.oxygen.coords(),
                 new_water.hydrogen_1.coords(),
@@ -416,26 +437,100 @@ impl<'a> SimulatedAnnealing {
             // println!("Old energy: {}", current_energy);
             // println!("New energy: {}\n", new_energy);
             let delta_energy = new_energy - current_energy;
-            if delta_energy < 0.0 {
+            // if delta_energy < 0.0 {
             // println!("Displacement: old_energy = {}, new_energy = {}, delta_u = {}", current_energy, new_energy, delta_energy);
-            // if monte_carlo::sa_acceptance_rejection(&new_energy, &current_energy, &self.temperature) {
-                // if current_energy > 0. {
-                //     println!("Old energy: {current_energy}\nNew energy: {new_energy}\nAccepted!\n\n");
-                // }
-                acceptance_rate += 1;
-                self.update_system(water_idx, new_water);
+
+            // We are still in the Simulated Annealing, the acceptance is different
+            if !equilibration_done {
+                if delta_energy < 0.0 {
+                // if monte_carlo::sa_acceptance_rejection(&new_energy, &current_energy, &self.temperature) {
+                    // if current_energy > 0. {
+                    //     println!("Old energy: {current_energy}\nNew energy: {new_energy}\nAccepted!\n\n");
+                    // }
+                    if equilibration_done && self.temperature >= production_temp {
+                        accepted_production += 1;
+                    }
+
+                    acceptance_rate += 1;
+                    self.update_system(water_idx, new_water);
+                }
+            } else {
+                // We are in the production step -> normal Monte Carlo
+                if monte_carlo::boltzmann_acceptance_rejection(&new_energy, 
+                    &current_energy, 
+                    &self.temperature, 
+                    &consts::BOLTZMANN_K) {
+                        if equilibration_done && self.temperature >= production_temp {
+                        accepted_production += 1;
+                    }
+
+                    acceptance_rate += 1;
+                    self.update_system(water_idx, new_water);
+                }
             }
 
             // Cool down
-            if cnt % 50 == 0 {
-                self.temperature *= self.cooling_rate;
-                // println!("{}", self.temperature);
+            if cnt % 100 == 0 && !equilibration_done {
+                if self.temperature > self.temp_min {
+                    self.temperature *= self.cooling_rate;
+                }
             }
 
+            acceptance_vec.push((cnt, (acceptance_rate as f64/cnt as f64) * 100.0));
             cnt += 1;
+
+            if self.temperature < self.temp_min {
+                if equilibrate {
+                    // Heat up
+                    if !start_equilibration{
+                        println!("Reached min temp (T={}). Now slowly heating up.", self.temperature);
+                        start_equilibration = true;
+                    }
+
+                    if self.temperature < production_temp && start_equilibration {
+                        // println!("Heating up to T: {}", self.temperature);
+                        // Slowly heat up
+                        self.temperature += 5.0;
+                        if self.temperature >= production_temp {
+                            equilibration_done = true;
+                        }
+                    }
+                } else {
+                    end_sa = cnt;
+                    equilibration_done = true;
+                    self.temperature = production_temp;
+                }
+            }
+
+            // Production
+            if self.temperature >= production_temp && equilibration_done {
+                // println!("Equilibration done, starting production at T {} and step {}", self.temperature, final_temp_cnt);
+                if final_temp_cnt % 100000 == 0 {
+                    println!("Production steps: {}", final_temp_cnt);
+                    self.frames.push(self.waters.clone());
+                }
+                final_temp_cnt += 1;
+                
+                // **Adaptive step size adjustment every 10 steps**
+                if final_temp_cnt % 100 == 0 {
+                    let acceptance_rate_production = accepted_production as f64 / (final_temp_cnt) as f64;
+                    println!("Acceptance rate production: {}", acceptance_rate_production);
+                    println!("Step size: {}", max_displacement);
+                    if acceptance_rate_production < 0.02 {
+                        max_displacement *= 0.9;  // Reduce step size
+                        rotational_displacement *= 0.9;
+                    } else if acceptance_rate_production > 0.08 {
+                        max_displacement *= 1.1;  // Increase step size
+                        rotational_displacement *= 1.1;
+                    }
+                }
+            } 
             // println!("Steps: {cnt}");
         }
-        println!("Acceptance rate: {}%", acceptance_rate as f64/100.0);
+        utils::plot_acceptance_rate(acceptance_vec, cnt, end_sa);
+        // self.frames.push(self.waters.clone());
+        acceptance_rate as f64/cnt as f64
+        // println!("Acceptance rate: {}%", acceptance_rate as f64/100.0);
     }
 
 }
