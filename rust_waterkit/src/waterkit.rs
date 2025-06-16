@@ -436,7 +436,20 @@ pub fn run_parallel_waterkit(receptor_points: Vec<Atom>,
                 num_steps,
                 optimization_steps
             )).collect();
-            
+    // let mut waters = Vec::with_capacity(epochs);
+    // for epoch in 0..epochs {
+    //     let result = run_single_waterkit_with_grids(
+    //                 &receptor_points,
+    //                 &water_configurations,
+    //                 &anchor_points,
+    //                 grid.clone(),
+    //                 epoch,
+    //                 num_steps,
+    //                 optimization_steps
+    //             );
+    //     waters.push(result);
+    // }
+
     println!("Done sampling...saving results!");
     
     // waters.par_iter().enumerate()

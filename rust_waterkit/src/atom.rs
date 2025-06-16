@@ -68,6 +68,12 @@ impl Atom {
     }
 
     pub fn set_residue_number(&mut self, res_number: usize) {
+        let old_atom_id = self.atom_id();
+        let splitted: Vec<&str> = old_atom_id.split(":").collect();
+        let chain = splitted[0];
+        let resname = splitted[1];
+        let atom_type = splitted[3];
+        self.atom_id = format!("{chain}:{resname}:{res_number}:{atom_type}");
         self.residue_number = res_number
     }
 
