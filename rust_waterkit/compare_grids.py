@@ -4,6 +4,7 @@ import os
 from gridData import Grid
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.ndimage import gaussian_filter
 
 
 
@@ -15,7 +16,7 @@ def load_grids(path_to_grid_files):
     grid_tso = Grid(os.path.join(path_to_grid_files, 'gist-dTSorient-dens.dx'))
     return [grid_gO, grid_esw, grid_eww, grid_tst, grid_tso]
 
-def select_voxels_within_distance(grid, max_distance=10.0):
+def select_voxels_within_distance(grid, max_distance=5.0):
     """
     Select voxels in a GIST grid within a specified distance from the origin.
     
@@ -63,6 +64,9 @@ def select_voxels_within_distance(grid, max_distance=10.0):
 def compare_grids(grid_1, grid_2, grid_type, x_axis, y_axis, plot_name, path):
     densities_1 = select_voxels_within_distance(grid_1).flatten()
     densities_2 = select_voxels_within_distance(grid_2).flatten()
+
+    smoothed_d1 = gaussian_filter(densities_1, sigma=3)
+    smoothed_d2 = gaussian_filter(densities_2, sigma=3)
     # densities_1 = grid_1.grid.flatten()
     # densities_2 = grid_2.grid.flatten()
     # Create scatter plot
@@ -83,7 +87,7 @@ def compare_grids(grid_1, grid_2, grid_type, x_axis, y_axis, plot_name, path):
     plt.savefig(f"{path}/plot_{grid_type}_{plot_name}.png")
     # plt.show()
     plt.clf()
-    return densities_1, densities_2
+    return smoothed_d1, smoothed_d2
 
 def compute_tanimoto(vec1, vec2):
     dot_product = np.dot(vec1, vec2)

@@ -72,9 +72,9 @@ fn get_energy(oxygen_pos: [f64; 3], h1_pos: [f64; 3], h2_pos: [f64; 3], grid: &G
     let electrostatics_oxygen = grid.trilinear_interpolation(oxygen_pos, ProbeType::HW);
     if electrostatics_h1.is_some() && electrostatics_h2.is_some() && electrostatics_oxygen.is_some() {
         let energy_value = lj_oxygen
-            + electrostatics_oxygen.unwrap() * consts::OXYGEN_W_Q_TIP3PFB
-            + electrostatics_h1.unwrap() * consts::HYDROGEN_W_Q_TIP3PFB
-            + electrostatics_h2.unwrap() * consts::HYDROGEN_W_Q_TIP3PFB;
+            + electrostatics_oxygen.unwrap() * consts::OXYGEN_W_Q
+            + electrostatics_h1.unwrap() * consts::HYDROGEN_W_Q
+            + electrostatics_h2.unwrap() * consts::HYDROGEN_W_Q;
         return energy_value;
     }
     f64::INFINITY
@@ -260,7 +260,7 @@ pub struct SimulatedAnnealing {
     pub system: System,
     pub waters: Vec<WaterMolecule>,
     pub waters_by_layer: HashMap<usize, Vec<WaterMolecule>>,
-    pub frames: Vec<Vec<WaterMolecule>>,
+    pub frame: Vec<WaterMolecule>,
     temperature: f64,
     temp_min: f64,
     cooling_rate: f64,
@@ -278,13 +278,13 @@ impl<'a> SimulatedAnnealing {
         cutoff: f64,
     ) -> Self {
         let mut waters_by_layer: HashMap<usize, Vec<WaterMolecule>> = HashMap::new();
-        let final_temp_max_iter = 1000;
-        let frames = Vec::with_capacity(final_temp_max_iter/1000);
+        let final_temp_max_iter = 100000;
+        let frame: Vec<WaterMolecule> = Vec::new();
         Self {
             system,
             waters,
             waters_by_layer,
-            frames,
+            frame,
             temperature: initial_temp,
             temp_min,
             cooling_rate,
@@ -398,7 +398,7 @@ impl<'a> SimulatedAnnealing {
         let mut equilibration_done = false;
         let mut accepted_production = 0;
         let mut max_displacement = 0.5;
-        let mut rotational_displacement = 130.0;
+        let mut rotational_displacement = 180.0;
         let mut acceptance_vec = Vec::new();
         let mut end_sa = 0;
 
@@ -506,16 +506,16 @@ impl<'a> SimulatedAnnealing {
             if self.temperature >= production_temp && equilibration_done {
                 // println!("Equilibration done, starting production at T {} and step {}", self.temperature, final_temp_cnt);
                 if final_temp_cnt % 100000 == 0 {
-                    println!("Production steps: {}", final_temp_cnt);
-                    self.frames.push(self.waters.clone());
+                    // println!("Production steps: {}", final_temp_cnt);
+                    // self.frames.push(self.waters.clone());
                 }
                 final_temp_cnt += 1;
                 
                 // **Adaptive step size adjustment every 10 steps**
                 if final_temp_cnt % 100 == 0 {
                     let acceptance_rate_production = accepted_production as f64 / (final_temp_cnt) as f64;
-                    println!("Acceptance rate production: {}", acceptance_rate_production);
-                    println!("Step size: {}", max_displacement);
+                    // println!("Acceptance rate production: {}", acceptance_rate_production);
+                    // println!("Step size: {}", max_displacement);
                     if acceptance_rate_production < 0.02 {
                         max_displacement *= 0.9;  // Reduce step size
                         rotational_displacement *= 0.9;
@@ -527,8 +527,8 @@ impl<'a> SimulatedAnnealing {
             } 
             // println!("Steps: {cnt}");
         }
-        utils::plot_acceptance_rate(acceptance_vec, cnt, end_sa);
-        // self.frames.push(self.waters.clone());
+        // utils::plot_acceptance_rate(acceptance_vec, cnt, end_sa);
+        self.frame = self.waters.clone();
         acceptance_rate as f64/cnt as f64
         // println!("Acceptance rate: {}%", acceptance_rate as f64/100.0);
     }

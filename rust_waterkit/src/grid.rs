@@ -335,9 +335,9 @@ pub fn get_systems_energy(grid: &Grid3D, water_atoms: &Vec<WaterMolecule>) -> f6
         // println!("Q H2: {}", electrostatics_oxygen.unwrap() * consts::HYDROGEN_W_Q_TIP3PFB);
         
         let energy_value = lj_oxygen
-            + electrostatics_oxygen.unwrap() * consts::OXYGEN_W_Q_TIP3PFB
-            + electrostatics_h1.unwrap() * consts::HYDROGEN_W_Q_TIP3PFB
-            + electrostatics_h2.unwrap() * consts::HYDROGEN_W_Q_TIP3PFB;
+            + electrostatics_oxygen.unwrap() * consts::OXYGEN_W_Q
+            + electrostatics_h1.unwrap() * consts::HYDROGEN_W_Q
+            + electrostatics_h2.unwrap() * consts::HYDROGEN_W_Q;
         // println!("Water's energy: {energy_value}");
         total_energy += energy_value;    
     }

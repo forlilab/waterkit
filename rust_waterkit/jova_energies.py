@@ -117,7 +117,7 @@ if __name__ == "__main__":
     # molsetups_names = [f"/data/phd/waterkit/rust_waterkit/test/water_{i}_unoptimized.pdb",
     #                 f"/data/phd/waterkit/rust_waterkit/test/water_{i}_optimized.pdb"]
     
-    molsetups_names = ["/data/phd/waterkit/rust_waterkit/water_0_0_optimized.pdb"]
+    molsetups_names = ["/data/phd/waterkit/rust_waterkit/test/water_0_0_optimized.pdb"]
     for name in molsetups_names:
         molsetups = load_waters(name)
         docksys = jova.DockingSystem(

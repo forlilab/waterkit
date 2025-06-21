@@ -30,7 +30,7 @@ fn optimize_placement_order_grid(grid: &Grid3D, points: &Vec<AnchorPoint>) -> Ve
         if energy.is_some() {
             energies.push(energy.unwrap());
         }
-        //
+        
 
         // if let Some(min_point) = grid
         //     .get_neighbors_within_distance_and_angle(point.anchor_point(), point.anchor_vectors(), max, min)
@@ -128,45 +128,54 @@ pub fn sample_without_layers_without_anchor_points(grid: &mut Grid3D,
     let mut placed_oxygens = Vec::new();
     let max_iterations = 1000;
     let k_b_t: f64 = BOLTZMANN_K * TEMPERATURE;
+    
     let mut gird_points_for_placement = Vec::new();
-    if receptor_points_tree.is_some() {
-        gird_points_for_placement.extend(grid.all_points().into_iter().filter(|p| 
+    match receptor_points_tree {
+        Some(receptor_points_tree) => {
+            gird_points_for_placement.extend(grid.all_points().into_iter().filter(|p| 
             {
-                let d = distance_to_protein_grid(p, &receptor_points_tree.clone().unwrap());
-                d <= distance_cutoff && d >= 1.5
-        }));
-    } else {
-        gird_points_for_placement.extend(grid.all_points().into_iter());
+                let d = distance_to_protein_grid(p, &receptor_points_tree);
+                d <= distance_cutoff && d >= 1.5 && !placed_oxygens.contains(&p.coords)
+            }));
+        },
+        None => {
+            gird_points_for_placement.extend(grid.all_points().into_iter().filter(|p| {
+                !placed_oxygens.contains(&p.coords)
+                }));
+            },        
     }
 
     // // Save occupied voxels to XYZ file
-    let mut file = File::create("grid_points_for_placement.xyz").unwrap();
-    writeln!(file, "{}", gird_points_for_placement.len()).unwrap();
-    // writeln!(file, "Occupied Voxels for Receptor")?;
-    for point in gird_points_for_placement.iter() {
-        let coords = point.coords;
-        writeln!(file, "He {:.3} {:.3} {:.3}", coords[0], coords[1], coords[2]).unwrap();
-    }
+    // let mut file = File::create("grid_points_for_placement.xyz").unwrap();
+    // writeln!(file, "{}", gird_points_for_placement.len()).unwrap();
+    // // writeln!(file, "Occupied Voxels for Receptor")?;
+    // for point in gird_points_for_placement.iter() {
+    //     let coords = point.coords;
+    //     writeln!(file, "He {:.3} {:.3} {:.3}", coords[0], coords[1], coords[2]).unwrap();
+    // }
     
     let bulk_water_density = 33.4; // molecules/nm^3
     let voxel_volume = grid.spacing * grid.spacing * grid.spacing;
     let total_volume = (voxel_volume * gird_points_for_placement.len() as f64) / 1000.0; // nm^3
-    let target_n_waters = (total_volume * bulk_water_density * 0.9) as usize;
+    let target_n_waters = (total_volume * bulk_water_density * 0.6) as usize;
     println!("Target # of waters for cutoff {}A: {}", distance_cutoff, target_n_waters);
 
     while new_water_molecules.len() < target_n_waters {
-        println!("# of waters placed so far: {}", new_water_molecules.len());
+        // println!("# of waters placed so far: {}", new_water_molecules.len());
         let mut gird_points_for_placement = Vec::new();
-        if receptor_points_tree.is_some() {
-            gird_points_for_placement.extend(grid.all_points().into_iter().filter(|p| 
-            {
-                let d = distance_to_protein_grid(p, &receptor_points_tree.clone().unwrap());
-                d <= distance_cutoff && d >= 1.5 && !placed_oxygens.contains(&p.coords)
-            }));
-        } else {
-            gird_points_for_placement.extend(grid.all_points().into_iter().filter(|p| {
-                !placed_oxygens.contains(&p.coords)
-            }));
+        match receptor_points_tree {
+            Some(receptor_points_tree) => {
+                gird_points_for_placement.extend(grid.all_points().into_iter().filter(|p| 
+                {
+                    let d = distance_to_protein_grid(p, &receptor_points_tree);
+                    d <= distance_cutoff && d >= 1.5 && !placed_oxygens.contains(&p.coords)
+                }));
+            },
+            None => {
+                gird_points_for_placement.extend(grid.all_points().into_iter().filter(|p| {
+                    !placed_oxygens.contains(&p.coords)
+                    }));
+                },        
         }
         let mut energies = Vec::with_capacity(gird_points_for_placement.len());
         for p in gird_points_for_placement.iter() {
@@ -324,48 +333,25 @@ pub fn sample_using_grids(layer_id: usize,
             receptor_points_on_the_grid.push(point.clone());
         }
     }
+    // println!("{} anchor points available", anchor_points.len());
     // Sample with Boltzmann the neighbors and the actual point and based on Metropolis 
     // acceptance criteria then these are the starting anchor points
-    // let start = SystemTime::now();
     let decisions = optimize_placement_order_grid(grid, &receptor_points_on_the_grid);
-    // let end = SystemTime::now();
-    // let duration = end.duration_since(start).unwrap();
-    // println!("Placement order took {} ms", duration.as_millis());
 
     for (_idx, decision) in decisions.iter().enumerate() {
-        
-        // let start = SystemTime::now();
         let new_point = optimize_poistion_grid(grid, decision);
-        // let end = SystemTime::now();
-        // let duration = end.duration_since(start).unwrap();
-        // println!("Position's optimization took {} ms", duration.as_millis());
 
         let point_energy = grid.trilinear_interpolation(new_point, ProbeType::ODa).unwrap();
         if mc::boltzmann_acceptance_rejection(&point_energy, &BOLTZMANN_ENERGY_CUTOFF, &TEMPERATURE, &BOLTZMANN_K) {
-            // Now we build explicit water
-            // let start = SystemTime::now();
             let (placed, mut water) = sample_waters_with_grids(&new_point, water_configurations, grid, last_residue_number);
-            // let end = SystemTime::now();
-            // let duration = end.duration_since(start).unwrap();
-            // println!("Water's orientation took {} ms", duration.as_millis());
-
             if placed {
-                // let start = SystemTime::now();
                 water.set_layer_id(layer_id + 1);
                 water.guess_new_hydrogen_bonds();
                 for hb in water.hydrogen_bonds().into_iter() {
                     new_anchor_points.push(hb);
                 }
-                // let end = SystemTime::now();
-                // let duration = end.duration_since(start).unwrap();
-                // println!("New Hydrogen's bond guessing took {} ms", duration.as_millis());
                 let atoms_to_update = water.as_vec();
-                
-                // let start = SystemTime::now();
                 grid.update_energies(&atoms_to_update);
-                // let end = SystemTime::now();
-                // let duration = end.duration_since(start).unwrap();
-                // println!("Grid's update took {} ms", duration.as_millis());
                 new_water_molecules.push(water);           
             }
         }
@@ -410,9 +396,9 @@ pub fn sample_waters_with_grids(oxygen_atom: &[f64; 3],
         }
 
         let energy_value = lj_oxygen
-            + electrostatics_oxygen.unwrap() * OXYGEN_W_Q_TIP3PFB
-            + electrostatics_h1.unwrap() * HYDROGEN_W_Q_TIP3PFB
-            + electrostatics_h2.unwrap() * HYDROGEN_W_Q_TIP3PFB;
+            + electrostatics_oxygen.unwrap() * OXYGEN_W_Q
+            + electrostatics_h1.unwrap() * HYDROGEN_W_Q
+            + electrostatics_h2.unwrap() * HYDROGEN_W_Q;
 
         if energy_value < best_energy {
             best_energy = energy_value;

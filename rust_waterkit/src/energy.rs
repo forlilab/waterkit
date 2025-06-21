@@ -104,14 +104,14 @@ pub fn energy_for_real_water(atoms_1: &Vec<Atom>, atoms_2: &Vec<Atom>) -> f64 {
     let mut e_lj = 0.0;
     let mut e_elec = 0.0;
     for atom_1 in atoms_1.iter() {
-        let atom_1_coords = atom_1.coords().clone();
+        let atom_1_coords = atom_1.coords();
         // Atoms2 are the water's atoms
         for atom_2 in atoms_2.iter() {
             if atom_1.residue_number == atom_2.residue_number {
                 continue
             }
 
-            let atom_2_coords = atom_2.coords().clone();
+            let atom_2_coords = atom_2.coords();
             // Calculate distance avoiding division by 0
             let distance = f64::max(geometry::euclidean_distance(&atom_1_coords,
                 &atom_2_coords), 1e-8_f64);
@@ -160,10 +160,10 @@ pub fn get_ow_energy(atoms_1: &Vec<Atom>, sphere_center: &[f64; 3]) -> f64{
             // TIP3PFB
             if atom_1.atom_type() != &"HW" {
                 let lj_energy = lennard_jones_rmin_half(atom_1.epsilon(),
-                consts::EPSILON_TIP3PFB,
+                consts::TIP3P_EPSILON,
                 distance,
                 atom_1.rmin_half(),
-                consts::RMIN_HALF_WATER_TIP3PFB);
+                consts::RMIN_HALF_WATER);
                 total_energy += lj_energy;
             }
         // }
@@ -205,10 +205,10 @@ pub fn update_grid_energies(atoms_1: &Vec<Atom>, sphere_center: &[f64; 3]) -> (f
 
         if atom_1.atom_type() != &"HW" {
             let lj_energy = lennard_jones_rmin_half(atom_1.epsilon(),
-            consts::EPSILON_TIP3PFB,
+            consts::TIP3P_EPSILON,
             distance,
             atom_1.rmin_half(),
-            consts::RMIN_HALF_WATER_TIP3PFB);
+            consts::RMIN_HALF_WATER);
             total_ow_energy += lj_energy;
         }
         let mut electrostatics = 0.0;
@@ -254,45 +254,45 @@ pub fn set_waters_energies(water_molecules: &mut Vec<WaterMolecule>, receptor_at
     }
 }
 
-// pub fn get_system_energy(water_molecules: &Vec<WaterMolecule>, receptor_atoms: &Vec<Atom>) -> (f64, f64) {
-//     let mut total_energy = 0.0;
-//     let mut water_energy = 0.0;
-//     let mut receptor_energy = 0.0;
-//     let n_waters = water_molecules.len();
-//     for index_1 in 0..n_waters {
-//         let water_1_atoms = &water_molecules[index_1].as_vec();
-//         for index_2 in index_1+1..n_waters {
-//             let water_2_atoms = &water_molecules[index_2].as_vec();
-//             water_energy += energy_for_real_water(&water_1_atoms, &water_2_atoms);
-//         }
-//         receptor_energy += energy_for_real_water(receptor_atoms, water_1_atoms);
-//     }
-//     (utils::round(water_energy), utils::round(receptor_energy))
-// }
-
 pub fn get_system_energy(water_molecules: &Vec<WaterMolecule>, receptor_atoms: &Vec<Atom>) -> (f64, f64) {
-    let (water_energy, receptor_energy): (f64, f64) = water_molecules
-        .par_iter()
-        .enumerate()
-        .map(|(index_1, water_1)| {
-            let water_1_atoms = water_1.as_vec();
-            let mut local_water_energy = 0.0;
-            let mut local_receptor_energy = 0.0;
-
-            // Water-water interactions
-            for water_2 in water_molecules.iter().skip(index_1 + 1) {
-                local_water_energy += energy_for_real_water(&water_1_atoms, &water_2.as_vec());
-            }
-            // Water-receptor interactions
-            local_receptor_energy += energy_for_real_water(&receptor_atoms, &water_1_atoms);
-
-            (local_water_energy, local_receptor_energy)
-        })
-        .reduce(
-            || (0.0, 0.0),
-            |(w1, r1), (w2, r2)| (w1 + w2, r1 + r2),
-        );
-
-    // Round to three decimal places
-    ((water_energy * 1000.0).round() / 1000.0, (receptor_energy * 1000.0).round() / 1000.0)
+    let mut total_energy = 0.0;
+    let mut water_energy = 0.0;
+    let mut receptor_energy = 0.0;
+    let n_waters = water_molecules.len();
+    for index_1 in 0..n_waters {
+        let water_1_atoms = &water_molecules[index_1].as_vec();
+        for index_2 in index_1+1..n_waters {
+            let water_2_atoms = &water_molecules[index_2].as_vec();
+            water_energy += energy_for_real_water(&water_1_atoms, &water_2_atoms);
+        }
+        receptor_energy += energy_for_real_water(&water_1_atoms, &receptor_atoms);
+    }
+    (utils::round(water_energy), utils::round(receptor_energy))
 }
+
+// pub fn get_system_energy(water_molecules: &Vec<WaterMolecule>, receptor_atoms: &Vec<Atom>) -> (f64, f64) {
+//     let (water_energy, receptor_energy): (f64, f64) = water_molecules
+//         .par_iter()
+//         .enumerate()
+//         .map(|(index_1, water_1)| {
+//             let water_1_atoms = water_1.as_vec();
+//             let mut local_water_energy = 0.0;
+//             let mut local_receptor_energy = 0.0;
+
+//             // Water-water interactions
+//             for water_2 in water_molecules.iter().skip(index_1 + 1) {
+//                 local_water_energy += energy_for_real_water(&water_1_atoms, &water_2.as_vec());
+//             }
+//             // Water-receptor interactions
+//             local_receptor_energy += energy_for_real_water(&receptor_atoms, &water_1_atoms);
+
+//             (local_water_energy, local_receptor_energy)
+//         })
+//         .reduce(
+//             || (0.0, 0.0),
+//             |(w1, r1), (w2, r2)| (w1 + w2, r1 + r2),
+//         );
+
+//     // Round to three decimal places
+//     ((water_energy * 1000.0).round() / 1000.0, (receptor_energy * 1000.0).round() / 1000.0)
+// }

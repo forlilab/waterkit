@@ -30,31 +30,31 @@ def get_data_form_meeko(wanted_residues, pdb_file, save=True):
     rotatable_bonds = parse_rotatable_hydrogens()
     surface_atoms = list()
     box_boundaries = list()
-    with open(pdb_file) as fi:
-        pdbstring = fi.read()
+    # with open(pdb_file) as fi:
+    #     pdbstring = fi.read()
         
-    # # blunt_ends = [("A:1", 0)]
-    mk_prep = meeko.MoleculePreparation(
-        merge_these_atom_types=[],
-        load_atom_params=["vina_params", "openff"],
-        charge_model="espaloma",
-    )
+    # # # blunt_ends = [("A:1", 0)]
+    # mk_prep = meeko.MoleculePreparation(
+    #     merge_these_atom_types=[],
+    #     load_atom_params=["vina_params", "openff"],
+    #     charge_model="espaloma",
+    # )
     
-    templates = meeko.ResidueChemTemplates.create_from_defaults()
-    polymer = meeko.Polymer.from_pdb_string(pdb_string=pdbstring,
-                                            chem_templates=templates,
-                                            mk_prep=mk_prep,
-                                            allow_bad_res=True,
-                                            default_altloc="A",)
-                                            # blunt_ends=blunt_ends)
-    json_s = polymer.to_json()
-    with open("target.json", "w") as fo:
-        fo.write(json_s)
+    # templates = meeko.ResidueChemTemplates.create_from_defaults()
+    # polymer = meeko.Polymer.from_pdb_string(pdb_string=pdbstring,
+    #                                         chem_templates=templates,
+    #                                         mk_prep=mk_prep,
+    #                                         allow_bad_res=True,
+    #                                         default_altloc="A",)
+    #                                         # blunt_ends=blunt_ends)
+    # json_s = polymer.to_json()
+    # with open("target.json", "w") as fo:
+    #     fo.write(json_s)
 
-    if save:
-        pdb_f = polymer.to_pdb()
-        with open("meeko.pdb", "w") as fo:
-            fo.write(pdb_f)
+    # if save:
+    #     pdb_f = polymer.to_pdb()
+    #     with open("meeko.pdb", "w") as fo:
+    #         fo.write(pdb_f)
     with open("/data/phd/waterkit/rust_waterkit/target.json") as fi:
     # with open("/Users/niccolobruciaferri/phd/waterkit/rust_waterkit/target.json") as fi:
         json_string = fi.read()
@@ -169,14 +169,14 @@ if __name__ == "__main__":
         spacing = 0.375
         # center = [2.7, 11.45, 24.80]
         center = [32.610, 28.188, 36.505]
-        # x_size, y_size, z_size = 24.0, 24.0, 24.0
-        x_size, y_size, z_size = 20.0, 20.0, 20.0
+        x_size, y_size, z_size = 24.0, 24.0, 24.0
+        # x_size, y_size, z_size = 20.0, 20.0, 20.0
 
         
 
         print("Starting waterkit!")
         aps = anchor_points
-        n_frames = 1
+        n_frames =100
 
         # num_steps = [1, 10, 100, 1000, 10000]
         # optimization_steps = [1, 10, 100, 1000, 10000]
