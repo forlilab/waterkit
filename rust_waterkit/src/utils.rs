@@ -1,3 +1,4 @@
+use std::error::Error;
 use std::io::{BufWriter, Write};
 use std::time::SystemTime;
 use plotters::prelude::*;
@@ -246,5 +247,52 @@ pub fn plot_acceptance_rate(data: Vec<(usize, f64)>, num_iterations: usize, end_
 
     println!("Scatter plot saved to '{}'", output_file);
 
+    Ok(())
+}
+
+// Function to plot energies
+pub fn plot_energies(energies: &[f64], output_file: &str) -> Result<(), Box<dyn Error>> {
+    // Create a drawing area (800x600 pixels)
+    let root = BitMapBackend::new(output_file, (800, 600)).into_drawing_area();
+    
+    // Fill background with white
+    root.fill(&WHITE)?;
+
+    // Create chart context
+    let min_energy = energies.iter().fold(f64::INFINITY, |a, &b| a.min(b));
+    let max_energy = energies.iter().fold(f64::NEG_INFINITY, |a, &b| a.max(b));
+    
+    let mut chart = ChartBuilder::on(&root)
+        .caption("Energy Plot", ("sans-serif", 40).into_font())
+        .margin(10)
+        .x_label_area_size(40)
+        .y_label_area_size(60)
+        .build_cartesian_2d(0f64..(energies.len() as f64), min_energy..max_energy)?;
+
+    // Configure the chart
+    chart
+        .configure_mesh()
+        .x_desc("Index")
+        .y_desc("Energy")
+        .axis_desc_style(("sans-serif", 20))
+        .draw()?;
+
+    // Plot the energy data as a line series
+    chart.draw_series(LineSeries::new(
+        energies.iter().enumerate().map(|(i, &e)| (i as f64, e)),
+        &BLUE,
+    ))?
+    .label("Energy")
+    .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &BLUE));
+
+    // Configure the legend
+    chart
+        .configure_series_labels()
+        .border_style(&BLACK)
+        .background_style(&WHITE.mix(0.8))
+        .draw()?;
+
+    // Finalize the plot
+    root.present()?;
     Ok(())
 }

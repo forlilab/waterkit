@@ -176,7 +176,7 @@ if __name__ == "__main__":
 
         print("Starting waterkit!")
         aps = anchor_points
-        n_frames =1
+        n_frames =10
 
         # num_steps = [1, 10, 100, 1000, 10000]
         # optimization_steps = [1, 10, 100, 1000, 10000]
@@ -201,7 +201,7 @@ if __name__ == "__main__":
         o_steps = 1
         save_path = f"test"
         os.makedirs(save_path, exist_ok=True)
-        # rust_waterkit.run_parallel_waterkit(parametrized_atoms, waters, aps, grid, n_frames, n_steps, o_steps, save_path)
-        rust_waterkit.run_waterkit_gcmcre(parametrized_atoms, waters, grid, n_frames, save_path)
+        rust_waterkit.run_parallel_waterkit(parametrized_atoms, waters, aps, grid, n_frames, n_steps, o_steps, save_path)
+        # rust_waterkit.run_waterkit_gcmcre(parametrized_atoms, waters, grid, n_frames, save_path)
         exec_time = time.time() - start
         print(f"Time necessary for the rust part: {exec_time/60} minutes - {exec_time} seconds")
