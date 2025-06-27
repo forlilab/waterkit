@@ -17,6 +17,7 @@ pub mod sampling;
 pub mod grid;
 pub mod waterkit;
 pub mod gcmc;
+pub mod replica_exchange;
 pub mod python_wrapper;
 
 #[cfg(test)]
