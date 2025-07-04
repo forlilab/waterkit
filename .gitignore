@@ -116,6 +116,7 @@ autodocksuite-4.2.6-src/autogrid/x86_Linux2/
 *.pse
 *.csv
 *.dx
+validation/*
 example/*
 autodocksuite-*/*
 rust_waterkit/amber/*
@@ -128,3 +129,5 @@ rust_waterkit/*.data*
 rust_waterkit/*.png
 rust_waterkit/gcmc_waterbox
 rust_waterkit/water_md_sim
+rust_waterkit/hiv_target
+rust_waterkit/hsp90_target

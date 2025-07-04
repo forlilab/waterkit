@@ -176,7 +176,7 @@ if __name__ == "__main__":
 
         print("Starting waterkit!")
         aps = anchor_points
-        n_frames =10
+        n_frames =500
 
         # num_steps = [1, 10, 100, 1000, 10000]
         # optimization_steps = [1, 10, 100, 1000, 10000]
