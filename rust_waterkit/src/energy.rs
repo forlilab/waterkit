@@ -160,10 +160,10 @@ pub fn get_ow_energy(atoms_1: &Vec<Atom>, sphere_center: &[f64; 3]) -> f64{
             // TIP3PFB
             if atom_1.atom_type() != &"HW" {
                 let lj_energy = lennard_jones_rmin_half(atom_1.epsilon(),
-                consts::TIP3P_EPSILON,
+                consts::TIP3PFB_EPSILON,
                 distance,
                 atom_1.rmin_half(),
-                consts::RMIN_HALF_WATER);
+                consts::RMIN_HALF_WATER_TIP3PFB);
                 total_energy += lj_energy;
             }
         // }
@@ -205,10 +205,10 @@ pub fn update_grid_energies(atoms_1: &Vec<Atom>, sphere_center: &[f64; 3]) -> (f
 
         if atom_1.atom_type() != &"HW" {
             let lj_energy = lennard_jones_rmin_half(atom_1.epsilon(),
-            consts::TIP3P_EPSILON,
+            consts::TIP3PFB_EPSILON,
             distance,
             atom_1.rmin_half(),
-            consts::RMIN_HALF_WATER);
+            consts::RMIN_HALF_WATER_TIP3PFB);
             total_ow_energy += lj_energy;
         }
         let mut electrostatics = 0.0;

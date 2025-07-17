@@ -72,9 +72,9 @@ fn get_energy(oxygen_pos: [f64; 3], h1_pos: [f64; 3], h2_pos: [f64; 3], grid: &G
     let electrostatics_oxygen = grid.trilinear_interpolation(oxygen_pos, ProbeType::HW);
     if electrostatics_h1.is_some() && electrostatics_h2.is_some() && electrostatics_oxygen.is_some() {
         let energy_value = lj_oxygen
-            + electrostatics_oxygen.unwrap() * consts::OXYGEN_W_Q
-            + electrostatics_h1.unwrap() * consts::HYDROGEN_W_Q
-            + electrostatics_h2.unwrap() * consts::HYDROGEN_W_Q;
+            + electrostatics_oxygen.unwrap() * consts::OXYGEN_W_Q_TIP3PFB
+            + electrostatics_h1.unwrap() * consts::HYDROGEN_W_Q_TIP3PFB
+            + electrostatics_h2.unwrap() * consts::HYDROGEN_W_Q_TIP3PFB;
         return energy_value;
     }
     f64::INFINITY
