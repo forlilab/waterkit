@@ -1,0 +1,16 @@
+#!/bin/bash
+#SBATCH --cpus-per-task=64
+#SBATCH --time=250-23:00
+#SBATCH --partition=forli
+#SBATCH --exclusive
+#SBATCH --output=MCSwell.%j.out
+#SBATCH --error=MCSwell.%j.err
+
+source /gpfs/home/nbruciaferri/.bashrc
+
+pwd; hostname; date
+
+micromamba activate waterkit
+
+python /mnt/forli/group/nbruciaferri/waterkit/rust_waterkit/run_waterkit.py /mnt/forli/group/nbruciaferri/waterkit/rust_waterkit/1uyg_prepared_fixed.pdb /mnt/forli/group/nbruciaferri/waterkit/rust_waterkit/hsp90 33.714676 30.430138 35.779892 $STEPS
+

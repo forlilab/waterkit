@@ -6,19 +6,6 @@ use rand::{distributions::Uniform, distributions::WeightedIndex, prelude::Distri
 
 use crate::{atom::Atom, consts, energy, geometry, water::{self, WaterMolecule}, waterkit_system::System};
 
-// Constants
-const KB: f64 = 0.0019872041; // Boltzmann constant in kcal/mol/K
-const TEMPERATURE: f64 = 300.; // Temperature in K
-const KT: f64 = KB * TEMPERATURE;
-const STANDARD_VOLUME: f64 = 30.345; // Volume per water molecule in bulk
-const BETA: f64 = 1.0 / (KB * TEMPERATURE);
-const CHEMICAL_POTENTIAL: f64 = -6.09; // Chemical potential in kcal/mol
-const LAMBDA: f64 = 0.145; // Thermal de Broglie wavelength in Å (simplified)
-const NUM_STEPS: usize = 800000; // Total Monte Carlo steps
-const WINDOW_SIZE: usize = 100; // Window size for rolling acceptance rate
-const NUM_FRAMES: usize = 1; // Number of frames to save
-const FRAME_INTERVAL: usize = NUM_STEPS / NUM_FRAMES; // Save a frame every frame_interval steps
-
 // Vector operations for [f64; 3]
 fn norm(v: &[f64; 3]) -> f64 {
     (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt()
@@ -37,9 +24,12 @@ fn is_in_hydration_shell(pos: &[f64; 3], x_min: f64, x_max: f64, y_min: f64, y_m
     (pos[0] >= x_min && pos[0] <= x_max) && (pos[1] >= y_min && pos[1] <= y_max) && (pos[2] >= z_min && pos[2] <= z_max) 
 }
 
+#[derive(Clone)]
 pub struct GCMC {
     pub waters: Vec<WaterMolecule>,
-    pub frames: Vec<Vec<WaterMolecule>>,
+    pub atoms: Vec<Atom>,
+    pub system_energy: f64,
+    water_configuration: WaterMolecule,
     cutoff: f64, // Distance cutoff for neighbor interactions
     x_min: f64,
     x_max: f64,
@@ -47,24 +37,36 @@ pub struct GCMC {
     y_max: f64,
     z_min: f64,
     z_max: f64,
+    pub mu: f64,
+    beta: f64,
+    standard_volume: f64,
+    num_steps: usize
 }
 
 
 impl GCMC {
     pub fn new( 
+        water_configuration: WaterMolecule,
         cutoff: f64,
         x_min: f64, 
         x_max: f64, 
         y_min: f64, 
         y_max: f64, 
         z_min: f64, 
-        z_max: f64) -> Self {
+        z_max: f64,
+        mu: f64,
+        beta: f64,
+        standard_volume: f64,
+        num_steps: usize) -> Self {
             let mut waters = Vec::new();
-            let mut frames = Vec::new();
+            let mut atoms = Vec::new();
+            let system_energy = 0.0;
 
             Self {
                 waters,
-                frames,
+                atoms,
+                system_energy,
+                water_configuration,
                 cutoff,
                 x_min,
                 x_max,
@@ -72,6 +74,10 @@ impl GCMC {
                 y_max,
                 z_min,
                 z_max,
+                mu,
+                beta,
+                standard_volume,
+                num_steps
             }
         }
 
@@ -191,20 +197,20 @@ impl GCMC {
         // Grand Canonical Monte Carlo simulation
     pub fn gcmc_simulation(&mut self, 
         receptor_atoms: &Vec<Atom>, 
-        water_molecule: WaterMolecule, 
         volume: f64, 
-        last_residue_number: usize) -> std::io::Result<Vec<WaterMolecule>> {
+        last_residue_number: usize,
+        gcmc_steps: usize) -> std::io::Result<Vec<WaterMolecule>> {
         // println!("# of waters in the system at the beginnign: {}", self.waters.len());
         // ADAMS parameter
-        let B = CHEMICAL_POTENTIAL * BETA + (volume / STANDARD_VOLUME).ln();
+        let B = self.mu * self.beta + (volume / self.standard_volume).ln();
         
         let mut system_atoms = receptor_atoms.clone();
 
         // println!("# Atoms: {}", system_atoms.len());
         let mut rng = rand::thread_rng();
-        let mut trans_history = VecDeque::with_capacity(WINDOW_SIZE);
-        let mut insert_history = VecDeque::with_capacity(WINDOW_SIZE);
-        let mut delete_history = VecDeque::with_capacity(WINDOW_SIZE);
+        let mut trans_history = VecDeque::with_capacity(self.num_steps);
+        let mut insert_history = VecDeque::with_capacity(self.num_steps);
+        let mut delete_history = VecDeque::with_capacity(self.num_steps);
         let mut trans_attempts = 0;
         let mut insert_attempts = 0;
         let mut delete_attempts = 0;
@@ -215,10 +221,10 @@ impl GCMC {
 
         let mut cnt = last_residue_number + 1;
         let mut step_cnt = 0;
-        for step in 0..NUM_STEPS {
+        for step in 0..gcmc_steps {
             step_cnt += 1;
             // Choose move type: 1/3 translation, 1/3 insertion, 1/3 deletion
-            let mut water_molecule_copy = self.randomize_water(&water_molecule, &mut rng);
+            let mut water_molecule_copy = self.randomize_water(&self.water_configuration, &mut rng);
             let mut rng = rand::thread_rng();
             let move_type = rng.gen_range(0..=2);
             if move_type == 0 && !self.waters.is_empty() {
@@ -240,7 +246,7 @@ impl GCMC {
                     // Using single energy
                     let new_energy = energy::energy_for_real_water(&system_atoms, &self.waters[water_idx].as_vec());
                     let delta_e = new_energy - old_energy;
-                    let acceptance_prob = (-BETA * delta_e).exp().min(1.0);
+                    let acceptance_prob = (-self.beta * delta_e).exp().min(1.0);
 
                     if Uniform::from(0.0..1.0).sample(&mut rng) < acceptance_prob { 
                         let new_water_atoms = self.waters[water_idx].as_vec();
@@ -277,9 +283,9 @@ impl GCMC {
 
                     // Using single energy
                     let new_energy = energy::energy_for_real_water(&system_atoms, &self.waters.last().unwrap().as_vec());
-                    let delta_e = new_energy + CHEMICAL_POTENTIAL;
+                    let delta_e = new_energy + self.mu;
 
-                    let acceptance_prob = ((1.0/(n+1.0)) * B.exp() * (-BETA * delta_e).exp()).min(1.0);
+                    let acceptance_prob = ((1.0/(n+1.0)) * B.exp() * (-self.beta * delta_e).exp()).min(1.0);
 
                     if Uniform::from(0.0..1.0).sample(&mut rng) < acceptance_prob {
                         system_atoms.extend(self.waters.last().unwrap().as_vec());
@@ -304,9 +310,9 @@ impl GCMC {
                 // Subtract the removed water energy to the previous energy
                 let new_energy = -removed_water_energy;
 
-                let delta_e = new_energy - CHEMICAL_POTENTIAL;
+                let delta_e = new_energy - self.mu;
                 let n = self.waters.len() as f64;
-                let acceptance_prob = (n * (-B).exp() * (-BETA * delta_e).exp()).min(1.0);
+                let acceptance_prob = (n * (-B).exp() * (-self.beta * delta_e).exp()).min(1.0);
 
                 if Uniform::from(0.0..1.0).sample(&mut rng) < acceptance_prob {
                     let removed_resnumber = removed_water.get_res_number();
@@ -320,7 +326,8 @@ impl GCMC {
             }
         }
 
-        // let system_energy = energy::get_system_energy(&self.waters, &receptor_atoms);
+        let system_energy = energy::get_system_energy(&self.waters, &receptor_atoms);
+        self.system_energy = system_energy.0 + system_energy.1;
         // println!("\n# of waters inserted: {}", self.waters.len());
         // if trans_attempts > 0 {
         //     let trans_rate = trans_history.iter().sum::<u8>() as f64 / trans_history.len() as f64;
@@ -341,6 +348,10 @@ impl GCMC {
         // println!("Deletions proposed in {} steps: {}", step_cnt, delete_attempts);
         // println!("System Energy: {:?}", system_energy);
         // frames.push(self.waters.clone());
+        self.atoms.clear();
+        for w in self.waters.iter() {
+            self.atoms.extend(w.as_vec());
+        }
         Ok(self.waters.clone())
     }
 }

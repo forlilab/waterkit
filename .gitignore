@@ -128,3 +128,4 @@ rust_waterkit/*.data*
 rust_waterkit/*.png
 rust_waterkit/gcmc_waterbox
 rust_waterkit/water_md_sim
+rust_waterkit/hsp90
