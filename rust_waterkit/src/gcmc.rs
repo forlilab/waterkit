@@ -221,11 +221,8 @@ impl GCMC {
 
         let mut cnt = last_residue_number + 1;
         let mut step_cnt = 0;
-<<<<<<< HEAD
+
         for step in 0..gcmc_steps {
-=======
-        for step in 0..self.num_steps {
->>>>>>> b3b24608fed4565c32912b9b3153fc190b731849
             step_cnt += 1;
             // Choose move type: 1/3 translation, 1/3 insertion, 1/3 deletion
             let mut water_molecule_copy = self.randomize_water(&self.water_configuration, &mut rng);

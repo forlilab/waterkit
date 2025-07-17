@@ -129,9 +129,6 @@ rust_waterkit/*.data*
 rust_waterkit/*.png
 rust_waterkit/gcmc_waterbox
 rust_waterkit/water_md_sim
-<<<<<<< HEAD
 rust_waterkit/hsp90
-=======
 rust_waterkit/hiv_target
 rust_waterkit/hsp90_target
->>>>>>> b3b24608fed4565c32912b9b3153fc190b731849

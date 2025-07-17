@@ -121,11 +121,7 @@ fn run_single_waterkit_gcmc_re(receptor_points: &[Atom],
             };
 
             // Perform GCMC simulation
-<<<<<<< HEAD
             let simulation = state.simulator.gcmc_simulation(&receptor_map, total_volume, last_residue_number, 100000);
-=======
-            let simulation = state.simulator.gcmc_simulation(&receptor_map, total_volume, last_residue_number);
->>>>>>> b3b24608fed4565c32912b9b3153fc190b731849
             if simulation.is_ok() {
                 let waters = simulation.unwrap();
                 state.num_waters = waters.len();
@@ -169,12 +165,8 @@ fn run_single_waterkit_gcmc_re(receptor_points: &[Atom],
 fn run_single_waterkit_gcmc_sa(receptor_points: &[Atom], 
     water_configurations: &Vec<[f64; 6]>, 
     mut grid: Grid3D,
-<<<<<<< HEAD
     epoch: usize,
     gcmc_steps: usize) -> (Vec<Atom>, Vec<Atom>, Vec<WaterMolecule>) {
-=======
-    epoch: usize) -> (Vec<Atom>, Vec<Atom>, Vec<WaterMolecule>) {
->>>>>>> b3b24608fed4565c32912b9b3153fc190b731849
 
     let mut receptor_map = receptor_points.to_vec();
     let mut last_residue_number = receptor_points.iter().map(|n| n.residue_number).max().unwrap_or(1);
@@ -202,8 +194,6 @@ fn run_single_waterkit_gcmc_sa(receptor_points: &[Atom],
     let min_max = find_min_max(&gird_points_for_placement);
     if min_max.is_some() {
         let (min, max) = min_max.unwrap();
-<<<<<<< HEAD
-=======
         // TIP3P water configuration
     //     let water_configuration = WaterMolecule::new( 
     //         [0.000, 0.000, 0.000], 
@@ -212,7 +202,6 @@ fn run_single_waterkit_gcmc_sa(receptor_points: &[Atom],
     //     "A".to_string(),
     // 0);
         // TIP3P-FB water configuration
->>>>>>> b3b24608fed4565c32912b9b3153fc190b731849
         let water_configuration = WaterMolecule::new( 
             [-7.336, 0.430, 6.058], 
             [-7.789, -0.296, 5.586], 
@@ -228,18 +217,9 @@ fn run_single_waterkit_gcmc_sa(receptor_points: &[Atom],
             consts::BETA, 
             consts::STANDARD_VOLUME, 
             consts::GCMC_STEPS);
-<<<<<<< HEAD
         let simulation = gcmc.gcmc_simulation(&receptor_map,  total_volume, last_residue_number, gcmc_steps);
         if simulation.is_ok() {
             let water_molecules = simulation.unwrap();
-    // GCMC
-
-=======
-        let simulation = gcmc.gcmc_simulation(&receptor_map,  total_volume, last_residue_number);
-        if simulation.is_ok() {
-            let water_molecules = simulation.unwrap();
-    // GCMC
->>>>>>> b3b24608fed4565c32912b9b3153fc190b731849
             // SA
             let mut system_waters: Vec<WaterSystem> = Vec::with_capacity(water_molecules.len());
             let mut  unoptimized_water_atoms = Vec::with_capacity(water_molecules.len() * 3);
