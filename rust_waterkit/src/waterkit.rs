@@ -203,9 +203,9 @@ fn run_single_waterkit_gcmc_sa(receptor_points: &[Atom],
     // 0);
         // TIP3P-FB water configuration
         let water_configuration = WaterMolecule::new( 
-            [-7.336, 0.430, 6.058], 
-            [-7.789, -0.296, 5.586], 
-            [-6.850, -0.048, 6.757],
+            [0.000, 0.000, -0.018], 
+            [0.000, 0.761, 0.595], 
+            [0.000, -0.761, 0.594],
         "A".to_string(),
     0);
         let mut gcmc = GCMC::new(water_configuration, 

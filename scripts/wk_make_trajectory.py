@@ -83,7 +83,7 @@ def write_pdb_file(output_name, molecule,  overwrite=True, **kwargs):
         raise IOError("Error: file %s already exists." % fname)
 
 
-def write_tleap_input_file(fname, pdb_filename, lib_files=None, frcmod_files=None):
+def write_tleap_input_file(fname, pdb_filename, lib_files=None, frcmod_files=None, use_tip3pfb=True):
     """Create tleap input script
 
     Args:
@@ -98,7 +98,11 @@ def write_tleap_input_file(fname, pdb_filename, lib_files=None, frcmod_files=Non
     output_str = "source leaprc.protein.ff14SB\n"
     output_str += "source leaprc.DNA.OL15\n"
     output_str += "source leaprc.RNA.OL3\n"
-    output_str += "source leaprc.water.tip3p\n"
+    if use_tip3pfb:
+        output_str += "WAT = FB3 \n"
+        output_str += "source leaprc.water.fb3 \n"
+    else:
+        output_str += "source leaprc.water.tip3p \n"
     output_str += "source leaprc.gaff2\n"
     if frcmod_files is not None:
         output_str += ''.join(['loadamberparams %s\n' % fl for fl in frcmod_files])
@@ -340,7 +344,7 @@ if __name__ == '__main__':
     
 #     # Create force field
 #     forcefield_files = ['amber14-all.xml', 
-#                        'amber14/tip3p.xml']
+#                        'amber14/tip3pfb.xml']
     
 #     if frcmod_files:
 #         forcefield_files.extend(frcmod_files)
