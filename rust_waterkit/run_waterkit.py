@@ -95,7 +95,10 @@ if __name__ == "__main__":
     
 
     print("Starting waterkit!")
-    n_frames = 10000
+    if gcmc_steps < 50000:
+        n_frames = 10000
+    else:
+        n_frames = 1000
     
     # # Setup grids at the beginning
     start = time.time()
