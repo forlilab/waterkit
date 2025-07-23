@@ -166,7 +166,8 @@ fn run_single_waterkit_gcmc_sa(receptor_points: &[Atom],
     water_configurations: &Vec<[f64; 6]>, 
     mut grid: Grid3D,
     epoch: usize,
-    gcmc_steps: usize) -> (Vec<Atom>, Vec<Atom>, Vec<WaterMolecule>) {
+    gcmc_steps: usize,
+    sa_steps: usize) -> (Vec<Atom>, Vec<Atom>, Vec<WaterMolecule>) {
 
     let mut receptor_map = receptor_points.to_vec();
     let mut last_residue_number = receptor_points.iter().map(|n| n.residue_number).max().unwrap_or(1);
@@ -252,6 +253,7 @@ fn run_single_waterkit_gcmc_sa(receptor_points: &[Atom],
                 300.0,
                 0.995,
                 12.0,
+                sa_steps
             );
             let acceptance_rate = sa.run();
             let mut waters = Vec::with_capacity(sa.waters.len() * 3);
@@ -502,6 +504,7 @@ pub fn run_parallel_waterkit(receptor_points: Vec<Atom>,
     grid: Grid3D,
     epochs: usize,
     gcmc_steps: usize,
+    sa_steps: usize,
     save_path: String) {
 
     let waters: Vec<(Vec<Atom>, Vec<Atom>, Vec<WaterMolecule>)> = (0..epochs).into_par_iter()
@@ -511,6 +514,7 @@ pub fn run_parallel_waterkit(receptor_points: Vec<Atom>,
                 grid.clone(),
                 epoch,
                 gcmc_steps,
+                sa_steps,
             )).collect();
 
     println!("Done sampling...saving results!");

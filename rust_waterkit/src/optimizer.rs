@@ -276,9 +276,10 @@ impl<'a> SimulatedAnnealing {
         temp_min: f64,
         cooling_rate: f64,
         cutoff: f64,
+        production_steps: usize
     ) -> Self {
         let mut waters_by_layer: HashMap<usize, Vec<WaterMolecule>> = HashMap::new();
-        let final_temp_max_iter = 100000;
+        let final_temp_max_iter = production_steps;
         let frame: Vec<WaterMolecule> = Vec::new();
         Self {
             system,
@@ -505,10 +506,6 @@ impl<'a> SimulatedAnnealing {
             // Production
             if self.temperature >= production_temp && equilibration_done {
                 // println!("Equilibration done, starting production at T {} and step {}", self.temperature, final_temp_cnt);
-                if final_temp_cnt % 100000 == 0 {
-                    // println!("Production steps: {}", final_temp_cnt);
-                    // self.frames.push(self.waters.clone());
-                }
                 final_temp_cnt += 1;
                 
                 // **Adaptive step size adjustment every 10 steps**

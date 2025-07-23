@@ -86,7 +86,7 @@ if __name__ == "__main__":
     pdb_path = sys.argv[1]
     project_path = sys.argv[2]
     center = [float(arg) for arg in sys.argv[3:6]]
-    gcmc_steps = int(sys.argv[6])
+    sa_steps = int(sys.argv[6])
     parametrized_atoms = get_data_form_meeko(pdb_file=pdb_path, project_path=project_path)
     waters = load_waters_orientations()
     spacing = 0.375
@@ -95,10 +95,11 @@ if __name__ == "__main__":
     
 
     print("Starting waterkit!")
-    if gcmc_steps < 50000:
-        n_frames = 10000
-    else:
-        n_frames = 1000
+    n_frames = 10000
+    # if gcmc_steps < 50000:
+    #     n_frames = 10000
+    # else:
+    #     n_frames = 1000
     
     # # Setup grids at the beginning
     start = time.time()
@@ -118,7 +119,7 @@ if __name__ == "__main__":
     #     for o_steps in optimization_steps:
     save_path = f"{project_path}/{gcmc_steps}_steps/frames/"
     os.makedirs(save_path, exist_ok=True)
-    rust_waterkit.run_parallel_waterkit(parametrized_atoms, waters, [], grid, n_frames, gcmc_steps, save_path)
+    rust_waterkit.run_parallel_waterkit(parametrized_atoms, waters, [], grid, n_frames, 200000, sa_steps, save_path)
     # rust_waterkit.run_waterkit_gcmcre(parametrized_atoms, waters, grid, n_frames, save_path)
     exec_time = time.time() - start
     print(f"Time necessary for the rust part: {exec_time/60} minutes - {exec_time} seconds")
