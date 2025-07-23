@@ -1,12 +1,13 @@
-import sys
 import os
-
-from gridData import Grid
+import shutil
+import sys
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.ndimage import gaussian_filter
+from gridData import Grid
 
-
+# frames = [100, 200, 300, 400, 500, 800, 1000, 2000, 3000, 4000, 5000, 8000, 10000, 12000, 15000, 20000]
+n_steps = [10000, 50000, 100000, 200000, 400000, 500000, 800000]
 
 def load_grids(path_to_grid_files):
     grid_gO = Grid(os.path.join(path_to_grid_files, 'gist-gO.dx'))
@@ -16,7 +17,7 @@ def load_grids(path_to_grid_files):
     grid_tso = Grid(os.path.join(path_to_grid_files, 'gist-dTSorient-dens.dx'))
     return [grid_gO, grid_esw, grid_eww, grid_tst, grid_tso]
 
-def select_voxels_within_distance(grid, max_distance=15.0):
+def select_voxels_within_distance(grid, max_distance=5.0):
     """
     Select voxels in a GIST grid within a specified distance from the origin.
     
@@ -61,34 +62,6 @@ def select_voxels_within_distance(grid, max_distance=15.0):
     
     return selected_values
 
-def compare_grids(grid_1, grid_2, grid_type, x_axis, y_axis, plot_name, path):
-    densities_1 = select_voxels_within_distance(grid_1).flatten()
-    densities_2 = select_voxels_within_distance(grid_2).flatten()
-
-    smoothed_d1 = gaussian_filter(densities_1, sigma=3)
-    smoothed_d2 = gaussian_filter(densities_2, sigma=3)
-    # densities_1 = grid_1.grid.flatten()
-    # densities_2 = grid_2.grid.flatten()
-    # Create scatter plot
-    plt.figure(figsize=(8, 8))
-    plt.scatter(densities_1, densities_2, alpha=0.5, s=10)  # s=10 for smaller points
-    plt.xlabel(f"Density {x_axis}")
-    plt.ylabel(f"Density {y_axis}")
-    plt.title("Voxel-by-Voxel Density Comparison")
-
-    # Add y=x reference line
-    max_val = max(np.max(densities_1), np.max(densities_2))
-    min_val = min(np.min(densities_1), np.min(densities_2))
-    plt.plot([min_val, max_val], [min_val, max_val], 'r--', label="y=x")
-    plt.legend()
-
-    # Optional: Set equal aspect ratio for better comparison
-    plt.axis('equal')
-    plt.savefig(f"{path}/plot_{grid_type}_{plot_name}.png")
-    # plt.show()
-    plt.clf()
-    return smoothed_d1, smoothed_d2
-
 def compute_tanimoto(vec1, vec2):
     dot_product = np.dot(vec1, vec2)
     norm1_sq = np.dot(vec1, vec1)
@@ -107,21 +80,47 @@ def compute_tanimoto(vec1, vec2):
     return similarity, distance
 
 if __name__ == "__main__":
-    path_to_grid_files_1 = sys.argv[1]
-    path_to_grid_files_2 = sys.argv[2]
-    x_axis = sys.argv[3]
-    y_axis = sys.argv[4]
-    plot_name = sys.argv[5]
-    grid_types = ['gO', 'Esw', 'Eww', 'TSt', 'TSo']
-    # grid_types = ['gO']
-    grids_1 = load_grids(path_to_grid_files_1)
-    grids_2 = load_grids(path_to_grid_files_2)
+    path_to_frames = sys.argv[1]
+
+    #grid_types = ['gO', 'Esw', 'Eww', 'TSt', 'TSo']
+    grid_types = ['gO', 'Esw', 'Eww']
+
+    tanimotos_for_plot = {"gO": [], 
+                          "Esw": [], 
+                          "Eww": []}
     
-    for idx, grid_type in enumerate(grid_types):
-        print(f"Analyzing grid: {grid_type}")
-        d1, d2 = compare_grids(grids_1[idx], grids_2[idx], grid_type, x_axis=x_axis, y_axis=y_axis, plot_name=plot_name, path=path_to_grid_files_2)
-        t_similarity, t_distance = compute_tanimoto(d1, d2)
-        print(f"Tanimoto Similarity: {t_similarity}\nTanimoto Distance: {t_distance}")
+    # for n_frames in frames:
+    for n_step in n_steps:
+        path_to_grids_MC = os.path.join(path_to_frames, "TIP3P", f"{n_step}_steps")
+        path_to_grids_MD = os.path.join(path_to_frames, "GIST_MD_NO_HMR")
+        grids_1 = load_grids(path_to_grids_MC)
+        grids_2 = load_grids(path_to_grids_MD)
+        for idx, grid_type in enumerate(grid_types):
+            print(f"Analyzing grid: {grid_type}")
+            densities_1 = select_voxels_within_distance(grids_1[idx]).flatten()
+            densities_2 = select_voxels_within_distance(grids_2[idx]).flatten()
+            smoothed_d1 = gaussian_filter(densities_1, sigma=3)
+            smoothed_d2 = gaussian_filter(densities_2, sigma=3)
+            t_similarity, t_distance = compute_tanimoto(smoothed_d1, smoothed_d2)
+            # print(f"Tanimoto Similarity: {t_similarity}\nTanimoto Distance: {t_distance}")
+            tanimotos_for_plot[grid_type].append(t_similarity)
+    
+    for grid_type in tanimotos_for_plot:
+        print(n_step, tanimotos_for_plot[grid_type])
+        plot_name = f"{grid_type}_tanimoto.png"
+        plt.figure(figsize=(8, 8))
+        plt.plot(n_steps, 
+                 tanimotos_for_plot[grid_type], 
+                 alpha=0.5)  # s=10 for smaller points
+        plt.xlabel(f"# of Steps")
+        plt.ylabel(f"Non-Binary Tanimoto Similarity")
+        plt.title("Distribution of Tanimoto Similarity amongst the frames")
+        plt.legend()
+
+        # Optional: Set equal aspect ratio for better comparison
+        # plt.axis('equal')
+        plt.savefig(f"{plot_name}")
+        plt.clf()
 
 
 

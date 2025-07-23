@@ -116,7 +116,8 @@ autodocksuite-4.2.6-src/autogrid/x86_Linux2/
 *.pse
 *.csv
 *.dx
-validation/*
+*.png
+validation/hsp90_target
 example/*
 autodocksuite-*/*
 rust_waterkit/amber/*
