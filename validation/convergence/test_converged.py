@@ -8,6 +8,7 @@ from gridData import Grid
 
 # frames = [100, 200, 300, 400, 500, 800, 1000, 2000, 3000, 4000, 5000, 8000, 10000, 12000, 15000, 20000]
 n_steps = [10000, 50000, 100000, 200000, 400000, 500000, 800000]
+# n_steps = [1000, 5000, 10000, 20000, 40000, 50000, 70000, 80000, 90000, 100000, 200000]
 
 def load_grids(path_to_grid_files):
     grid_gO = Grid(os.path.join(path_to_grid_files, 'gist-gO.dx'))
@@ -82,45 +83,56 @@ def compute_tanimoto(vec1, vec2):
 if __name__ == "__main__":
     path_to_frames = sys.argv[1]
 
-    #grid_types = ['gO', 'Esw', 'Eww', 'TSt', 'TSo']
-    grid_types = ['gO', 'Esw', 'Eww']
-
-    tanimotos_for_plot = {"gO": [], 
-                          "Esw": [], 
-                          "Eww": []}
+    grid_types = ['gO', 'Esw', 'Eww', 'TSt', 'TSo']
+    # tanimotos_for_plot = {"gO": [],
+    #                       "Esw": [],
+    #                       "Eww": [],
+    #                       "TSt": [],
+    #                       "TSo": []}
+    
+    # grid_types = ['gO', 'Esw', 'Eww']
+    # tanimotos_for_plot = {"gO": [], 
+    #                       "Esw": [], 
+    #                       "Eww": []}
     
     # for n_frames in frames:
-    for n_step in n_steps:
-        path_to_grids_MC = os.path.join(path_to_frames, "TIP3P", f"{n_step}_steps")
-        path_to_grids_MD = os.path.join(path_to_frames, "GIST_MD_NO_HMR")
-        grids_1 = load_grids(path_to_grids_MC)
-        grids_2 = load_grids(path_to_grids_MD)
-        for idx, grid_type in enumerate(grid_types):
-            print(f"Analyzing grid: {grid_type}")
-            densities_1 = select_voxels_within_distance(grids_1[idx]).flatten()
-            densities_2 = select_voxels_within_distance(grids_2[idx]).flatten()
-            smoothed_d1 = gaussian_filter(densities_1, sigma=3)
-            smoothed_d2 = gaussian_filter(densities_2, sigma=3)
-            t_similarity, t_distance = compute_tanimoto(smoothed_d1, smoothed_d2)
-            # print(f"Tanimoto Similarity: {t_similarity}\nTanimoto Distance: {t_distance}")
-            tanimotos_for_plot[grid_type].append(t_similarity)
-    
-    for grid_type in tanimotos_for_plot:
-        print(n_step, tanimotos_for_plot[grid_type])
-        plot_name = f"{grid_type}_tanimoto.png"
-        plt.figure(figsize=(8, 8))
-        plt.plot(n_steps, 
-                 tanimotos_for_plot[grid_type], 
-                 alpha=0.5)  # s=10 for smaller points
-        plt.xlabel(f"# of Steps")
-        plt.ylabel(f"Non-Binary Tanimoto Similarity")
-        plt.title("Distribution of Tanimoto Similarity amongst the frames")
-        plt.legend()
+    for rep in range(0, 3):
+        tanimotos_for_plot = {"gO": [],
+                          "Esw": [],
+                          "Eww": [],
+                          "TSt": [],
+                          "TSo": []}
+        for n_step in n_steps:
+            path_to_grids_MC = os.path.join(path_to_frames, "TIP3P", "GCMC_STEPS", f"{n_step}_steps")
+            path_to_grids_MD = os.path.join(path_to_frames, "GIST_MD_NO_HMR", f"gist_rep{rep+1}")
+            grids_1 = load_grids(path_to_grids_MC)
+            grids_2 = load_grids(path_to_grids_MD)
+            for idx, grid_type in enumerate(grid_types):
+                print(f"Analyzing grid: {grid_type}")
+                densities_1 = select_voxels_within_distance(grids_1[idx]).flatten()
+                densities_2 = select_voxels_within_distance(grids_2[idx]).flatten()
+                smoothed_d1 = gaussian_filter(densities_1, sigma=3)
+                smoothed_d2 = gaussian_filter(densities_2, sigma=3)
+                t_similarity, t_distance = compute_tanimoto(smoothed_d1, smoothed_d2)
+                # print(f"Tanimoto Similarity: {t_similarity}\nTanimoto Distance: {t_distance}")
+                tanimotos_for_plot[grid_type].append(t_similarity)
+        
+        for grid_type in tanimotos_for_plot:
+            print(n_step, tanimotos_for_plot[grid_type])
+            plot_name = f"{grid_type}_tanimoto_{rep+1}.png"
+            plt.figure(figsize=(8, 8))
+            plt.plot(n_steps, 
+                    tanimotos_for_plot[grid_type], 
+                    alpha=0.5)  # s=10 for smaller points
+            plt.xlabel(f"# of Steps")
+            plt.ylabel(f"Non-Binary Tanimoto Similarity")
+            plt.title("Distribution of Tanimoto Similarity amongst the frames")
+            plt.legend()
 
-        # Optional: Set equal aspect ratio for better comparison
-        # plt.axis('equal')
-        plt.savefig(f"{plot_name}")
-        plt.clf()
+            # Optional: Set equal aspect ratio for better comparison
+            # plt.axis('equal')
+            plt.savefig(f"{plot_name}")
+            plt.clf()
 
 
 

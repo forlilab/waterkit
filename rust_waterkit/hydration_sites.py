@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
+import os
 import argparse
 from gridData import Grid
 from waterkit.analysis import HydrationSites
@@ -18,6 +19,8 @@ def cmd_lineparser():
                         action='store', help='dTStrans')
     parser.add_argument('--dtsorient', dest='dtsorient', required=True,
                         action='store', help='dTSorient')
+    parser.add_argument('--out', dest='out', required=True,
+                        action='store', help='out path')
     return parser.parse_args()
 
 
@@ -28,6 +31,7 @@ def main():
     eww = Grid(args.eww)
     tst = Grid(args.dtstrans)
     tso = Grid(args.dtsorient)
+    out_path = args.out
     dg = (esw + 2 * eww) - (tst + tso)
 
     # Identification of hydration site positions using gO
@@ -36,11 +40,11 @@ def main():
 
     # Get Gaussian smoothed energy for hydration sites only
     dg_energy = hs.hydration_sites_energy(dg, water_radius=1.4)
-    hs.export_to_pdb("hydration_sites_dG_smoothed.pdb", hydration_sites, dg_energy)
+    hs.export_to_pdb(os.path.join(out_path, "hydration_sites_dG_smoothed.pdb"), hydration_sites, dg_energy)
 
     # ... or get the whole Gaussian smoothed map
     map_smooth = blur_map(dg, radius=1.4)
-    map_smooth.export("gist-dG-dens_smoothed.dx")
+    map_smooth.export(os.path.join(out_path, "gist-dG-dens_smoothed.dx"))
 
 if __name__ == "__main__":
    main()

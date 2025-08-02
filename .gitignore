@@ -118,6 +118,7 @@ autodocksuite-4.2.6-src/autogrid/x86_Linux2/
 *.dx
 *.png
 validation/hsp90_target
+validation/hiv_target
 example/*
 autodocksuite-*/*
 rust_waterkit/amber/*

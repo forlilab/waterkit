@@ -9,6 +9,7 @@ use crate::grid::ProbeType;
 use crate::monte_carlo;
 use crate::energy::energy_for_real_water;
 use crate::utils;
+use crate::water;
 use crate::water::WaterMolecule;
 use crate::waterkit_system;
 use crate::waterkit_system::System;
@@ -66,15 +67,15 @@ fn rotate_hydrogens(oxygen_coords: [f64; 3], h1_coords: [f64; 3], h2_coords: [f6
 fn get_energy(oxygen_pos: [f64; 3], h1_pos: [f64; 3], h2_pos: [f64; 3], grid: &Grid3D) -> f64 {
     // Need to interpolate the oxygen too since we are sampling small movements for this atom too 
     let lj_oxygen = grid.trilinear_interpolation(oxygen_pos, ProbeType::OW).unwrap_or(f64::INFINITY);
-
+    let water_params = consts::WATER_PARAMS.get(consts::WATER_FF).unwrap();
     let electrostatics_h1 = grid.trilinear_interpolation(h1_pos, ProbeType::HW);
     let electrostatics_h2 = grid.trilinear_interpolation(h2_pos, ProbeType::HW);
     let electrostatics_oxygen = grid.trilinear_interpolation(oxygen_pos, ProbeType::HW);
     if electrostatics_h1.is_some() && electrostatics_h2.is_some() && electrostatics_oxygen.is_some() {
         let energy_value = lj_oxygen
-            + electrostatics_oxygen.unwrap() * consts::OXYGEN_W_Q_TIP3PFB
-            + electrostatics_h1.unwrap() * consts::HYDROGEN_W_Q_TIP3PFB
-            + electrostatics_h2.unwrap() * consts::HYDROGEN_W_Q_TIP3PFB;
+            + electrostatics_oxygen.unwrap() * water_params.OXYGEN_W_Q
+            + electrostatics_h1.unwrap() * water_params.HYDROGEN_W_Q
+            + electrostatics_h2.unwrap() * water_params.HYDROGEN_W_Q;
         return energy_value;
     }
     f64::INFINITY

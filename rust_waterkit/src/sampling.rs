@@ -11,7 +11,7 @@ use rand::{thread_rng, Rng};
 
 use crate::anchor_point::AnchorPoint;
 use crate::atom::Atom;
-use crate::{geometry, monte_carlo as mc};
+use crate::{consts, geometry, monte_carlo as mc, water};
 use crate::grid::{Grid3D, GridPoint, ProbeType};
 use crate::consts::*;
 use crate::water::WaterMolecule;
@@ -367,6 +367,7 @@ pub fn sample_waters_with_grids(oxygen_atom: &[f64; 3],
     water_configurations: &Vec<[f64; 6]>,
     grid: &Grid3D,
     last_residue_number: &mut usize) -> (bool, WaterMolecule) {
+    let water_params = consts::WATER_PARAMS.get(consts::WATER_FF).unwrap();
     let oxygen_position = *oxygen_atom;
     let lj_oxygen = grid.trilinear_interpolation(oxygen_position, ProbeType::OW).unwrap_or(f64::INFINITY);
 
@@ -396,9 +397,9 @@ pub fn sample_waters_with_grids(oxygen_atom: &[f64; 3],
         }
 
         let energy_value = lj_oxygen
-            + electrostatics_oxygen.unwrap() * OXYGEN_W_Q_TIP3PFB
-            + electrostatics_h1.unwrap() * HYDROGEN_W_Q_TIP3PFB
-            + electrostatics_h2.unwrap() * HYDROGEN_W_Q_TIP3PFB;
+            + electrostatics_oxygen.unwrap() * water_params.OXYGEN_W_Q
+            + electrostatics_h1.unwrap() * water_params.HYDROGEN_W_Q
+            + electrostatics_h2.unwrap() * water_params.HYDROGEN_W_Q;
 
         if energy_value < best_energy {
             best_energy = energy_value;

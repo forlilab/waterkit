@@ -5,6 +5,24 @@ use plotters::prelude::*;
 
 use crate::atom::Atom;
 
+fn remove_and_get_indices<T, F>(vec: &mut Vec<T>, mut predicate: F) -> Vec<usize>
+where
+    F: FnMut(&T) -> bool,
+{
+    let mut removed_indices = Vec::new();
+    let mut i = 0;
+    while i < vec.len() {
+        if !predicate(&vec[i]) {
+            // Element should be removed
+            removed_indices.push(i);
+            vec.remove(i); // This shifts subsequent elements
+        } else {
+            i += 1; // Keep the element, move to the next
+        }
+    }
+    removed_indices
+}
+
 pub fn round(value: f64) -> f64 {
     (value * 1000.0).round() / 1000.0
 }

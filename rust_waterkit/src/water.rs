@@ -2,6 +2,7 @@ use crate::anchor_point::AnchorPoint;
 use crate::atom::Atom;
 use crate::geometry;
 use crate::consts;
+use crate::water;
 
 #[derive(Clone, Debug, PartialEq)]
 // #[pyclass]
@@ -26,12 +27,13 @@ impl WaterMolecule {
                 hydrogen_2_coords: [f64; 3],
                 chain: String,
                 resnumber: usize) -> Self {
+            let water_params = consts::WATER_PARAMS.get(consts::WATER_FF).unwrap();
             let oxygen = Atom::new("OW".to_string(),
                 format!("{chain}:HOH:{resnumber}:0"),
                 oxygen_coords,
-                consts::RMIN_HALF_WATER_TIP3PFB,
-                consts::TIP3PFB_EPSILON,
-                consts::OXYGEN_W_Q_TIP3PFB,
+                water_params.RMIN_HALF_WATER,
+                water_params.EPSILON_WATER,
+                water_params.OXYGEN_W_Q,
                 1.7,
                 true,
                 true
@@ -42,7 +44,7 @@ impl WaterMolecule {
                 hydrogen_1_coords,
                 0.0,
                 0.0,
-                consts::HYDROGEN_W_Q_TIP3PFB,
+                water_params.HYDROGEN_W_Q,
                 0.0,
                 false,
                 false
@@ -52,7 +54,7 @@ impl WaterMolecule {
                 hydrogen_2_coords,
                 0.0,
                 0.0,
-                consts::HYDROGEN_W_Q_TIP3PFB,
+                water_params.HYDROGEN_W_Q,
                 0.0,
                 false,
                 false

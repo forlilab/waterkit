@@ -83,7 +83,7 @@ def write_pdb_file(output_name, molecule,  overwrite=True, **kwargs):
         raise IOError("Error: file %s already exists." % fname)
 
 
-def write_tleap_input_file(fname, pdb_filename, lib_files=None, frcmod_files=None, use_tip3pfb=True):
+def write_tleap_input_file(fname, pdb_filename, lib_files=None, frcmod_files=None, use_tip3pfb=False):
     """Create tleap input script
 
     Args:
@@ -204,13 +204,13 @@ def cmd_lineparser():
     return parser.parse_args()
 
 
-def main():
-    args = cmd_lineparser()
-    receptor_filename = args.receptor_filename
-    water_directory = args.water_directory
-    output_prefix = args.output_prefix
-    lib_files = args.lib_files
-    frcmod_files = args.frcmod_files
+def make_trajectory(receptor_filename, water_directory, output_prefix, lib_files=None, frcmod_files=None):
+    # args = cmd_lineparser()
+    # receptor_filename = args.receptor_filename
+    # water_directory = args.water_directory
+    # output_prefix = args.output_prefix
+    # lib_files = args.lib_files
+    # frcmod_files = args.frcmod_files
 
     tleap_input = 'leap.template.in'
     tleap_output = 'leap.template.out'
@@ -252,7 +252,17 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    args = cmd_lineparser()
+    receptor_filename = args.receptor_filename
+    water_directory = args.water_directory
+    output_prefix = args.output_prefix
+    lib_files = args.lib_files
+    frcmod_files = args.frcmod_files
+    make_trajectory(receptor_filename=receptor_filename,
+                    water_directory=water_directory,
+                    output_prefix=output_prefix,
+                    lib_files=lib_files,
+                    frcmod_files=frcmod_files)
 
 
 #!/usr/bin/env python

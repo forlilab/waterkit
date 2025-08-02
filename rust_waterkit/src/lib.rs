@@ -2,6 +2,7 @@
 
 pub mod utils;
 pub mod consts;
+pub mod gpu_energy;
 pub mod geometry;
 pub mod vina_ff;
 pub mod anchor_point;

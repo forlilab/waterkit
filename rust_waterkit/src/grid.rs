@@ -6,6 +6,7 @@ use kdtree::distance::squared_euclidean;
 use kdtree::KdTree;
 
 use crate::atom::Atom;
+use crate::consts::WATER_CONSTANTS;
 use crate::energy;
 use crate::consts;
 use crate::geometry;
@@ -312,7 +313,7 @@ impl Grid3D {
 
 pub fn get_systems_energy(grid: &Grid3D, water_atoms: &Vec<WaterMolecule>) -> f64 {
     let mut total_energy = 0.0;
-
+    let water_params = consts::WATER_PARAMS.get(consts::WATER_FF).unwrap();
     for water in water_atoms {
         let atoms = water.as_vec();
         let oxygen = atoms[0].coords();
@@ -335,9 +336,9 @@ pub fn get_systems_energy(grid: &Grid3D, water_atoms: &Vec<WaterMolecule>) -> f6
         // println!("Q H2: {}", electrostatics_oxygen.unwrap() * consts::HYDROGEN_W_Q_TIP3PFB);
         
         let energy_value = lj_oxygen
-            + electrostatics_oxygen.unwrap() * consts::OXYGEN_W_Q_TIP3PFB
-            + electrostatics_h1.unwrap() * consts::HYDROGEN_W_Q_TIP3PFB
-            + electrostatics_h2.unwrap() * consts::HYDROGEN_W_Q_TIP3PFB;
+            + electrostatics_oxygen.unwrap() * water_params.OXYGEN_W_Q
+            + electrostatics_h1.unwrap() * water_params.HYDROGEN_W_Q
+            + electrostatics_h2.unwrap() * water_params.HYDROGEN_W_Q;
         // println!("Water's energy: {energy_value}");
         total_energy += energy_value;    
     }

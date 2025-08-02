@@ -141,6 +141,7 @@ pub fn energy_for_real_water(atoms_1: &Vec<Atom>, atoms_2: &Vec<Atom>) -> f64 {
 /// Grids region
 pub fn get_ow_energy(atoms_1: &Vec<Atom>, sphere_center: &[f64; 3]) -> f64{
     let mut total_energy = 0.0;
+    let water_params = consts::WATER_PARAMS.get(consts::WATER_FF).unwrap();
     for atom_1 in atoms_1.iter() {
         let atom_1_coords = atom_1.coords();
 
@@ -160,10 +161,10 @@ pub fn get_ow_energy(atoms_1: &Vec<Atom>, sphere_center: &[f64; 3]) -> f64{
             // TIP3PFB
             if atom_1.atom_type() != &"HW" {
                 let lj_energy = lennard_jones_rmin_half(atom_1.epsilon(),
-                consts::TIP3PFB_EPSILON,
+                water_params.EPSILON_WATER,
                 distance,
                 atom_1.rmin_half(),
-                consts::RMIN_HALF_WATER_TIP3PFB);
+                water_params.RMIN_HALF_WATER);
                 total_energy += lj_energy;
             }
         // }
@@ -198,6 +199,7 @@ pub fn update_grid_energies(atoms_1: &Vec<Atom>, sphere_center: &[f64; 3]) -> (f
     let mut total_oda_energy = 0.0;
     let mut total_ow_energy = 0.0;
     let mut total_q_energy = 0.0;
+    let water_params = consts::WATER_PARAMS.get(consts::WATER_FF).unwrap();
 
     for atom_1 in atoms_1.iter() {
         let atom_1_coords = atom_1.coords();
@@ -205,10 +207,10 @@ pub fn update_grid_energies(atoms_1: &Vec<Atom>, sphere_center: &[f64; 3]) -> (f
 
         if atom_1.atom_type() != &"HW" {
             let lj_energy = lennard_jones_rmin_half(atom_1.epsilon(),
-            consts::TIP3PFB_EPSILON,
+            water_params.EPSILON_WATER,
             distance,
             atom_1.rmin_half(),
-            consts::RMIN_HALF_WATER_TIP3PFB);
+            water_params.RMIN_HALF_WATER);
             total_ow_energy += lj_energy;
         }
         let mut electrostatics = 0.0;

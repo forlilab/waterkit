@@ -1,10 +1,11 @@
 use core::panic;
-use std::{collections::{HashMap, VecDeque}, fs::File, thread::current};
+use cubecl::{compute::CubeTask, prelude::*, wgpu::WgpuDevice};
+use std::{collections::{HashMap, VecDeque}, fs::File, thread::current, time::Instant};
 
 use kiddo::float::kdtree::KdTree;
 use rand::{distributions::Uniform, distributions::WeightedIndex, prelude::Distribution, Rng};
 
-use crate::{atom::Atom, consts, energy, geometry, water::{self, WaterMolecule}, waterkit_system::System};
+use crate::{atom::Atom, consts, energy, geometry, gpu_energy::compute_energy, water::{self, WaterMolecule}, waterkit_system::System};
 
 // Vector operations for [f64; 3]
 fn norm(v: &[f64; 3]) -> f64 {
@@ -23,6 +24,66 @@ fn add(v1: &[f64; 3], v2: &[f64; 3]) -> [f64; 3] {
 fn is_in_hydration_shell(pos: &[f64; 3], x_min: f64, x_max: f64, y_min: f64, y_max: f64, z_min: f64, z_max: f64) -> bool {
     (pos[0] >= x_min && pos[0] <= x_max) && (pos[1] >= y_min && pos[1] <= y_max) && (pos[2] >= z_min && pos[2] <= z_max) 
 }
+
+// //GPU BABY!
+// // Define the kernel for pairwise energy calculation
+// #[cube]
+// pub fn compute_pairwise_energy(
+//     positions: &Tensor<f32>,
+//     num_atoms: u32,
+//     out_energy: &mut Tensor<f32>,
+// ) {
+//     // Simplified pairwise energy (e.g., Lennard-Jones potential)
+//     let idx = ABSOLUTE_POS;
+//     if idx < num_atoms {
+//         let mut energy = 0.0;
+//         let pos_x = positions[idx * 3];
+//         let pos_y = positions[idx * 3 + 1];
+//         let pos_z = positions[idx * 3 + 2];
+
+//         for j in 0..num_atoms {
+//             if j != idx {
+//                 let dx = pos_x - positions[j * 3];
+//                 let dy = pos_y - positions[j * 3 + 1];
+//                 let dz = pos_z - positions[j * 3 + 2];
+//                 let r2 = dx * dx + dy * dy + dz * dz;
+//                 if r2 < consts::ELECTROSTATICS_CUTOFF.powi(2) {
+//                     let r = f32::sqrt(r2);
+
+//                     let rmin = positions[idx * 3 + 3] + positions[j * 3 + 3];
+//                     let epsilon_2 = (positions[idx * 3 + 4] * positions[j * 3+ 4]);
+//                     let epsilon = F::sqrt(epsilon_2);
+//                     let rmin_over_r = rmin / r;
+//                     let lj = epsilon * (f32::powf(rmin_over_r, 12.0) - (2.0 * f32::powf(rmin_over_r, 6.0)));
+
+//                     let coulomb = consts::K_E * positions[idx * 3 + 5] * positions[j * 3 + 5] / r;
+//                     energy += lj + coulomb;
+//                 }
+//             }
+//         }
+//         out_energy[idx] = energy;
+//     }
+// }
+
+// Kernel struct implementing CubeTask
+// #[derive(Clone)]
+// struct EnergyKernel;
+
+// impl CubeTask for EnergyKernel {
+//     type Input = (TensorHandle<f32>, u32);
+//     type Output = TensorHandle<f32>;
+
+//     fn kernel_name(&self) -> &'static str {
+//         "compute_pairwise_energy"
+//     }
+
+//     fn kernel(&self, input: Self::Input, context: &mut CubeContext) -> Self::Output {
+//         let (positions, num_atoms) = input;
+//         let mut out_energy = context.create_tensor::<f32>(vec![num_atoms as usize], TensorUsage::ReadWrite);
+//         compute_pairwise_energy(&positions, num_atoms, &mut out_energy);
+//         out_energy
+//     }
+// }
 
 #[derive(Clone)]
 pub struct GCMC {
@@ -194,35 +255,45 @@ impl GCMC {
         (new_waters, i)
     }
 
-        // Grand Canonical Monte Carlo simulation
+    // Grand Canonical Monte Carlo simulation
     pub fn gcmc_simulation(&mut self, 
         receptor_atoms: &Vec<Atom>, 
         volume: f64, 
         last_residue_number: usize,
-        gcmc_steps: usize) -> std::io::Result<Vec<WaterMolecule>> {
+        gcmc_steps: usize,
+        device: WgpuDevice) -> std::io::Result<Vec<WaterMolecule>> {
+        // let client = cubecl::wgpu::WgpuRuntime::client(&device);
         // println!("# of waters in the system at the beginnign: {}", self.waters.len());
         // ADAMS parameter
         let B = self.mu * self.beta + (volume / self.standard_volume).ln();
         
         let mut system_atoms = receptor_atoms.clone();
+        
+        // GPU
+        // let mut x = Vec::with_capacity(system_atoms.len());
+        // let mut y = Vec::with_capacity(system_atoms.len());
+        // let mut z = Vec::with_capacity(system_atoms.len());
+        // let mut rmin_half = Vec::with_capacity(system_atoms.len());
+        // let mut epsilon = Vec::with_capacity(system_atoms.len());
+        // let mut charge = Vec::with_capacity(system_atoms.len());
 
-        // println!("# Atoms: {}", system_atoms.len());
+        // for (idx, atom) in system_atoms.iter().enumerate() {
+        //     let coords = atom.coords();
+        //     x.push(coords[0] as f32);
+        //     y.push(coords[1] as f32);
+        //     z.push(coords[2] as f32);
+        //     rmin_half.push(atom.rmin_half() as f32);
+        //     epsilon.push(atom.epsilon() as f32);
+        //     charge.push(atom.charge() as f32);
+        // }
+        //
+
         let mut rng = rand::thread_rng();
-        let mut trans_history = VecDeque::with_capacity(self.num_steps);
-        let mut insert_history = VecDeque::with_capacity(self.num_steps);
-        let mut delete_history = VecDeque::with_capacity(self.num_steps);
-        let mut trans_attempts = 0;
-        let mut insert_attempts = 0;
-        let mut delete_attempts = 0;
-        let mut trans_accepts = 0;
-        let mut insert_accepts = 0;
-        let mut delete_accepts = 0;
-        // let mut frames = Vec::with_capacity(NUM_FRAMES);
-
         let mut cnt = last_residue_number + 1;
         let mut step_cnt = 0;
 
         for step in 0..gcmc_steps {
+            // println!("Num atoms: {}", system_atoms.len());
             step_cnt += 1;
             // Choose move type: 1/3 translation, 1/3 insertion, 1/3 deletion
             let mut water_molecule_copy = self.randomize_water(&self.water_configuration, &mut rng);
@@ -230,14 +301,19 @@ impl GCMC {
             let move_type = rng.gen_range(0..=2);
             if move_type == 0 && !self.waters.is_empty() {
                 // Translation move
-                trans_attempts += 1;
                 let water_idx = rng.gen_range(0..self.waters.len());
                 let mut current_water = self.waters[water_idx].clone();
                 let base_idx = water_idx * 3;
-                // let exclude = [base_idx, base_idx + 1, base_idx + 2];
 
                 // Using single energy
+                // let start_gpu = Instant::now();
+                // let old_energy_gpu = compute_energy::<cubecl::wgpu::WgpuRuntime>(&device, &x, &y, &z, &rmin_half, &epsilon, &charge);
+                // println!("Time for GPU: {:?}", start_gpu.elapsed());
+                // println!("GPU energy: {}", old_energy_gpu);
+                // let start_cpu = Instant::now();
                 let old_energy = energy::energy_for_real_water(&system_atoms, &current_water.as_vec());
+                // println!("Time for CPU: {:?}", start_cpu.elapsed());
+                // println!("CPU energy: {}", old_energy);
 
                 if let Some(new_water) = self.propose_perturbation(
                     &current_water, 
@@ -251,28 +327,25 @@ impl GCMC {
 
                     if Uniform::from(0.0..1.0).sample(&mut rng) < acceptance_prob { 
                         let new_water_atoms = self.waters[water_idx].as_vec();
-                        system_atoms.iter_mut().for_each(|atom| {
+                        system_atoms.iter_mut().enumerate().for_each(|(idx, atom)| {
                             if atom.atom_id() == new_water_atoms[0].atom_id() {
                                 atom.set_coords(new_water_atoms[0].coords());
+                                // x[idx] = atom.coords()[0] as f32
                             } else if atom.atom_id() == new_water_atoms[1].atom_id() {
                                 atom.set_coords(new_water_atoms[1].coords());
+                                // y[idx] = atom.coords()[1] as f32
                             } else if atom.atom_id() == new_water_atoms[2].atom_id() {
                                 atom.set_coords(new_water_atoms[2].coords());
+                                // z[idx] = atom.coords()[2] as f32
                             }
                         });
-                        trans_history.push_back(1);
-                        trans_accepts += 1;
                     } else {
                         self.waters[water_idx] = current_water;
-                        trans_history.push_back(0);
                     }
-                } else {
-                    trans_history.push_back(0); // Rejected due to leaving hydration shell
                 }
             } else if move_type == 1 {
             // if move_type == 0 {
                 // Insertion move
-                insert_attempts += 1;
                 if let Some(mut new_water) = self.propose_insertion(
                     &water_molecule_copy,
                     &mut rng,
@@ -290,19 +363,22 @@ impl GCMC {
 
                     if Uniform::from(0.0..1.0).sample(&mut rng) < acceptance_prob {
                         system_atoms.extend(self.waters.last().unwrap().as_vec());
+                        // for atom in self.waters.last().unwrap().as_vec() {
+                        //     let coords = atom.coords();
+                        //     x.push(coords[0] as f32);
+                        //     y.push(coords[1] as f32);
+                        //     z.push(coords[2] as f32);
+                        //     rmin_half.push(atom.rmin_half() as f32);
+                        //     epsilon.push(atom.epsilon() as f32);
+                        //     charge.push(atom.charge() as f32);
+                        // } 
                         cnt += 1;
-                        insert_history.push_back(1);
-                        insert_accepts += 1;
                     } else {
                         self.waters.pop();
-                        insert_history.push_back(0);
                     }
-                } else {
-                    insert_history.push_back(0); // Failed to find valid position
                 }
             } else if move_type == 2 && !self.waters.is_empty() {
                 // Deletion move
-                delete_attempts += 1;
                 let (new_waters, removed_water_idx) = self.propose_deletion(&self.waters, &mut rng);
 
                 // Using single energy
@@ -318,37 +394,29 @@ impl GCMC {
                 if Uniform::from(0.0..1.0).sample(&mut rng) < acceptance_prob {
                     let removed_resnumber = removed_water.get_res_number();
                     self.waters = new_waters;
+                    let mut to_remove = Vec::new();
+                    for (idx, atom) in system_atoms.iter().enumerate() {
+                        if atom.residue_number == removed_resnumber {
+                            // system_atoms.remove(idx);
+                            to_remove.push(idx);
+                        }
+                    }
+
+                    // for idx in to_remove.into_iter().rev() {
+                    //     x.remove(idx);
+                    //     y.remove(idx);
+                    //     z.remove(idx);
+                    //     rmin_half.remove(idx);
+                    //     epsilon.remove(idx);
+                    //     charge.remove(idx);
+                    // }
                     system_atoms.retain(|x| x.residue_number != removed_resnumber);
-                    delete_history.push_back(1);
-                    delete_accepts += 1;
-                } else {
-                    delete_history.push_back(0);
                 }
             }
         }
 
         let system_energy = energy::get_system_energy(&self.waters, &receptor_atoms);
         self.system_energy = system_energy.0 + system_energy.1;
-        // println!("\n# of waters inserted: {}", self.waters.len());
-        // if trans_attempts > 0 {
-        //     let trans_rate = trans_history.iter().sum::<u8>() as f64 / trans_history.len() as f64;
-        //     println!("# of Translations accepted: {} out of {} attempts.", trans_accepts, trans_attempts);
-        //     println!("Translation Acceptance Rate = {:.3}", trans_rate);
-        // }
-        // if insert_attempts > 0 {
-        //     let insert_rate = insert_history.iter().sum::<u8>() as f64 / insert_history.len() as f64;
-        //     println!("# of Insertions accepted: {} out of {} attempts.", insert_accepts, insert_attempts);
-        //     println!("Insertion Acceptance Rate = {:.3}", insert_rate);
-        // }
-        // if delete_attempts > 0 {
-        //     let delete_rate = delete_history.iter().sum::<u8>() as f64 / delete_history.len() as f64;
-        //     println!("# of Deletions accepted: {} out of {} attempts.", delete_accepts, delete_attempts);
-        //     println!("Deletion Acceptance Rate = {:.3}", delete_rate);
-        // }        
-        // println!("Insertions proposed in {} steps: {}", step_cnt, insert_attempts);
-        // println!("Deletions proposed in {} steps: {}", step_cnt, delete_attempts);
-        // println!("System Energy: {:?}", system_energy);
-        // frames.push(self.waters.clone());
         self.atoms.clear();
         for w in self.waters.iter() {
             self.atoms.extend(w.as_vec());

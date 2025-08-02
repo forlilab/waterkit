@@ -3,8 +3,10 @@ import os
 
 from gridData import Grid
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 from scipy.ndimage import gaussian_filter
+from scipy.stats import kendalltau, pearsonr
 
 
 
@@ -16,7 +18,7 @@ def load_grids(path_to_grid_files):
     grid_tso = Grid(os.path.join(path_to_grid_files, 'gist-dTSorient-dens.dx'))
     return [grid_gO, grid_esw, grid_eww, grid_tst, grid_tso]
 
-def select_voxels_within_distance(grid, max_distance=15.0):
+def select_voxels_within_distance(grid, max_distance=10.0):
     """
     Select voxels in a GIST grid within a specified distance from the origin.
     
@@ -106,6 +108,14 @@ def compute_tanimoto(vec1, vec2):
     distance = 1 - similarity
     return similarity, distance
 
+def compute_kendalltau(vec1, vec2):
+    tau, p_value = kendalltau(vec1, vec2)
+    return tau, p_value
+
+def compute_r(vec1, vec2):
+    r, p_value = pearsonr(vec1, vec2)
+    return r, p_value
+
 if __name__ == "__main__":
     path_to_grid_files_1 = sys.argv[1]
     path_to_grid_files_2 = sys.argv[2]
@@ -113,16 +123,29 @@ if __name__ == "__main__":
     y_axis = sys.argv[4]
     plot_name = sys.argv[5]
     grid_types = ['gO', 'Esw', 'Eww', 'TSt', 'TSo']
+    
     # grid_types = ['gO']
     grids_1 = load_grids(path_to_grid_files_1)
     grids_2 = load_grids(path_to_grid_files_2)
+    
+    results = dict()
     
     for idx, grid_type in enumerate(grid_types):
         print(f"Analyzing grid: {grid_type}")
         d1, d2 = compare_grids(grids_1[idx], grids_2[idx], grid_type, x_axis=x_axis, y_axis=y_axis, plot_name=plot_name, path=path_to_grid_files_2)
         t_similarity, t_distance = compute_tanimoto(d1, d2)
-        print(f"Tanimoto Similarity: {t_similarity}\nTanimoto Distance: {t_distance}")
-
+        tau, tau_pvalue = compute_kendalltau(d1, d2)
+        r, r_pvalue = compute_r(d1, d2)
+        print(f"Tanimoto Similarity: {t_similarity}\nKendall Tau: {tau}\nPearson correlation coefficient: {r}\nr^2: {r**2}\n")
+        results[grid_type] = {'Tanimoto similarity': round(t_similarity, 3),
+                              'Kendall Tau': round(tau, 3),
+                              "Pearson's correlation coefficient": round(r, 3),
+                            #   "Pearson's pvalue": r_pvalue,
+                              "r^2": round(r**2, 3)}
+    with open(f"stats_{x_axis}_{y_axis}.csv", "w") as fo:
+        fo.write(f"Density,Tanimoto,Tau,r,r^2\n")
+        for key, value in results.items():
+            fo.write(f"{key},{value['Tanimoto similarity']},{value['Kendall Tau']},{value['Pearson\'s correlation coefficient']},{value['r^2']}\n")
 
 
 

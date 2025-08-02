@@ -6,7 +6,7 @@ import meeko
 import rust_waterkit
 from rdkit import Chem
 
-def get_data_form_meeko(pdb_file, project_path, save=True):
+def get_data_from_meeko(pdb_file, project_path, save=True):
     rotatable_hydrogens = list()
     surface_atoms = list()
     box_boundaries = list()
@@ -17,7 +17,7 @@ def get_data_form_meeko(pdb_file, project_path, save=True):
     mk_prep = meeko.MoleculePreparation(
         merge_these_atom_types=[],
         load_atom_params=["vina_params", "openff"],
-        charge_model="espaloma",
+        charge_model="gasteiger",
     )
     
     templates = meeko.ResidueChemTemplates.create_from_defaults()
@@ -69,11 +69,35 @@ def get_data_form_meeko(pdb_file, project_path, save=True):
             surface_atoms.append(new_atom)
     return surface_atoms
 
-def load_waters_orientations(orientations="/mnt/forli/group/nbruciaferri/waterkit/waterkit/data/water_orientations.txt"):
+def load_waters_orientations(orientations="/data/phd/waterkit/waterkit/data/water_orientations.txt"):
 # def load_waters_orientations(orientations="/Users/niccolobruciaferri/phd/waterkit/waterkit/data/water_orientations.txt"):
     usecols = [0, 1, 2, 3, 4, 5]
     water_orientations = np.loadtxt(orientations, usecols=usecols)
     return water_orientations
+
+
+def run_mcswell(receptor_path, project_path, center, alg_type="gcmc"):
+    parametrized_atoms = get_data_from_meeko(pdb_file=receptor_path, project_path=project_path)
+    spacing = 0.375
+    x_size, y_size, z_size = 24.0, 24.0, 24.0
+    n_frames = 300
+    print("Starting MCSwell!")
+    start = time.time()
+    grid = rust_waterkit.setup_system(parametrized_atoms, x_size, y_size, z_size, spacing, center)
+    save_path = f"{project_path}/frames/"
+    os.makedirs(save_path, exist_ok=True)
+    # sa_steps to be adjusted
+    if alg_type == "gcmc":
+        rust_waterkit.run_waterkit_gcmc(parametrized_atoms, [], grid, n_frames, 400000, save_path)
+    elif alg_type == "gcmcmc":
+        rust_waterkit.run_waterkit_gcmcmc(parametrized_atoms, [], grid, n_frames, 400000, 75000, save_path)
+    elif alg_type == "gcmcsa":
+        rust_waterkit.run_parallel_waterkit(parametrized_atoms, [], [], grid, n_frames, 400000, 75000, save_path)
+    else:
+        print(f"Error! {alg_type} not available in the allowed algorithms!\nPlease chooes between 1) gcmc 2) gcmcmc 3) gcmcsa")
+    exec_time = time.time() - start
+    print(f"Time necessary for the rust part: {exec_time/60} minutes - {exec_time} seconds")
+    return
 
 '''
     To compile the code:
@@ -86,16 +110,17 @@ if __name__ == "__main__":
     pdb_path = sys.argv[1]
     project_path = sys.argv[2]
     center = [float(arg) for arg in sys.argv[3:6]]
-    sa_steps = int(sys.argv[6])
-    parametrized_atoms = get_data_form_meeko(pdb_file=pdb_path, project_path=project_path)
+    # sa_steps = int(sys.argv[6])
+    # sa_steps = 75000
+    parametrized_atoms = get_data_from_meeko(pdb_file=pdb_path, project_path=project_path)
     waters = load_waters_orientations()
     spacing = 0.375
     x_size, y_size, z_size = 24.0, 24.0, 24.0
 
-    
+    sa_intervals = [1000, 5000, 10000, 20000, 40000, 50000, 70000, 80000, 90000, 100000, 200000]
 
     print("Starting waterkit!")
-    n_frames = 10000
+    n_frames = 1000
     # if gcmc_steps < 50000:
     #     n_frames = 10000
     # else:
@@ -117,9 +142,10 @@ if __name__ == "__main__":
 
     # for n_steps in num_steps:
     #     for o_steps in optimization_steps:
-    save_path = f"{project_path}/{gcmc_steps}_steps/frames/"
-    os.makedirs(save_path, exist_ok=True)
-    rust_waterkit.run_parallel_waterkit(parametrized_atoms, waters, [], grid, n_frames, 200000, sa_steps, save_path)
-    # rust_waterkit.run_waterkit_gcmcre(parametrized_atoms, waters, grid, n_frames, save_path)
-    exec_time = time.time() - start
-    print(f"Time necessary for the rust part: {exec_time/60} minutes - {exec_time} seconds")
+    for sa_steps in sa_intervals:
+        save_path = f"{project_path}/{sa_steps}_steps/frames/"
+        os.makedirs(save_path, exist_ok=True)
+        rust_waterkit.run_parallel_waterkit(parametrized_atoms, waters, [], grid, n_frames, 100000, sa_steps, save_path)
+        # rust_waterkit.run_waterkit_gcmcre(parametrized_atoms, waters, grid, n_frames, save_path)
+        exec_time = time.time() - start
+        print(f"Time necessary for the rust part: {exec_time/60} minutes - {exec_time} seconds")

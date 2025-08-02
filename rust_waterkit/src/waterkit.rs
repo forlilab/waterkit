@@ -3,6 +3,8 @@ use std::collections::HashSet;
 use std::fs::File;
 use std::io::Write;
 use std::time::SystemTime;
+use cubecl::wgpu::{WebGpu, WgpuDevice};
+use cubecl::{prelude::*};
 use ncollide3d::shape::FeatureId;
 use pyo3::prelude::*;
 use rand::seq::SliceRandom;
@@ -44,131 +46,14 @@ use crate::waterkit_system::AtomSystem;
 use crate::waterkit_system::AtomType;
 use crate::waterkit_system::WaterSystem;
 
-fn run_single_waterkit_gcmc_re(receptor_points: &[Atom],
-    water_configurations: &Vec<[f64; 6]>,
-    mut grid: Grid3D,
-    epoch: usize) -> (Vec<Atom>, Vec<Atom>) {
-
-    let mut receptor_map = receptor_points.to_vec();
-    let mut last_residue_number = receptor_points.iter().map(|n| n.residue_number).max().unwrap_or(1);
-    let distance_cutoff = 10.0;
-    let mut receptor_points_tree = None;
-    if receptor_map.len() > 0 {
-        receptor_points_tree = Some(build_kd_tree(&receptor_map.clone()));
-    }
-    let mut gird_points_for_placement = Vec::new();
-    if receptor_points_tree.is_some() {
-        gird_points_for_placement.extend(grid.all_points().into_iter().filter(|p| 
-            {
-                let d = distance_to_protein_grid(p, &receptor_points_tree.clone().unwrap());
-                d <= distance_cutoff && d >= 1.5
-        }).map(|p| p.coords));
-    } else {
-        gird_points_for_placement.extend(grid.all_points().into_iter().map(|p| p.coords));
-    }
-
-    let mut rng = rand::thread_rng();
-    let bulk_water_density = 0.0334; // molecules/A^3
-    let voxel_volume = grid.spacing * grid.spacing * grid.spacing;
-    let total_volume = (voxel_volume * gird_points_for_placement.len() as f64);
-    let target_n_waters = (total_volume * bulk_water_density * 0.9) as usize;
-    let min_max = find_min_max(&gird_points_for_placement);
-    // if min_max.is_some() {
-    let (min, max) = min_max.unwrap();
-
-    // Parallel version
-    let n_replicas = consts::CHEMICAL_POTENTIALS.len();
-    let mut replica_states = Vec::with_capacity(n_replicas);
-    let water_configuration = WaterMolecule::new(
-        [0.000, 0.000, 0.000],
-        [0.000, 0.756, 0.586],
-        [0.000, -0.756, 0.585],
-        "A".to_string(),
-        0,
-    );
-
-    // Initialize replica states (unchanged)
-    for i in 0..consts::CHEMICAL_POTENTIALS.len() {
-        replica_states.push(replica_exchange::ReplicaState {
-            simulator: GCMC::new(
-                water_configuration.clone(),
-                distance_cutoff,
-                min[0], max[0],
-                min[1], max[1],
-                min[2], max[2],
-                consts::CHEMICAL_POTENTIALS[i],
-                consts::BETA,
-                consts::STANDARD_VOLUME,
-                consts::GCMC_STEPS,
-            ),
-            num_waters: 0,
-            energy: 0.0,
-            positions: vec![],
-        });
-    }
-
-    // Assume rng is defined elsewhere, e.g., let mut rng = rand::thread_rng();
-    for step in 0..consts::RE_STEPS {
-        println!("Step: {}", step);
-
-        // Parallelize the GCMC simulation loop
-        replica_states.par_iter_mut().enumerate().for_each(|(replica_state, state)| {
-            // Get last residue number if step > 0
-            let last_residue_number = if step > 0 {
-                state.simulator.waters.last().unwrap().get_res_number()
-            } else {
-                last_residue_number
-            };
-
-            // Perform GCMC simulation
-            let simulation = state.simulator.gcmc_simulation(&receptor_map, total_volume, last_residue_number, 100000);
-            if simulation.is_ok() {
-                let waters = simulation.unwrap();
-                state.num_waters = waters.len();
-                state.energy = state.simulator.system_energy;
-                state.positions = state.simulator.atoms.clone();
-            }
-        });
-
-        // Replica exchange loop (remains sequential)
-        for i in 0..n_replicas - 1 {
-            let system_i = &replica_states[i];
-            let system_j = &replica_states[i + 1];
-            let mu_i = consts::CHEMICAL_POTENTIALS[i];
-            let mu_j = consts::CHEMICAL_POTENTIALS[i + 1];
-            let n_i = system_i.num_waters;
-            let n_j = system_j.num_waters;
-            let u_i = system_i.energy;
-            let u_j = system_j.energy;
-
-            let prob = replica_exchange::exchange_probability(mu_i, mu_j, n_i, n_j, u_i, u_j, consts::BETA);
-            if rng.gen::<f64>() < prob {
-                // Swap configurations
-                replica_states.swap(i, i + 1);
-                println!("Swapping configurations: {} - {}", i, i + 1);
-            }
-        }
-    }
-    for (idx, replica) in replica_states.into_iter().enumerate() {
-        if replica.simulator.mu == consts::CHEMICAL_POTENTIAL {
-            to_pdb(&replica.positions, &format!("test/water_replica_{idx}_optimized.pdb"), None);
-        }
-        // waters.par_iter().enumerate()
-        // .for_each(|(idx, (unoptimized_system, optimized_system))| {
-        //     to_pdb(&unoptimized_system, &format!("{save_path}/water_{idx}_unoptimized.pdb"), None);
-        //     to_pdb(&optimized_system, &format!("{save_path}/water_{idx}_optimized.pdb"), None)}
-        // );
-    }
-    (Vec::new(), Vec::new())
-}
-
 fn run_single_waterkit_gcmc_sa(receptor_points: &[Atom], 
     water_configurations: &Vec<[f64; 6]>, 
     mut grid: Grid3D,
     epoch: usize,
     gcmc_steps: usize,
-    sa_steps: usize) -> (Vec<Atom>, Vec<Atom>, Vec<WaterMolecule>) {
-
+    sa_steps: usize,
+device: WgpuDevice) -> (Vec<Atom>, Vec<Atom>, Vec<WaterMolecule>) {
+    let water_params = consts::WATER_PARAMS.get(consts::WATER_FF).unwrap();
     let mut receptor_map = receptor_points.to_vec();
     let mut last_residue_number = receptor_points.iter().map(|n| n.residue_number).max().unwrap_or(1);
     let distance_cutoff = 10.0;
@@ -195,18 +80,11 @@ fn run_single_waterkit_gcmc_sa(receptor_points: &[Atom],
     let min_max = find_min_max(&gird_points_for_placement);
     if min_max.is_some() {
         let (min, max) = min_max.unwrap();
-        // TIP3P water configuration
-    //     let water_configuration = WaterMolecule::new( 
-    //         [0.000, 0.000, 0.000], 
-    //         [0.000, 0.756, 0.586], 
-    //         [0.000, -0.756, 0.585],
-    //     "A".to_string(),
-    // 0);
-        // TIP3P-FB water configuration
+        let water_model = water_params.WATER_MODEL;
         let water_configuration = WaterMolecule::new( 
-            [0.000, 0.000, -0.018], 
-            [0.000, 0.761, 0.595], 
-            [0.000, -0.761, 0.594],
+            water_model[0], 
+            water_model[1], 
+            water_model[2],
         "A".to_string(),
     0);
         let mut gcmc = GCMC::new(water_configuration, 
@@ -218,7 +96,7 @@ fn run_single_waterkit_gcmc_sa(receptor_points: &[Atom],
             consts::BETA, 
             consts::STANDARD_VOLUME, 
             consts::GCMC_STEPS);
-        let simulation = gcmc.gcmc_simulation(&receptor_map,  total_volume, last_residue_number, gcmc_steps);
+        let simulation = gcmc.gcmc_simulation(&receptor_map,  total_volume, last_residue_number, gcmc_steps, device);
         if simulation.is_ok() {
             let water_molecules = simulation.unwrap();
             // SA
@@ -267,6 +145,169 @@ fn run_single_waterkit_gcmc_sa(receptor_points: &[Atom],
     return (Vec::new(), Vec::new(), Vec::new());
 }
 
+fn run_single_waterkit_gcmcmc(receptor_points: &[Atom], 
+    water_configurations: &Vec<[f64; 6]>, 
+    mut grid: Grid3D,
+    epoch: usize,
+    gcmc_steps: usize,
+    sa_steps: usize,
+    device: WgpuDevice) -> (Vec<Atom>, Vec<Atom>, Vec<WaterMolecule>) {
+    let water_params = consts::WATER_PARAMS.get(consts::WATER_FF).unwrap();
+    let mut receptor_map = receptor_points.to_vec();
+    let mut last_residue_number = receptor_points.iter().map(|n| n.residue_number).max().unwrap_or(1);
+    let distance_cutoff = 10.0;
+    let mut receptor_points_tree = None;
+    if receptor_map.len() > 0 {
+        receptor_points_tree = Some(build_kd_tree(&receptor_map.clone()));
+    }
+    let mut gird_points_for_placement = Vec::new();
+    if receptor_points_tree.is_some() {
+        gird_points_for_placement.extend(grid.all_points().into_iter().filter(|p| 
+            {
+                let d = distance_to_protein_grid(p, &receptor_points_tree.clone().unwrap());
+                d <= distance_cutoff && d >= 1.5
+        }).map(|p| p.coords));
+    } else {
+        gird_points_for_placement.extend(grid.all_points().into_iter().map(|p| p.coords));
+    }
+    
+    // GCMC
+    let bulk_water_density = 0.0334; // molecules/A^3
+    let voxel_volume = grid.spacing * grid.spacing * grid.spacing;
+    let total_volume = (voxel_volume * gird_points_for_placement.len() as f64);
+    let target_n_waters = (total_volume * bulk_water_density * 0.9) as usize;
+    let min_max = find_min_max(&gird_points_for_placement);
+    if min_max.is_some() {
+        let (min, max) = min_max.unwrap();
+        let water_model = water_params.WATER_MODEL;
+        let water_configuration = WaterMolecule::new( 
+            water_model[0], 
+            water_model[1], 
+            water_model[2],
+        "A".to_string(),
+    0);
+        let mut gcmc = GCMC::new(water_configuration, 
+            distance_cutoff, 
+            min[0], max[0], 
+            min[1], max[1], 
+            min[2], max[2], 
+            consts::CHEMICAL_POTENTIAL, 
+            consts::BETA, 
+            consts::STANDARD_VOLUME, 
+            consts::GCMC_STEPS);
+        let simulation = gcmc.gcmc_simulation(&receptor_map,  total_volume, last_residue_number, gcmc_steps, device);
+        if simulation.is_ok() {
+            let water_molecules = simulation.unwrap();
+            // SA
+            let mut system_waters: Vec<WaterSystem> = Vec::with_capacity(water_molecules.len());
+            let mut  unoptimized_water_atoms = Vec::with_capacity(water_molecules.len() * 3);
+            let mut system_atoms = Vec::new();
+            
+            let mut cnt = 0;
+            for water in water_molecules.iter() {
+                let water_vec = water.as_vec();
+                for atom in water_vec {
+                    let atom_type = match atom.atom_type().as_str() {
+                        "HW" => AtomType::WaterH,
+                        "OW" => AtomType::WaterO,
+                        _ => panic!("Unknown atom type: {}", atom.atom_type()),
+                    };
+                    unoptimized_water_atoms.push(atom.clone());
+                    system_atoms.push(AtomSystem::new(atom, atom_type));
+                    // system_atoms.push(atom.clone());
+                }
+                system_waters.push(WaterSystem::new(cnt, cnt+1, cnt+2));
+                cnt += 3;
+            }
+            for atom in receptor_points {
+                system_atoms.push(AtomSystem::new(atom.clone(), AtomType::Protein))
+            }
+            let system = waterkit_system::System::new(system_atoms, system_waters);
+            let mut sa = optimizer::SimulatedAnnealing::new(
+                system,
+                water_molecules,
+                299.0,
+                300.0,
+                0.995,
+                12.0,
+                sa_steps
+            );
+            let acceptance_rate = sa.run();
+            let mut waters = Vec::with_capacity(sa.waters.len() * 3);
+            for w in sa.waters.iter() {
+                waters.extend(w.as_vec());
+            }
+            return (Vec::new(), waters, sa.waters);
+    // SA
+        }
+    }
+    return (Vec::new(), Vec::new(), Vec::new());
+}
+
+fn run_single_waterkit_gcmc(receptor_points: &[Atom], 
+    water_configurations: &Vec<[f64; 6]>, 
+    mut grid: Grid3D,
+    epoch: usize,
+    gcmc_steps: usize,
+    sa_steps: usize,
+    device: WgpuDevice) -> (Vec<Atom>, Vec<Atom>, Vec<WaterMolecule>) {
+    let water_params = consts::WATER_PARAMS.get(consts::WATER_FF).unwrap();
+    let mut receptor_map = receptor_points.to_vec();
+    let mut last_residue_number = receptor_points.iter().map(|n| n.residue_number).max().unwrap_or(1);
+    let distance_cutoff = 10.0;
+    let mut receptor_points_tree = None;
+    if receptor_map.len() > 0 {
+        receptor_points_tree = Some(build_kd_tree(&receptor_map.clone()));
+    }
+    let mut gird_points_for_placement = Vec::new();
+    if receptor_points_tree.is_some() {
+        gird_points_for_placement.extend(grid.all_points().into_iter().filter(|p| 
+            {
+                let d = distance_to_protein_grid(p, &receptor_points_tree.clone().unwrap());
+                d <= distance_cutoff && d >= 1.5
+        }).map(|p| p.coords));
+    } else {
+        gird_points_for_placement.extend(grid.all_points().into_iter().map(|p| p.coords));
+    }
+    
+    // GCMC
+    let bulk_water_density = 0.0334; // molecules/A^3
+    let voxel_volume = grid.spacing * grid.spacing * grid.spacing;
+    let total_volume = (voxel_volume * gird_points_for_placement.len() as f64);
+    let target_n_waters = (total_volume * bulk_water_density * 0.9) as usize;
+    let min_max = find_min_max(&gird_points_for_placement);
+    if min_max.is_some() {
+        let (min, max) = min_max.unwrap();
+        let water_model = water_params.WATER_MODEL;
+        let water_configuration = WaterMolecule::new( 
+            water_model[0], 
+            water_model[1], 
+            water_model[2],
+        "A".to_string(),
+    0);
+        let mut gcmc = GCMC::new(water_configuration, 
+            distance_cutoff, 
+            min[0], max[0], 
+            min[1], max[1], 
+            min[2], max[2], 
+            consts::CHEMICAL_POTENTIAL, 
+            consts::BETA, 
+            consts::STANDARD_VOLUME, 
+            consts::GCMC_STEPS);
+        let simulation = gcmc.gcmc_simulation(&receptor_map,  total_volume, last_residue_number, gcmc_steps, device);
+        if simulation.is_ok() {
+            let water_molecules = simulation.unwrap();
+            let mut waters = Vec::with_capacity(water_molecules.len() * 3);
+            for w in water_molecules.iter() {
+                waters.extend(w.as_vec());
+            }
+            return (Vec::new(), waters, water_molecules);
+    // SA
+        }
+    }
+    return (Vec::new(), Vec::new(), Vec::new());
+}
+
 fn find_min_max(coords: &[[f64; 3]]) -> Option<([f64; 3], [f64; 3])> {
     if coords.is_empty() {
         return None;
@@ -294,91 +335,6 @@ fn distance_to_protein_grid(point: &GridPoint, tree: &KdTree<f64, 3>) -> f64 {
     nearest.distance.sqrt() // Convert squared distance to Euclidean distance
 }
 
-pub fn optimize_water_nw_with_grids(new_waters: &mut Vec<WaterMolecule>, grid: &mut Grid3D, num_steps: i32, optimization_steps: i32) {
-    // let mut optimized_waters = Vec::new();
-    let mut rng = thread_rng();
-
-    for step in 0..num_steps {
-        if let Some(water) = new_waters.choose_mut(&mut rng) {
-            optimize_using_grids(water, grid, optimization_steps, consts::TEMPERATURE);
-        }
-    }
-}
-
-pub fn optimize_water_nw_with_grids_sa(new_waters: &mut Vec<WaterMolecule>, receptor_atoms: &Vec<Atom>, grid: &mut Grid3D, num_steps: i32, optimization_steps: i32) {
-    // Worth trying reannealing after there's no acceptance for x epochs
-    
-    let plot_energies = false;
-
-    let mut rng = thread_rng();
-    let cooling_rate = 0.98;
-    let mut starting_temp = 1200.;
-    let final_temp = 0.001;
-    
-    // Reannealing
-    // let reanneal_threshold = 5000;  // Steps before checking for stagnation
-    // let reanneal_factor = 1.5;      // Reset temp to 50% of current if stagnation occurs
-    // let mut rejection_counter = 0;
-    // let max_rejections = 1000;
-    
-    // For the plot
-    // let mut waters_energies = Vec::with_capacity((num_steps/100) as usize);
-    // let mut receptor_energies = Vec::with_capacity((num_steps/100) as usize);
-    // let mut total_energies = Vec::with_capacity((num_steps/100) as usize);
-    // let (waters_energy, receptor_energy) = energy::get_system_energy(new_waters, receptor_atoms);
-    // let mut initial_energy = waters_energy + receptor_energy;
-    // let mut upper_b = initial_energy.max(waters_energy).max(receptor_energy);
-    // let mut lower_b = initial_energy.min(waters_energy).min(receptor_energy);
-    // waters_energies.push(waters_energy);
-    // receptor_energies.push(receptor_energy); 
-    // total_energies.push(initial_energy);
-
-    for step in 0..num_steps {
-        if let Some(water) = new_waters.choose_mut(&mut rng) {
-            // if monte_carlo::boltzmann_acceptance_rejection(&water.get_energy(), &consts::BOLTZMANN_ENERGY_CUTOFF, &starting_temp, &consts::BOLTZMANN_K){
-                let accepted = optimize_using_grids(water, grid, optimization_steps, starting_temp);
-            // }
-
-            // Track rejected moves
-            // if accepted {
-            //     rejection_counter = 0;  // Reset if a move is accepted
-            // } else {
-            //     rejection_counter += 1;
-            // }
-
-            // // Check for reannealing
-            // if rejection_counter >= max_rejections {
-            //     starting_temp = (starting_temp * reanneal_factor);
-            //     rejection_counter = 0;  // Reset counter after reannealing
-            //     println!("Reannealing at step {}: Reset temp to {:.2}", step, starting_temp);
-            // }
-
-            // Cooling schedule
-            if step % 10 == 0 {
-
-                // For the plot
-                // let (new_water_energy, new_receptor_energy) = energy::get_system_energy(new_waters, receptor_atoms);
-                // let new_energy = new_water_energy + new_receptor_energy;
-                // upper_b = upper_b.max(new_energy).max(new_water_energy).max(new_receptor_energy);
-                // lower_b = lower_b.min(new_energy).min(new_water_energy).min(new_receptor_energy);
-                // waters_energies.push(new_water_energy);
-                // receptor_energies.push(new_receptor_energy);
-                // total_energies.push(new_energy);
-                // // println!("Old energy: {initial_systems_energy}, new energy: {new_energy}");
-                // initial_energy = new_energy;
-                
-                starting_temp *= cooling_rate;
-                if starting_temp < final_temp {
-                    println!("Temperature reached at step {step}");
-                    break;
-                }
-            }
-            // starting_temp *= cooling_rate;
-            // println!("Temp: {starting_temp}");
-        }
-    }
-    // let plot = plot_optimization(&total_energies, &waters_energies, &receptor_energies, lower_b, upper_b, num_steps as usize, optimization_steps as usize);
-}
 
 pub fn optimize_water_network(receptor_map: &mut Vec<Atom>, new_waters: &Vec<WaterMolecule>, grid: &mut Grid3D, filename: &str) -> Vec<Atom> {
     // let start = SystemTime::now();
@@ -507,6 +463,8 @@ pub fn run_parallel_waterkit(receptor_points: Vec<Atom>,
     sa_steps: usize,
     save_path: String) {
 
+    // Initialize the device (wgpu)
+    let device = WgpuDevice::DefaultDevice;
     let waters: Vec<(Vec<Atom>, Vec<Atom>, Vec<WaterMolecule>)> = (0..epochs).into_par_iter()
         .map(|epoch| run_single_waterkit_gcmc_sa(
                 &receptor_points,
@@ -515,6 +473,7 @@ pub fn run_parallel_waterkit(receptor_points: Vec<Atom>,
                 epoch,
                 gcmc_steps,
                 sa_steps,
+                device.clone()
             )).collect();
 
     println!("Done sampling...saving results!");
@@ -524,45 +483,75 @@ pub fn run_parallel_waterkit(receptor_points: Vec<Atom>,
             // to_pdb(&unoptimized_system, &format!("{save_path}/water_{idx}_unoptimized.pdb"), None);
             to_pdb(&optimized_system, &format!("{save_path}/water_{idx}_optimized.pdb"), None)}
         );
-
-    //let mut energies = Vec::with_capacity(waters.len());
-    //for water_molecules in waters {
-    //    let s_energy = energy::get_system_energy(&water_molecules.2, &receptor_points);
-    //    energies.push(s_energy.0 + s_energy.1);
-    //}
-
-    //utils::plot_energies(&energies, &format!("energies_distribution.png"));
 }
 
 #[pyfunction]
-pub fn run_waterkit_gcmcre(receptor_points: Vec<Atom>, 
+pub fn run_waterkit_gcmc(receptor_points: Vec<Atom>, 
     water_configurations: Vec<[f64; 6]>,
     grid: Grid3D,
-    num_frames: usize, 
+    num_frames: usize,
+    gcmc_steps: usize, 
     save_path: String) {
-        let waters: (Vec<Vec<Atom>>, Vec<Vec<Atom>>) = (0..num_frames).into_par_iter()
-        .map(|epoch| run_single_waterkit_gcmc_re(
-                &receptor_points,
-                &water_configurations,
-                grid.clone(),
-                epoch
-            )).collect();
+
+    
+    // Initialize the device (wgpu)
+    let device = WgpuDevice::DefaultDevice;
+
+    let waters: Vec<(Vec<Atom>, Vec<Atom>, Vec<WaterMolecule>)> = (0..num_frames).into_par_iter()
+        .map(|epoch| run_single_waterkit_gcmc(
+            &receptor_points,
+            &water_configurations,
+            grid.clone(),
+            epoch,
+            gcmc_steps,
+            0,
+            device.clone()
+        )).collect();
 
     println!("Done sampling...saving results!");
-    
+
     waters.par_iter().enumerate()
-        .for_each(|(idx, (unoptimized_system, optimized_system))| {
+        .for_each(|(idx, (unoptimized_system, optimized_system, water_moleucles))| {
             // to_pdb(&unoptimized_system, &format!("{save_path}/water_{idx}_unoptimized.pdb"), None);
             to_pdb(&optimized_system, &format!("{save_path}/water_{idx}_optimized.pdb"), None)}
-    );
-    
+        );
+}
 
+#[pyfunction]
+pub fn run_waterkit_gcmcmc(receptor_points: Vec<Atom>, 
+    water_configurations: Vec<[f64; 6]>,
+    grid: Grid3D,
+    num_frames: usize,
+    gcmc_steps: usize,
+    mc_steps: usize, 
+    save_path: String) {
+    
+    // Initialize the device (wgpu)
+    let device = WgpuDevice::DefaultDevice;
+    let waters: Vec<(Vec<Atom>, Vec<Atom>, Vec<WaterMolecule>)> = (0..num_frames).into_par_iter()
+        .map(|epoch| run_single_waterkit_gcmcmc(
+            &receptor_points,
+            &water_configurations,
+            grid.clone(),
+            epoch,
+            gcmc_steps,
+            mc_steps,
+            device.clone()
+        )).collect();
+
+    println!("Done sampling...saving results!");
+
+    waters.par_iter().enumerate()
+        .for_each(|(idx, (unoptimized_system, optimized_system, water_moleucles))| {
+            // to_pdb(&unoptimized_system, &format!("{save_path}/water_{idx}_unoptimized.pdb"), None);
+            to_pdb(&optimized_system, &format!("{save_path}/water_{idx}_optimized.pdb"), None)}
+        );
 }
 
 #[pyfunction]
 pub fn get_energies_for_system(receptor_points: Vec<Atom>, 
     waters: Vec<[Atom; 3]>, center: [f64; 3], x: f64, y: f64, z: f64) {
-    
+    let water_params = consts::WATER_PARAMS.get(consts::WATER_FF).unwrap();
     let grid_receptor = setup_grid(&receptor_points, x, y, z, 0.375, center);
 
     for (index, water) in waters.iter().enumerate() {
@@ -593,35 +582,35 @@ pub fn get_energies_for_system(receptor_points: Vec<Atom>,
             // let mut energy = energy_for_real_water(&points, &vec![oxygen.clone()]);
             let mut energy = grid_receptor_and_w.trilinear_interpolation(oxygen.coords(), ProbeType::OW).unwrap();
             println!("Total LJ: {}", energy);
-            let e_elec = grid_receptor_and_w.trilinear_interpolation(oxygen.coords(), ProbeType::HW).unwrap() * consts::OXYGEN_W_Q_TIP3PFB;
+            let e_elec = grid_receptor_and_w.trilinear_interpolation(oxygen.coords(), ProbeType::HW).unwrap() * water_params.OXYGEN_W_Q;
             println!("Total Coulomb: {}", e_elec);
             energy += e_elec;
             println!("{index} {index} {energy} O (rec+wat)");
 
             // let mut energy_rec = energy_for_real_water(&receptor_points, &vec![oxygen.clone()]);
             let mut energy_rec = grid_receptor.trilinear_interpolation(oxygen.coords(), ProbeType::OW).unwrap();
-            energy_rec += grid_receptor.trilinear_interpolation(oxygen.coords(), ProbeType::HW).unwrap() * consts::OXYGEN_W_Q_TIP3PFB;
+            energy_rec += grid_receptor.trilinear_interpolation(oxygen.coords(), ProbeType::HW).unwrap() * water_params.OXYGEN_W_Q;
             println!("{index} {index} {energy_rec} O (just rec)");
 
             // let e = energy_for_real_water(&points, &vec![h1.clone()]);
-            let e = grid_receptor_and_w.trilinear_interpolation(h1.coords(), ProbeType::HW).unwrap() * consts::HYDROGEN_W_Q_TIP3PFB;
+            let e = grid_receptor_and_w.trilinear_interpolation(h1.coords(), ProbeType::HW).unwrap() * water_params.HYDROGEN_W_Q;
             println!("Total Coulomb: {}", e);
             println!("{index} {index} {e} H (rec+wat)");
             energy += e;
 
             // let er = energy_for_real_water(&receptor_points, &vec![h1.clone()]);
-            let er = grid_receptor.trilinear_interpolation(h1.coords(), ProbeType::HW).unwrap() * consts::HYDROGEN_W_Q_TIP3PFB;
+            let er = grid_receptor.trilinear_interpolation(h1.coords(), ProbeType::HW).unwrap() * water_params.HYDROGEN_W_Q;
             println!("{index} {index} {er} H (just rec)");
             energy_rec += er;
 
             // let e = energy_for_real_water(&points, &vec![h2.clone()]);
-            let e = grid_receptor_and_w.trilinear_interpolation(h2.coords(), ProbeType::HW).unwrap() * consts::HYDROGEN_W_Q_TIP3PFB;
+            let e = grid_receptor_and_w.trilinear_interpolation(h2.coords(), ProbeType::HW).unwrap() * water_params.HYDROGEN_W_Q;
             println!("Total Coulomb: {}", e);
             println!("{index} {index} {e} H (rec+wat)");
             energy += e;
 
             // let er = energy_for_real_water(&receptor_points, &vec![h2.clone()]);
-            let er = grid_receptor.trilinear_interpolation(h2.coords(), ProbeType::HW).unwrap() * consts::HYDROGEN_W_Q_TIP3PFB;
+            let er = grid_receptor.trilinear_interpolation(h2.coords(), ProbeType::HW).unwrap() * water_params.HYDROGEN_W_Q;
             println!("{index} {index} {er} H (just rec)");
             energy_rec += er;
 
