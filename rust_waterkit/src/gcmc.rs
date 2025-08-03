@@ -268,25 +268,7 @@ impl GCMC {
         let B = self.mu * self.beta + (volume / self.standard_volume).ln();
         
         let mut system_atoms = receptor_atoms.clone();
-        
-        // GPU
-        // let mut x = Vec::with_capacity(system_atoms.len());
-        // let mut y = Vec::with_capacity(system_atoms.len());
-        // let mut z = Vec::with_capacity(system_atoms.len());
-        // let mut rmin_half = Vec::with_capacity(system_atoms.len());
-        // let mut epsilon = Vec::with_capacity(system_atoms.len());
-        // let mut charge = Vec::with_capacity(system_atoms.len());
-
-        // for (idx, atom) in system_atoms.iter().enumerate() {
-        //     let coords = atom.coords();
-        //     x.push(coords[0] as f32);
-        //     y.push(coords[1] as f32);
-        //     z.push(coords[2] as f32);
-        //     rmin_half.push(atom.rmin_half() as f32);
-        //     epsilon.push(atom.epsilon() as f32);
-        //     charge.push(atom.charge() as f32);
-        // }
-        //
+        let mut hw_mapping_system = vec![0; system_atoms.len()];
 
         let mut rng = rand::thread_rng();
         let mut cnt = last_residue_number + 1;
@@ -306,14 +288,16 @@ impl GCMC {
                 let base_idx = water_idx * 3;
 
                 // Using single energy
-                // let start_gpu = Instant::now();
-                // let old_energy_gpu = compute_energy::<cubecl::wgpu::WgpuRuntime>(&device, &x, &y, &z, &rmin_half, &epsilon, &charge);
-                // println!("Time for GPU: {:?}", start_gpu.elapsed());
-                // println!("GPU energy: {}", old_energy_gpu);
-                // let start_cpu = Instant::now();
+                let start_gpu = Instant::now();
+                let old_energy_gpu = compute_energy::<cubecl::wgpu::WgpuRuntime>(&device, &system_atoms, &current_water.as_vec(), &hw_mapping_system, &vec![0, 1, 1]);
+                println!("Time for GPU: {:?}", start_gpu.elapsed());
+                println!("GPU energy: {}", old_energy_gpu);
+                let start_cpu = Instant::now();
                 let old_energy = energy::energy_for_real_water(&system_atoms, &current_water.as_vec());
-                // println!("Time for CPU: {:?}", start_cpu.elapsed());
-                // println!("CPU energy: {}", old_energy);
+                println!("Time for CPU: {:?}", start_cpu.elapsed());
+                println!("CPU energy: {}", old_energy);
+                let system_energy = energy::get_system_energy(&self.waters, &receptor_atoms);
+                println!("System energy: {}", system_energy.0 + system_energy.1);
 
                 if let Some(new_water) = self.propose_perturbation(
                     &current_water, 
@@ -330,13 +314,10 @@ impl GCMC {
                         system_atoms.iter_mut().enumerate().for_each(|(idx, atom)| {
                             if atom.atom_id() == new_water_atoms[0].atom_id() {
                                 atom.set_coords(new_water_atoms[0].coords());
-                                // x[idx] = atom.coords()[0] as f32
                             } else if atom.atom_id() == new_water_atoms[1].atom_id() {
                                 atom.set_coords(new_water_atoms[1].coords());
-                                // y[idx] = atom.coords()[1] as f32
                             } else if atom.atom_id() == new_water_atoms[2].atom_id() {
                                 atom.set_coords(new_water_atoms[2].coords());
-                                // z[idx] = atom.coords()[2] as f32
                             }
                         });
                     } else {
@@ -363,15 +344,9 @@ impl GCMC {
 
                     if Uniform::from(0.0..1.0).sample(&mut rng) < acceptance_prob {
                         system_atoms.extend(self.waters.last().unwrap().as_vec());
-                        // for atom in self.waters.last().unwrap().as_vec() {
-                        //     let coords = atom.coords();
-                        //     x.push(coords[0] as f32);
-                        //     y.push(coords[1] as f32);
-                        //     z.push(coords[2] as f32);
-                        //     rmin_half.push(atom.rmin_half() as f32);
-                        //     epsilon.push(atom.epsilon() as f32);
-                        //     charge.push(atom.charge() as f32);
-                        // } 
+                        hw_mapping_system.push(0);
+                        hw_mapping_system.push(1);
+                        hw_mapping_system.push(1);
                         cnt += 1;
                     } else {
                         self.waters.pop();
@@ -394,13 +369,13 @@ impl GCMC {
                 if Uniform::from(0.0..1.0).sample(&mut rng) < acceptance_prob {
                     let removed_resnumber = removed_water.get_res_number();
                     self.waters = new_waters;
-                    let mut to_remove = Vec::new();
-                    for (idx, atom) in system_atoms.iter().enumerate() {
-                        if atom.residue_number == removed_resnumber {
+                    // let mut to_remove = Vec::new();
+                    // for (idx, atom) in system_atoms.iter().enumerate() {
+                    //     if atom.residue_number == removed_resnumber {
                             // system_atoms.remove(idx);
-                            to_remove.push(idx);
-                        }
-                    }
+                            // to_remove.push(idx);
+                        // }
+                    // }
 
                     // for idx in to_remove.into_iter().rev() {
                     //     x.remove(idx);
@@ -411,6 +386,10 @@ impl GCMC {
                     //     charge.remove(idx);
                     // }
                     system_atoms.retain(|x| x.residue_number != removed_resnumber);
+
+                    let num_to_remove = 3;
+                    let new_len = hw_mapping_system.len().saturating_sub(num_to_remove);
+                    hw_mapping_system.truncate(new_len);
                 }
             }
         }

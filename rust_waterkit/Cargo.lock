@@ -2241,6 +2241,7 @@ dependencies = [
 name = "rust_waterkit"
 version = "0.1.1"
 dependencies = [
+ "bytemuck",
  "cubecl",
  "fixed",
  "itertools 0.14.0",

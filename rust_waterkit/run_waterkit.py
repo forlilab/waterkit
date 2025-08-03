@@ -80,7 +80,7 @@ def run_mcswell(receptor_path, project_path, center, alg_type="gcmc"):
     parametrized_atoms = get_data_from_meeko(pdb_file=receptor_path, project_path=project_path)
     spacing = 0.375
     x_size, y_size, z_size = 24.0, 24.0, 24.0
-    n_frames = 300
+    n_frames = 1
     print("Starting MCSwell!")
     start = time.time()
     grid = rust_waterkit.setup_system(parametrized_atoms, x_size, y_size, z_size, spacing, center)
@@ -88,7 +88,7 @@ def run_mcswell(receptor_path, project_path, center, alg_type="gcmc"):
     os.makedirs(save_path, exist_ok=True)
     # sa_steps to be adjusted
     if alg_type == "gcmc":
-        rust_waterkit.run_waterkit_gcmc(parametrized_atoms, [], grid, n_frames, 400000, save_path)
+        rust_waterkit.run_waterkit_gcmc(parametrized_atoms, [], grid, n_frames, 100, save_path)
     elif alg_type == "gcmcmc":
         rust_waterkit.run_waterkit_gcmcmc(parametrized_atoms, [], grid, n_frames, 400000, 75000, save_path)
     elif alg_type == "gcmcsa":
