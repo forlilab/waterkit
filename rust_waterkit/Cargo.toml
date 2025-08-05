@@ -10,6 +10,7 @@ crate-type = ["cdylib", "lib"]
 [dependencies]
 bytemuck = "1.23.1"
 cubecl = { version = "0.6.0", features = ["wgpu"]}
+cubecl-random = "0.6.0"
 fixed = "1.28.0"
 itertools = "0.14.0"
 kdtree = "0.7.0"
@@ -28,6 +29,9 @@ simple-logging = "2.0.2"
 
 [features]
 extension-module = ["pyo3/extension-module"]
+wgpu = ["cubecl/wgpu"]
+cuda = ["cubecl/cuda"]
+cpu = []
 
 # [profile.release]
 # debug = true

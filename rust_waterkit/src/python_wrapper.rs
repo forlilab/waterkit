@@ -11,6 +11,7 @@ use crate::waterkit::optimize_disordered_hydrogens;
 use crate::waterkit::run_parallel_waterkit;
 use crate::waterkit::run_waterkit_gcmc;
 use crate::waterkit::run_waterkit_gcmcmc;
+use crate::waterkit::test_gpu;
 
 #[pymodule(name = "rust_waterkit")]
 fn rust_waterkit(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -23,6 +24,7 @@ fn rust_waterkit(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(run_parallel_waterkit))?;
     m.add_wrapped(wrap_pyfunction!(run_waterkit_gcmc))?;
     m.add_wrapped(wrap_pyfunction!(run_waterkit_gcmcmc))?;
+    m.add_wrapped(wrap_pyfunction!(test_gpu))?;
     m.add_wrapped(wrap_pyfunction!(get_energies_for_system))?;
     m.add_wrapped(wrap_pyfunction!(optimize_disordered_hydrogens))?;
     Ok(())

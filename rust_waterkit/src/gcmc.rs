@@ -25,66 +25,6 @@ fn is_in_hydration_shell(pos: &[f64; 3], x_min: f64, x_max: f64, y_min: f64, y_m
     (pos[0] >= x_min && pos[0] <= x_max) && (pos[1] >= y_min && pos[1] <= y_max) && (pos[2] >= z_min && pos[2] <= z_max) 
 }
 
-// //GPU BABY!
-// // Define the kernel for pairwise energy calculation
-// #[cube]
-// pub fn compute_pairwise_energy(
-//     positions: &Tensor<f32>,
-//     num_atoms: u32,
-//     out_energy: &mut Tensor<f32>,
-// ) {
-//     // Simplified pairwise energy (e.g., Lennard-Jones potential)
-//     let idx = ABSOLUTE_POS;
-//     if idx < num_atoms {
-//         let mut energy = 0.0;
-//         let pos_x = positions[idx * 3];
-//         let pos_y = positions[idx * 3 + 1];
-//         let pos_z = positions[idx * 3 + 2];
-
-//         for j in 0..num_atoms {
-//             if j != idx {
-//                 let dx = pos_x - positions[j * 3];
-//                 let dy = pos_y - positions[j * 3 + 1];
-//                 let dz = pos_z - positions[j * 3 + 2];
-//                 let r2 = dx * dx + dy * dy + dz * dz;
-//                 if r2 < consts::ELECTROSTATICS_CUTOFF.powi(2) {
-//                     let r = f32::sqrt(r2);
-
-//                     let rmin = positions[idx * 3 + 3] + positions[j * 3 + 3];
-//                     let epsilon_2 = (positions[idx * 3 + 4] * positions[j * 3+ 4]);
-//                     let epsilon = F::sqrt(epsilon_2);
-//                     let rmin_over_r = rmin / r;
-//                     let lj = epsilon * (f32::powf(rmin_over_r, 12.0) - (2.0 * f32::powf(rmin_over_r, 6.0)));
-
-//                     let coulomb = consts::K_E * positions[idx * 3 + 5] * positions[j * 3 + 5] / r;
-//                     energy += lj + coulomb;
-//                 }
-//             }
-//         }
-//         out_energy[idx] = energy;
-//     }
-// }
-
-// Kernel struct implementing CubeTask
-// #[derive(Clone)]
-// struct EnergyKernel;
-
-// impl CubeTask for EnergyKernel {
-//     type Input = (TensorHandle<f32>, u32);
-//     type Output = TensorHandle<f32>;
-
-//     fn kernel_name(&self) -> &'static str {
-//         "compute_pairwise_energy"
-//     }
-
-//     fn kernel(&self, input: Self::Input, context: &mut CubeContext) -> Self::Output {
-//         let (positions, num_atoms) = input;
-//         let mut out_energy = context.create_tensor::<f32>(vec![num_atoms as usize], TensorUsage::ReadWrite);
-//         compute_pairwise_energy(&positions, num_atoms, &mut out_energy);
-//         out_energy
-//     }
-// }
-
 #[derive(Clone)]
 pub struct GCMC {
     pub waters: Vec<WaterMolecule>,
@@ -260,10 +200,8 @@ impl GCMC {
         receptor_atoms: &Vec<Atom>, 
         volume: f64, 
         last_residue_number: usize,
-        gcmc_steps: usize,
-        device: WgpuDevice) -> std::io::Result<Vec<WaterMolecule>> {
-        // let client = cubecl::wgpu::WgpuRuntime::client(&device);
-        // println!("# of waters in the system at the beginnign: {}", self.waters.len());
+        gcmc_steps: usize,) -> std::io::Result<Vec<WaterMolecule>> {
+        // device: WgpuDevice) -> std::io::Result<Vec<WaterMolecule>> {
         // ADAMS parameter
         let B = self.mu * self.beta + (volume / self.standard_volume).ln();
         
@@ -288,16 +226,22 @@ impl GCMC {
                 let base_idx = water_idx * 3;
 
                 // Using single energy
-                let start_gpu = Instant::now();
-                let old_energy_gpu = compute_energy::<cubecl::wgpu::WgpuRuntime>(&device, &system_atoms, &current_water.as_vec(), &hw_mapping_system, &vec![0, 1, 1]);
-                println!("Time for GPU: {:?}", start_gpu.elapsed());
-                println!("GPU energy: {}", old_energy_gpu);
-                let start_cpu = Instant::now();
+                // let start_gpu = Instant::now();
+                // GPU
+                #[cfg(feature = "cuda")]
+                let old_energy = compute_energy::<cubecl::cuda::CudaRuntime>(&Default::default(), &system_atoms, &self.waters.last().unwrap().as_vec(), &hw_mapping_system, &vec![0, 1, 1]);
+                #[cfg(feature = "wgpu")]
+                let old_energy = compute_energy::<cubecl::wgpu::WgpuRuntime>(&Default::default(), &system_atoms, &current_water.as_vec(), &hw_mapping_system, &vec![0, 1, 1]);
+                // println!("Time for GPU: {:?}", start_gpu.elapsed());
+                // println!("GPU energy: {}", old_energy_gpu);
+                // let start_cpu = Instant::now();
+                // CPU
+                #[cfg(feature = "cpu")]
                 let old_energy = energy::energy_for_real_water(&system_atoms, &current_water.as_vec());
-                println!("Time for CPU: {:?}", start_cpu.elapsed());
-                println!("CPU energy: {}", old_energy);
-                let system_energy = energy::get_system_energy(&self.waters, &receptor_atoms);
-                println!("System energy: {}", system_energy.0 + system_energy.1);
+                // println!("Time for CPU: {:?}", start_cpu.elapsed());
+                // println!("CPU energy: {}", old_energy);
+                // let system_energy = energy::get_system_energy(&self.waters, &receptor_atoms);
+                // println!("System energy: {}", system_energy.0 + system_energy.1);
 
                 if let Some(new_water) = self.propose_perturbation(
                     &current_water, 
@@ -305,7 +249,14 @@ impl GCMC {
                     self.waters[water_idx] = new_water;
 
                     // Using single energy
+                    // CPU
+                    #[cfg(feature = "cpu")]
                     let new_energy = energy::energy_for_real_water(&system_atoms, &self.waters[water_idx].as_vec());
+                    // GPU
+                    #[cfg(feature = "cuda")]
+                    let new_energy = compute_energy::<cubecl::cuda::CudaRuntime>(&Default::default(), &system_atoms, &self.waters.last().unwrap().as_vec(), &hw_mapping_system, &vec![0, 1, 1]);
+                    #[cfg(feature = "wgpu")]
+                    let new_energy = compute_energy::<cubecl::wgpu::WgpuRuntime>(&Default::default(), &system_atoms, &current_water.as_vec(), &hw_mapping_system, &vec![0, 1, 1]);
                     let delta_e = new_energy - old_energy;
                     let acceptance_prob = (-self.beta * delta_e).exp().min(1.0);
 
@@ -325,7 +276,6 @@ impl GCMC {
                     }
                 }
             } else if move_type == 1 {
-            // if move_type == 0 {
                 // Insertion move
                 if let Some(mut new_water) = self.propose_insertion(
                     &water_molecule_copy,
@@ -337,7 +287,14 @@ impl GCMC {
                     self.waters.push(new_water);
 
                     // Using single energy
+                    // CPU
+                    #[cfg(feature = "cpu")]
                     let new_energy = energy::energy_for_real_water(&system_atoms, &self.waters.last().unwrap().as_vec());
+                    // GPU
+                    #[cfg(feature = "cuda")]
+                    let new_energy = compute_energy::<cubecl::cuda::CudaRuntime>(&Default::default(), &system_atoms, &self.waters.last().unwrap().as_vec(), &hw_mapping_system, &vec![0, 1, 1]);
+                    #[cfg(feature = "wgpu")]
+                    let new_energy = compute_energy::<cubecl::wgpu::WgpuRuntime>(&Default::default(), &system_atoms, &self.waters.last().unwrap().as_vec(), &hw_mapping_system, &vec![0, 1, 1]);
                     let delta_e = new_energy + self.mu;
 
                     let acceptance_prob = ((1.0/(n+1.0)) * B.exp() * (-self.beta * delta_e).exp()).min(1.0);
@@ -348,6 +305,7 @@ impl GCMC {
                         hw_mapping_system.push(1);
                         hw_mapping_system.push(1);
                         cnt += 1;
+                        // old_energy = new_energy;
                     } else {
                         self.waters.pop();
                     }
@@ -358,7 +316,14 @@ impl GCMC {
 
                 // Using single energy
                 let removed_water = self.waters[removed_water_idx].clone();
+                // CPU
+                #[cfg(feature = "cpu")]
                 let removed_water_energy = energy::energy_for_real_water(&system_atoms, &removed_water.as_vec());
+                // GPU
+                #[cfg(feature = "cuda")]
+                let removed_water_energy = compute_energy::<cubecl::cuda::CudaRuntime>(&Default::default(), &system_atoms, &removed_water.as_vec(), &hw_mapping_system, &vec![0, 1, 1]);
+                #[cfg(feature = "wgpu")]
+                let removed_water_energy = compute_energy::<cubecl::wgpu::WgpuRuntime>(&Default::default(), &system_atoms, &removed_water.as_vec(), &hw_mapping_system, &vec![0, 1, 1]);
                 // Subtract the removed water energy to the previous energy
                 let new_energy = -removed_water_energy;
 
@@ -369,22 +334,6 @@ impl GCMC {
                 if Uniform::from(0.0..1.0).sample(&mut rng) < acceptance_prob {
                     let removed_resnumber = removed_water.get_res_number();
                     self.waters = new_waters;
-                    // let mut to_remove = Vec::new();
-                    // for (idx, atom) in system_atoms.iter().enumerate() {
-                    //     if atom.residue_number == removed_resnumber {
-                            // system_atoms.remove(idx);
-                            // to_remove.push(idx);
-                        // }
-                    // }
-
-                    // for idx in to_remove.into_iter().rev() {
-                    //     x.remove(idx);
-                    //     y.remove(idx);
-                    //     z.remove(idx);
-                    //     rmin_half.remove(idx);
-                    //     epsilon.remove(idx);
-                    //     charge.remove(idx);
-                    // }
                     system_atoms.retain(|x| x.residue_number != removed_resnumber);
 
                     let num_to_remove = 3;

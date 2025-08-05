@@ -84,7 +84,7 @@ pub fn compute_energy<R: Runtime>(
     hw_mapping_water: &Vec<i32>
 ) -> f64 {
     unsafe {
-        let client = R::client(device);
+        let client: ComputeClient<<R as Runtime>::Server, <R as Runtime>::Channel> = R::client(device);
         let num_atoms = atoms.len();
         let mut system_atoms = Vec::with_capacity(atoms.len() * 7);
         let mut target_water_atoms = Vec::with_capacity(water_atoms.len() * 7);

@@ -84,11 +84,11 @@ pub const VINA_GAUSS2_W: f64 = -0.005156;
 pub const USE_DIELECTRIC: bool = false;
 
 // MC 
-pub const KB: f64 = 0.0019872041; // Boltzmann constant in kcal/mol/K
-pub const KT: f64 = KB * TEMPERATURE;
-pub const STANDARD_VOLUME: f64 = 30.345; // Volume per water molecule in bulk
-pub const BETA: f64 = 1.0 / (KB * TEMPERATURE);
-pub const CHEMICAL_POTENTIAL: f64 = -6.09; // Chemical potential in kcal/mol
+pub const KB: f32 = 0.0019872041; // Boltzmann constant in kcal/mol/K
+pub const KT: f32 = KB * TEMPERATURE as f32;
+pub const STANDARD_VOLUME: f32 = 30.345; // Volume per water molecule in bulk
+pub const BETA: f32 = 1.0 / KT;
+pub const CHEMICAL_POTENTIAL: f32 = -6.09; // Chemical potential in kcal/mol
 // const LAMBDA: f64 = 0.145; // Thermal de Broglie wavelength in Å (simplified)
 pub const GCMC_STEPS: usize = 400000; // Total Monte Carlo steps -> original = 800000
 
