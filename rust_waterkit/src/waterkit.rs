@@ -1,5 +1,6 @@
 use core::f64;
 use std::collections::HashSet;
+use std::env;
 use std::fs::File;
 use std::io::Write;
 use std::time::SystemTime;
@@ -552,6 +553,7 @@ pub fn test_gpu(receptor_points: Vec<Atom>,
     num_frames: usize,
     gcmc_steps: usize, 
     save_path: String) {
+    env::set_var("RUST_BACKTRACE", "1");
     let water_params = consts::WATER_PARAMS.get(consts::WATER_FF).unwrap();
     let mut receptor_map = receptor_points.to_vec();
     let mut last_residue_number = receptor_points.iter().map(|n| n.residue_number).max().unwrap_or(1);
@@ -587,6 +589,7 @@ pub fn test_gpu(receptor_points: Vec<Atom>,
         "A".to_string(),
     0);
     let n_waters = gpu_gcmc::simulate::<cubecl::wgpu::WgpuRuntime>(
+        num_frames,
         &Default::default(), 
         receptor_points, 
         water_configuration, 
