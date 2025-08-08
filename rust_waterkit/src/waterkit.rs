@@ -599,19 +599,75 @@ pub fn test_gpu(receptor_points: Vec<Atom>,
              min[2] as f32, max[2] as f32], 
         total_volume as f32, 
         gcmc_steps as usize);
-    println!("Done sampling...saving results!");
-    for idx in 0..n_waters.len() {
-        println!("{idx} - {}", n_waters[idx]);
+    // for idx in 0..n_waters.len() {
+        // println!("{idx} - {}", n_waters[idx]);
         // println!("C {} {} {}", n_waters[idx], n_waters[idx+1], n_waters[idx+2]);
-    }
-    // waters.par_iter().enumerate()
-    //     .for_each(|(idx, (unoptimized_system, optimized_system, water_moleucles))| {
-    //         // to_pdb(&unoptimized_system, &format!("{save_path}/water_{idx}_unoptimized.pdb"), None);
-    //         to_pdb(&optimized_system, &format!("{save_path}/water_{idx}_optimized.pdb"), None)}
-    //     );
+    // }
+    println!("Done sampling...saving results!");
+    let frames = reconstruct_waters(n_waters, num_frames, 250, 7, 3);
+    frames.par_iter().enumerate()
+        .for_each(|(idx, waters)| {
+            // to_pdb(&unoptimized_system, &format!("{save_path}/water_{idx}_unoptimized.pdb"), None);
+            to_pdb(&waters, &format!("{save_path}/water_{idx}_optimized.pdb"), None)}
+        );
     }
 }
 
+fn reconstruct_waters(waters: Vec<f32>, num_frames: usize, max_n_waters: usize, atom_features: usize, atoms_per_water: usize) -> Vec<Vec<Atom>> {
+    let mut frames = Vec::new();
+    for sim in 0..num_frames {
+        // Calculate the starting index for this simulation's water data
+        let base_wat_idx = sim * max_n_waters * atom_features * atoms_per_water;
+        let mut water_molecules = Vec::<Atom>::new();
+        
+        // Iterate through each potential water molecule slot
+        for water_idx in 0..max_n_waters {
+            // Calculate the starting index for this water molecule
+            let wat_index = base_wat_idx + (water_idx * atom_features * atoms_per_water);
+            
+            // Check if this water slot contains valid data
+            // (assuming invalid waters have coordinates of 0.0, 0.0, 0.0)
+            let o_x = waters[wat_index] as f64;
+            let o_y = waters[wat_index + 1] as f64;
+            let o_z = waters[wat_index + 2] as f64;
+            
+            // Skip if this water slot is empty (all coordinates are 0)
+            // if o_x == 0.0 && o_y == 0.0 && o_z == 0.0 {
+            //     continue;
+            // }
+            
+            // Extract hydrogen coordinates
+            let h1_x = waters[wat_index + 7] as f64;       // Start of H1
+            let h1_y = waters[wat_index + 8] as f64;
+            let h1_z = waters[wat_index + 9] as f64;
+            
+            let h2_x = waters[wat_index + 14] as f64;   // Start of H2
+            let h2_y = waters[wat_index + 15] as f64;
+            let h2_z = waters[wat_index + 16] as f64;
+            
+            // Extract residue number (assuming it's stored in the last field of oxygen)
+            let resnumber = waters[wat_index + 6] as usize;  // 7th field (index 6) of oxygen
+            
+            // Create water molecule
+            let wat_mol = WaterMolecule::new(
+                [o_x, o_y, o_z],
+                [h1_x, h1_y, h1_z],
+                [h2_x, h2_y, h2_z], 
+                "A".to_string(), 
+                resnumber
+            );
+            
+            // Add all atoms from this water molecule
+            for atom in wat_mol.as_vec() {
+                water_molecules.push(atom);
+            }
+        }
+    println!("Simulation {}: Found {} water molecules", sim, water_molecules.len() / 3);
+    frames.push(water_molecules);
+    
+    }
+    frames
+}
 #[pyfunction]
 pub fn get_energies_for_system(receptor_points: Vec<Atom>, 
     waters: Vec<[Atom; 3]>, center: [f64; 3], x: f64, y: f64, z: f64) {

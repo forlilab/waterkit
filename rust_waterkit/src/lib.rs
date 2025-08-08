@@ -20,6 +20,7 @@ pub mod waterkit;
 pub mod gcmc;
 pub mod gpu_gcmc;
 pub mod gpu_geometry;
+pub mod gpu_gcmc_moves;
 pub mod replica_exchange;
 pub mod python_wrapper;
 

@@ -80,7 +80,7 @@ def run_mcswell(receptor_path, project_path, center, alg_type="gcmc"):
     parametrized_atoms = get_data_from_meeko(pdb_file=receptor_path, project_path=project_path)
     spacing = 0.375
     x_size, y_size, z_size = 24.0, 24.0, 24.0
-    n_frames = 2
+    n_frames = 1
     print("Starting MCSwell!")
     start = time.time()
     grid = rust_waterkit.setup_system(parametrized_atoms, x_size, y_size, z_size, spacing, center)
@@ -89,7 +89,7 @@ def run_mcswell(receptor_path, project_path, center, alg_type="gcmc"):
     # sa_steps to be adjusted
     if alg_type == "gcmc":
         # rust_waterkit.run_waterkit_gcmc(parametrized_atoms, [], grid, n_frames, 400000, save_path)
-        rust_waterkit.test_gpu(parametrized_atoms, [], grid, n_frames, 1, save_path)  
+        rust_waterkit.test_gpu(parametrized_atoms, [], grid, n_frames, 500, save_path)  
     elif alg_type == "gcmcmc":
         rust_waterkit.run_waterkit_gcmcmc(parametrized_atoms, [], grid, n_frames, 400000, 75000, save_path)
     elif alg_type == "gcmcsa":
@@ -146,7 +146,7 @@ if __name__ == "__main__":
     for sa_steps in sa_intervals:
         save_path = f"{project_path}/{sa_steps}_steps/frames/"
         os.makedirs(save_path, exist_ok=True)
-        rust_waterkit.run_parallel_waterkit(parametrized_atoms, waters, [], grid, n_frames, 100000, sa_steps, save_path)
+        rust_waterkit.run_parallel_waterkit(parametrized_atoms, waters, [], grid, n_frames, 100, sa_steps, save_path)
         # rust_waterkit.run_waterkit_gcmcre(parametrized_atoms, waters, grid, n_frames, save_path)
         exec_time = time.time() - start
         print(f"Time necessary for the rust part: {exec_time/60} minutes - {exec_time} seconds")

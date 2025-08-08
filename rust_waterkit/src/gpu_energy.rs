@@ -89,13 +89,6 @@ pub fn compute_energy<R: Runtime>(
         let mut system_atoms = Vec::with_capacity(atoms.len() * 7);
         let mut target_water_atoms = Vec::with_capacity(water_atoms.len() * 7);
 
-        // let mut x = Vec::with_capacity(atoms.len());
-        // let mut y = Vec::with_capacity(atoms.len());
-        // let mut z = Vec::with_capacity(atoms.len());
-        // let mut charges = Vec::with_capacity(atoms.len());
-        // let mut sigmas = Vec::with_capacity(atoms.len());
-        // let mut epsilons = Vec::with_capacity(atoms.len());
-        // let mut resnumbers = Vec::with_capacity(atoms.len());
         for atom in atoms {
             let coords = atom.coords();
             system_atoms.push(coords[0] as f32);
@@ -118,13 +111,6 @@ pub fn compute_energy<R: Runtime>(
             target_water_atoms.push(atom.residue_number as f32);
         }
 
-        // let x_input = client.create(f32::as_bytes(&x));
-        // let y_input = client.create(f32::as_bytes(&y));
-        // let z_input = client.create(f32::as_bytes(&z));
-        // let charge_input = client.create(f32::as_bytes(&charges));
-        // let sigma_input = client.create(f32::as_bytes(&sigmas));
-        // let epsilon_input = client.create(f32::as_bytes(&epsilons));
-        // let resnumbers_input = client.create(u32::as_bytes(&resnumbers));
         let system_atoms_handle = client.create(f32::as_bytes(&system_atoms));
         let target_water_handle = client.create(f32::as_bytes(&target_water_atoms));
         let hw_mapping_system_handle = client.create(i32::as_bytes(&hw_mapping_system));
