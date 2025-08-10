@@ -3,6 +3,30 @@ use cubecl::prelude::*;
 
 const NUM_FEATURES: u32 = 7;
 
+#[cube]
+pub fn lennard_jones_rmin_half(epsilon_1: f32, epsilon_2: f32, dist: f32, rmin_half1: f32, rmin_half2: f32) -> f32 {
+    let rmin = rmin_half1 + rmin_half2;
+    let epsilon = f32::sqrt(epsilon_1 * epsilon_2);
+    let lj = epsilon * (f32::powf(rmin / dist, 12.0) - (2.0 * f32::powf(rmin / dist, 6.0)));
+    lj
+}
+
+/// Calculate the Coulomb interaction energy.
+/// Parameters:
+///     q1 (&f64): Charge of the first atom (in e).
+///     q2 (&f64): Charge of the second atom (in e).
+///     r (&f64): Distance between two atoms (in angstroms).
+///
+/// Returns:
+///     f64: Coulomb energy (in kcal/mol).
+#[cube]
+pub fn coulomb_energy<F: Float>(q1: F, q2: F, r: F) -> F {
+    let k_e = F::new(332.0636); // Electrostatic constant in kcal·Å/(mol·e^2)
+    // let dielectric = 1.0; // Dielectric constant of the medium (default: 1.0)
+    let coulomb = k_e * (q1 * q2) / r;
+    coulomb
+}
+
 #[cube(launch_unchecked)]
 fn compute_interactions<F: Float>(
     atoms: &Array<F>,

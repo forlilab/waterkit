@@ -40,7 +40,7 @@ pub fn euclidean_distance<F: Float>(p1: &Array<F>, p2: &Array<F>) -> F {
     let dx = p1[0] - p2[0];
     let dy = p1[1] - p2[1];
     let dz = p1[2] - p2[2];
-    F::sqrt(dx * dx + dy *dy + dz * dz)
+    F::sqrt(dx * dx + dy * dy + dz * dz)
 }
 
 #[cube]

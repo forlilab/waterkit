@@ -1,7 +1,9 @@
-use cubecl::prelude::*;
-use crate::{consts, gpu_geometry::{self, rodrigues_rotation}};
+use std::sync::atomic::ATOMIC_ISIZE_INIT;
 
-pub const MAX_N_WATERS: u32 = 250;
+use cubecl::prelude::*;
+use crate::{consts, gpu_energy, gpu_geometry::{self, rodrigues_rotation}};
+
+pub const MAX_N_WATERS: u32 = 300;
 pub const ATOM_FEATURES: u32 = 7;
 pub const WATER_SIZE: u32 = ATOM_FEATURES * 3;
 
@@ -25,7 +27,7 @@ pub fn insertion_move(
     receptor_atoms: &Array<f32>,
     water_atoms: &mut Array<f32>,
     random_numbers: &Array<f32>,
-    energies: &mut Array<f32>,
+    // energies: &mut Array<f32>,
     sim_id: u32,
     epoch: u32,
     active_waters: u32,
@@ -34,52 +36,33 @@ pub fn insertion_move(
     last_resnum: u32,
     B: f32,
     epochs: u32,
+    // debug_energies: &mut Array<f32>
 ) -> bool {
     let mut accepted = false;
     let waters_handle_idx = sim_id  * MAX_N_WATERS * ATOM_FEATURES * 3;
     // Check if we have space for another water
     if active_waters >= MAX_N_WATERS {
         terminate!(); // No space available
+        // return false;
     }
-    
     // Calculate position for new water (at end of active waters)
     let new_water_idx = waters_handle_idx + active_waters * WATER_SIZE;
     let base_idx_for_rng = (sim_id * epochs + epoch) * 12;
 
     // Create temporary water for testing
-    let mut new_water = Array::<f32>::new(WATER_SIZE);
     let possible_resnum = last_resnum + active_waters + 1;
-    
+    let mut new_water = create_water_std(possible_resnum);
+
     // Generate new water configuration
     propose_insertion_compact(boundaries, random_numbers, &mut new_water, possible_resnum as f32, epochs, epoch);
     
     // Calculate energy of new water interacting with receptor and existing waters
-    // compute_interactions_for_insertion(
-    //     receptor_atoms,
-    //     water_atoms,
-    //     &new_water,
-    //     energies,
-    //     sim_id,
-    //     *active_waters,
-    //     waters_base_idx,
-    //     n_receptor_atoms
-    // );
-    compute_interactions(receptor_atoms, 
-                water_atoms, 
-                &new_water, 
-                energies,
-                sim_id);
-
-    // Sum up energies
-    let n_water_atoms = water_atoms.len() / ATOM_FEATURES;
-    let receptor_idx = sim_id * (n_receptor_atoms + MAX_N_WATERS as u32 * 3);
-    let mut new_energy = 0.0;
-    // Map by simulation ID
-    for energy in receptor_idx..receptor_idx + (n_receptor_atoms + n_water_atoms) {
-        new_energy += energies[energy];
-        // reset to calculate again after;
-        energies[energy] = 0.0;
-    }
+    let new_energy = energy_for_real_water_kernel(receptor_atoms,
+        water_atoms,
+        &new_water,
+        n_receptor_atoms,
+        active_waters,
+        sim_id);
         
     // Calculate acceptance probability
     let deltaE = new_energy + consts::CHEMICAL_POTENTIAL;
@@ -87,15 +70,15 @@ pub fn insertion_move(
         (1.0 / (active_waters + 1) as f32) * f32::exp(B) * f32::exp(-consts::BETA * deltaE),
         1.0
     );
-    
+
     // Check acceptances
     let rnd_acceptance = random_numbers[base_idx_for_rng + ACCEPTANCE_IDX];
-    
-    // if rnd_acceptance < acceptance_prob {
+    if rnd_acceptance < acceptance_prob {
+    // if new_enexrgy <= 0.0 {
         // ACCEPT: Copy new water to the active position
         copy_water_to_array(&new_water, water_atoms, new_water_idx);
         accepted = true;
-    // }
+    }
     // If rejected, do nothing - the slot remains empty
     accepted
 }
@@ -375,28 +358,6 @@ fn propose_insertion_compact(
     let new_ox = ox + delta_x;
     let new_oy = oy + delta_y;
     let new_oz = oz + delta_z;
-
-    new_water[0] = new_ox; // oxygen x
-    new_water[1] = new_oy; // oxygen y
-    new_water[2] = new_oz; // oxygen z
-    new_water[3] = -0.8340;     // oxygen charge
-    new_water[4] = 0.15210325;  // oxygen epsilon
-    new_water[5] = 1.7682;      // oxygen rmin_half
-    new_water[6] = resnum;              // oxygen resnum
-    new_water[7] = new_water[7]; // hydrogen1 x
-    new_water[8] = new_water[8]; // hydrogen1 y
-    new_water[9] = new_water[9]; // hydrogen1 z
-    new_water[10] = 0.4170;     // hydrogen1 charge
-    new_water[11] = 0.0;        // hydrogen1 epsilon
-    new_water[12] = 0.0;        // hydrogen1 rmin_half
-    new_water[13] = resnum;             // hydrogen1 resnum
-    new_water[14] = new_water[14]; // hydrogen2 x
-    new_water[15] = new_water[15]; // hydrogen2 y
-    new_water[16] = new_water[16]; // hydrogen2 z
-    new_water[17] = 0.4170;     // hydrogen2 charge
-    new_water[18] = 0.0;        // hydrogen2 epsilon
-    new_water[19] = 0.0;        // hydrogen2 rmin_half
-    new_water[20] = resnum;             // hydrogen2 resnum
     
     // Apply rotation around oxygen center
     let angle = angle_rnd; // Small rotation
@@ -422,19 +383,28 @@ fn propose_insertion_compact(
     axis_array[1] = axis_y;
     axis_array[2] = axis_z; 
 
-    axis_array = gpu_geometry::normalize(&mut axis_array);
+    let mut original_oxygen = Array::new(3);
+    original_oxygen[0] = new_water[0];
+    original_oxygen[1] = new_water[1];
+    original_oxygen[2] = new_water[2];
+
+    let normalized_axis_array = gpu_geometry::normalize(&mut axis_array);
 
     let mut new_h1: Array::<f32> = Array::new(3);
-    rodrigues_rotation(&h1, &axis_array, angle, &new_oxygen, &mut new_h1);
-    new_water[7] = new_h1[0]; // hydrogen1 x
-    new_water[8] = new_h1[1]; // hydrogen1 y
-    new_water[9] = new_h1[2]; // hydrogen1 z
+    rodrigues_rotation(&h1, &normalized_axis_array, angle, &original_oxygen, &mut new_h1);
+    new_water[7] = new_h1[0] + new_ox; // hydrogen1 x
+    new_water[8] = new_h1[1] + new_oy; // hydrogen1 y
+    new_water[9] = new_h1[2] + new_oz; // hydrogen1 z
 
     let mut new_h2: Array::<f32> = Array::new(3);
-    rodrigues_rotation(&h2, &axis_array, angle, &new_oxygen, &mut new_h2);
-    new_water[14] = new_h2[0]; // hydrogen2 x
-    new_water[15] = new_h2[1]; // hydrogen2 y
-    new_water[16] = new_h2[2]; // hydrogen2 z
+    rodrigues_rotation(&h2, &normalized_axis_array, angle, &original_oxygen, &mut new_h2);
+    new_water[14] = new_h2[0] + new_ox; // hydrogen2 x
+    new_water[15] = new_h2[1] + new_oy; // hydrogen2 y
+    new_water[16] = new_h2[2] + new_oz; // hydrogen2 z
+
+    new_water[0] = new_ox;
+    new_water[1] = new_oy;
+    new_water[2] = new_oz;
 }
 
 #[cube]
@@ -569,13 +539,30 @@ fn compute_interactions<F: Float>(
 
         // Fixed: multiply idx by NUM_FEATURES to get correct base index
         let base_idx = idx * ATOM_FEATURES;
-        let x = receptor_atoms[base_idx];
-        let y = receptor_atoms[base_idx + 1];
-        let z = receptor_atoms[base_idx + 2];
-        let charge = receptor_atoms[base_idx + 3];
-        let epsilon = receptor_atoms[base_idx + 4];
-        let rmin_half = receptor_atoms[base_idx + 5];
-        let resnum = receptor_atoms[base_idx + 6];
+        let mut x = F::new(0.0);
+        let mut y = F::new(0.0);
+        let mut z = F::new(0.0);
+        let mut charge = F::new(0.0);
+        let mut epsilon = F::new(0.0);
+        let mut rmin_half = F::new(0.0);
+        let mut resnum = F::new(0.0);
+        if idx < n_receptor_atoms {
+            x = receptor_atoms[base_idx];
+            y = receptor_atoms[base_idx + 1];
+            z = receptor_atoms[base_idx + 2];
+            charge = receptor_atoms[base_idx + 3];
+            epsilon = receptor_atoms[base_idx + 4];
+            rmin_half = receptor_atoms[base_idx + 5];
+            resnum = receptor_atoms[base_idx + 6];
+        } else {
+            x = water_atoms[base_idx];
+            y = water_atoms[base_idx + 1];
+            z = water_atoms[base_idx + 2];
+            charge = water_atoms[base_idx + 3];
+            epsilon = water_atoms[base_idx + 4];
+            rmin_half = water_atoms[base_idx + 5];
+            resnum = water_atoms[base_idx + 6];
+        }
         
         for j in 0..(target_water.len() / ATOM_FEATURES) {
             let start_idx = j * ATOM_FEATURES;
@@ -634,14 +621,17 @@ fn compute_interactions_for_insertion(
     waters_base_idx: u32,
     n_receptor_atoms: u32
 ) {
-    // Calculate interactions between new water and receptor
-    let receptor_energy_base = sim_id * (n_receptor_atoms + MAX_N_WATERS as u32 * 3);
-    
+    const ATOM_FEATURES: u32 = 7;
+    const WATER_SIZE: u32 = 3 * ATOM_FEATURES;
+
+    // Base offset in energies array for this simulation
+    // Layout: [ receptor_atom_energies..., water_molecule_energies... ]
+    let sim_energy_base = sim_id * (n_receptor_atoms + active_waters);
+
+    // ---- RECEPTOR vs NEW WATER ----
     for receptor_idx in 0..n_receptor_atoms {
-        let mut energy = 0.0;
         let atom_base = receptor_idx * ATOM_FEATURES;
-        
-        // Get receptor atom properties
+
         let rx = receptor_atoms[atom_base];
         let ry = receptor_atoms[atom_base + 1];
         let rz = receptor_atoms[atom_base + 2];
@@ -649,10 +639,13 @@ fn compute_interactions_for_insertion(
         let repsilon = receptor_atoms[atom_base + 4];
         let rrmin_half = receptor_atoms[atom_base + 5];
         let rresnum = receptor_atoms[atom_base + 6];
-        
-        // Interact with all atoms in new water
+
+        let mut energy = 0.0;
+
+        // Interact with all atoms in the new water
         for water_atom_idx in 0..3 {
             let water_base = water_atom_idx * ATOM_FEATURES;
+
             let wx = new_water[water_base];
             let wy = new_water[water_base + 1];
             let wz = new_water[water_base + 2];
@@ -660,66 +653,92 @@ fn compute_interactions_for_insertion(
             let wepsilon = new_water[water_base + 4];
             let wrmin_half = new_water[water_base + 5];
             let wresnum = new_water[water_base + 6];
-            
+
             if rresnum != wresnum {
                 let dx = rx - wx;
                 let dy = ry - wy;
                 let dz = rz - wz;
                 let r2 = dx * dx + dy * dy + dz * dz;
                 let r = f32::sqrt(r2);
-                
-                // LJ interaction (only for oxygen-oxygen, water_atom_idx == 0)
+
+                // Lennard–Jones (O–O only)
                 let mut lj = 0.0;
                 if water_atom_idx == 0 {
                     let rmin = rrmin_half + wrmin_half;
-                    lj = repsilon * (f32::powf(rmin / r, 12.0) - 2.0 * f32::powf(rmin / r, 6.0));
+                    let epsilon_combined = f32::sqrt(repsilon * wepsilon);
+                    let ratio = rmin / r;
+                    lj = epsilon_combined * (f32::powf(ratio, 12.0) - 2.0 * f32::powf(ratio, 6.0));
                 }
-                
-                // Coulomb interaction
+
+                // Coulomb
                 let coulomb = 332.0636 * rcharge * wcharge / r;
+
                 energy += lj + coulomb;
             }
         }
-        
-        energies[receptor_energy_base + receptor_idx] = energy;
+
+        // Store receptor–water energy per receptor atom
+        energies[sim_energy_base + receptor_idx] = energy;
     }
-    
-    // Calculate interactions between new water and existing waters
+
+    // ---- NEW WATER vs EXISTING WATERS ----
     for existing_idx in 0..active_waters {
         let existing_water_base = waters_base_idx + existing_idx * WATER_SIZE;
-        let mut energy = 0.0;
-        
-        // Load existing water
+
+        // Load existing water molecule (3 atoms)
         let mut existing_water = Array::<f32>::new(WATER_SIZE);
         load_water_from_array(existing_waters, existing_water_base, &mut existing_water);
-        
-        // Calculate interaction between new_water and existing_water
+
+        let mut energy = 0.0;
+
         for new_atom in 0..3 {
+            let new_base = new_atom * ATOM_FEATURES;
+
+            let nx = new_water[new_base];
+            let ny = new_water[new_base + 1];
+            let nz = new_water[new_base + 2];
+            let nq = new_water[new_base + 3];
+            let neps = new_water[new_base + 4];
+            let nrmin_half = new_water[new_base + 5];
+            let nresnum = new_water[new_base + 6];
+
             for exist_atom in 0..3 {
-                let new_base = new_atom * 7;
-                let exist_base = exist_atom * 7;
-                
-                let dx = new_water[new_base] - existing_water[exist_base];
-                let dy = new_water[new_base + 1] - existing_water[exist_base + 1];
-                let dz = new_water[new_base + 2] - existing_water[exist_base + 2];
-                let r2 = dx * dx + dy * dy + dz * dz;
-                let r = f32::sqrt(r2);
-                
-                if new_water[new_base + 6] != existing_water[exist_base + 6] { // Different residues
+                let exist_base = exist_atom * ATOM_FEATURES;
+
+                let ex = existing_water[exist_base];
+                let ey = existing_water[exist_base + 1];
+                let ez = existing_water[exist_base + 2];
+                let eq = existing_water[exist_base + 3];
+                let eeps = existing_water[exist_base + 4];
+                let ermin_half = existing_water[exist_base + 5];
+                let eresnum = existing_water[exist_base + 6];
+
+                if nresnum != eresnum {
+                    let dx = nx - ex;
+                    let dy = ny - ey;
+                    let dz = nz - ez;
+                    let r2 = dx * dx + dy * dy + dz * dz;
+                    let r = f32::sqrt(r2);
+
+                    // Lennard–Jones (O–O only)
                     let mut lj = 0.0;
-                    if new_atom == 0 && exist_atom == 0 { // Oxygen-oxygen
-                        let rmin = new_water[new_base + 5] + existing_water[exist_base + 5];
-                        lj = new_water[new_base + 4] * (f32::powf(rmin / r, 12.0) - 2.0 * f32::powf(rmin / r, 6.0));
+                    if new_atom == 0 && exist_atom == 0 {
+                        let rmin = nrmin_half + ermin_half;
+                        let epsilon_combined = f32::sqrt(neps * eeps);
+                        let ratio = rmin / r;
+                        lj = epsilon_combined * (f32::powf(ratio, 12.0) - 2.0 * f32::powf(ratio, 6.0));
                     }
-                    
-                    let coulomb = 332.0636 * new_water[new_base + 3] * existing_water[exist_base + 3] / r;
+
+                    // Coulomb
+                    let coulomb = 332.0636 * nq * eq / r;
+
                     energy += lj + coulomb;
                 }
             }
         }
-        
-        // Store water-water interaction energy
-        energies[receptor_energy_base + n_receptor_atoms + existing_idx * 3] = energy;
+
+        // Store water–water energy per existing water molecule
+        energies[sim_energy_base + n_receptor_atoms + existing_idx] = energy;
     }
 }
 
@@ -899,4 +918,217 @@ fn get_deletion_energy_sum(
     }
     
     total_energy
+}
+
+#[cube]
+pub fn energy_for_real_water_kernel(
+    receptor_atoms: &Array<f32>,      // [n_receptor * 7] - x,y,z,charge,epsilon,rmin_half,resnum
+    water_atoms: &Array<f32>,         // [n_waters * 7] - all waters in system
+    target_water: &Array<f32>,        // [3 * 7] - the specific water (3 atoms: O, H, H)
+    n_receptor: u32,
+    n_waters: u32,
+    sim_id: u32,
+) -> f32 {
+    let mut total_energy = 0.0f32;
+    
+    // Get target water residue number (from first atom - oxygen)
+    let target_resnum: f32 = target_water[6];
+    
+    // Iterate through target water atoms (3 atoms: O, H, H)
+    // let receptor_offset: u32 = receptor_atoms.len();
+    // Process all receptor atoms
+    for r_idx in 0u32..receptor_atoms.len() / ATOM_FEATURES {
+        let r_base: u32 = r_idx * ATOM_FEATURES;
+
+        let r_x: f32 = receptor_atoms[r_base];
+        let r_y: f32 = receptor_atoms[r_base + 1u32];
+        let r_z: f32 = receptor_atoms[r_base + 2u32];
+        let r_charge: f32 = receptor_atoms[r_base + 3u32];
+        let r_epsilon: f32 = receptor_atoms[r_base + 4u32];
+        let r_rmin_half: f32 = receptor_atoms[r_base + 5u32];
+        let r_resnum: f32 = receptor_atoms[r_base + 6u32];
+
+        for target_atom_idx in 0u32..3u32 {
+            let t_base: u32 = target_atom_idx * ATOM_FEATURES;
+            let t_x: f32 = target_water[t_base];
+            let t_y: f32 = target_water[t_base + 1u32];
+            let t_z: f32 = target_water[t_base + 2u32];
+            let t_charge: f32 = target_water[t_base + 3u32];
+            let t_epsilon: f32 = target_water[t_base + 4u32];
+            let t_rmin_half: f32 = target_water[t_base + 5u32];
+            let t_resnum: f32 = target_water[t_base + 6u32];
+            
+            // Check if target atom is HW (hydrogen in water)
+            let t_is_hw: bool = t_epsilon == 0.0f32;
+            
+            // Calculate distance
+            let dx: f32 = t_x - r_x;
+            let dy: f32 = t_y - r_y;
+            let dz: f32 = t_z - r_z;
+            let distance_sq: f32 = dx * dx + dy * dy + dz * dz;
+            let distance: f32 = f32::sqrt(distance_sq);
+            let r = f32::max(distance, 1e-8f32);
+            
+            // let r_is_hw: bool = r_epsilon == 0.0f32;
+            
+            // Lennard-Jones energy (skip if either atom is HW)
+            let mut lj_energy = 0.0f32;
+            if !t_is_hw {
+                lj_energy = gpu_energy::lennard_jones_rmin_half(
+                    t_epsilon,
+                    r_epsilon,
+                    r,
+                    t_rmin_half,
+                    r_rmin_half
+                );
+            }
+            total_energy += lj_energy;
+        
+            // Electrostatic energy
+            let electrostatics_energy: f32 = gpu_energy::coulomb_energy::<f32>(t_charge, r_charge, r);
+            total_energy += electrostatics_energy;
+        }
+    }        
+
+    let water_offset: u32 = sim_id * n_waters * ATOM_FEATURES;
+    
+    // Process all water atoms
+    for w_atom_idx in 0u32..water_atoms.len() / ATOM_FEATURES {
+        // Fix the indexing for water atoms
+        let w_base: u32 = water_offset + w_atom_idx * ATOM_FEATURES;
+        
+        let w_x: f32 = water_atoms[w_base];
+        let w_y: f32 = water_atoms[w_base + 1u32];
+        let w_z: f32 = water_atoms[w_base + 2u32];
+        let w_charge: f32 = water_atoms[w_base + 3u32];
+        let w_epsilon: f32 = water_atoms[w_base + 4u32];
+        let w_rmin_half: f32 = water_atoms[w_base + 5u32];
+        let w_resnum: f32 = water_atoms[w_base + 6u32];
+
+        for target_atom_idx in 0u32..3u32 {
+            let t_base: u32 = target_atom_idx * ATOM_FEATURES;
+            let t_x: f32 = target_water[t_base];
+            let t_y: f32 = target_water[t_base + 1u32];
+            let t_z: f32 = target_water[t_base + 2u32];
+            let t_charge: f32 = target_water[t_base + 3u32];
+            let t_epsilon: f32 = target_water[t_base + 4u32];
+            let t_rmin_half: f32 = target_water[t_base + 5u32];
+            let t_resnum: f32 = target_water[t_base + 6u32];
+            
+            // Check if target atom is HW (hydrogen in water)
+            let t_is_hw: bool = t_epsilon == 0.0f32;
+            
+            // Skip if same residue (same water molecule)
+            if t_resnum != w_resnum {
+                // Calculate distance
+                let dx: f32 = t_x - w_x;
+                let dy: f32 = t_y - w_y;
+                let dz: f32 = t_z - w_z;
+                let distance_sq: f32 = dx * dx + dy * dy + dz * dz;
+                let distance: f32 = f32::sqrt(distance_sq);
+                let r = f32::max(distance, 1e-8f32);
+                
+                let w_is_hw: bool = w_epsilon == 0.0f32;
+                
+                // Lennard-Jones energy (skip if either atom is HW)
+                let mut lj_energy = 0.0f32;
+                if !t_is_hw && !w_is_hw {
+                    lj_energy = gpu_energy::lennard_jones_rmin_half(
+                        t_epsilon,
+                        w_epsilon,
+                        r,
+                        t_rmin_half,
+                        w_rmin_half
+                    );
+                }
+                total_energy += lj_energy;
+                
+                // Electrostatic energy
+                let electrostatics_energy: f32 = gpu_energy::coulomb_energy::<f32>(t_charge, w_charge, r);
+                total_energy += electrostatics_energy;
+            }
+        }
+    }
+    
+    total_energy
+}
+
+
+
+#[cube]
+/// This is just for TIP3P for now
+fn create_water_std(resnum: u32) -> Array<f32>{
+    let mut new_water: Array<f32> = Array::new(WATER_SIZE);
+    new_water[0] = 0.000;
+    new_water[1] = 0.000;
+    new_water[2] = 0.000;
+    new_water[3] = -0.8340;
+    new_water[4] = 0.15210325;
+    new_water[5] = 1.7682;
+    new_water[6] = resnum as f32;
+    new_water[7] = 0.000;
+    new_water[8] = 0.756;
+    new_water[9] = 0.586;
+    new_water[10] = 0.4170;
+    new_water[11] = 0.000;
+    new_water[12] = 0.000;
+    new_water[13] = resnum as f32;
+    new_water[14] = 0.000;
+    new_water[15] = -0.761;
+    new_water[16] = 0.594;
+    new_water[17] = 0.4170;
+    new_water[18] = 0.000;
+    new_water[19] = 0.000;
+    new_water[20] = resnum as f32;
+    new_water
+} 
+
+
+#[cube]
+pub fn fast_flat_combine<F: Float>(
+    array_a: &Array<F>,
+    array_b: &Array<F>,
+    output: &mut Array<F>,
+    a_len: u32,
+    b_len: u32,
+) -> u32 {
+    let mut write_idx = 0u32;
+    
+    // Copy array_a
+    for i in 0..a_len {
+        if i < array_a.len() && write_idx < output.len() {
+            output[write_idx] = array_a[i];
+            write_idx += 1;
+        }
+    }
+    
+    // Copy array_b
+    for i in 0..b_len {
+        if i < array_b.len() && write_idx < output.len() {
+            output[write_idx] = array_b[i];
+            write_idx += 1;
+        }
+    }
+    
+    write_idx // Return the total number of elements written
+}
+
+#[cube]
+pub fn combine_arrays_to_sequence<F: Float>(
+    array_a: &Array<F>,
+    array_b: &Array<F>,
+) -> Sequence<F> {
+    let mut result = Sequence::<F>::new();
+    
+    // Add all elements from array_a
+    for i in 0..array_a.len() {
+        result.push(array_a[i]);
+    }
+    
+    // Add all elements from array_b
+    for i in 0..array_b.len() {
+        result.push(array_b[i]);
+    }
+    
+    result
 }

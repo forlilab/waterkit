@@ -557,12 +557,13 @@ pub fn test_gpu(receptor_points: Vec<Atom>,
     let water_params = consts::WATER_PARAMS.get(consts::WATER_FF).unwrap();
     let mut receptor_map = receptor_points.to_vec();
     let mut last_residue_number = receptor_points.iter().map(|n| n.residue_number).max().unwrap_or(1);
-    let distance_cutoff = 10.0;
+    let distance_cutoff = 25.0;
     let mut receptor_points_tree = None;
     if receptor_map.len() > 0 {
         receptor_points_tree = Some(build_kd_tree(&receptor_map.clone()));
     }
     let mut gird_points_for_placement = Vec::new();
+
     if receptor_points_tree.is_some() {
         gird_points_for_placement.extend(grid.all_points().into_iter().filter(|p| 
             {
@@ -577,6 +578,7 @@ pub fn test_gpu(receptor_points: Vec<Atom>,
     let bulk_water_density = 0.0334; // molecules/A^3
     let voxel_volume = grid.spacing * grid.spacing * grid.spacing;
     let total_volume = (voxel_volume * gird_points_for_placement.len() as f64);
+    println!("Total volume: {}", total_volume);
     let target_n_waters = (total_volume * bulk_water_density * 0.9) as usize;
     let min_max = find_min_max(&gird_points_for_placement);
     if min_max.is_some() {
@@ -604,7 +606,7 @@ pub fn test_gpu(receptor_points: Vec<Atom>,
         // println!("C {} {} {}", n_waters[idx], n_waters[idx+1], n_waters[idx+2]);
     // }
     println!("Done sampling...saving results!");
-    let frames = reconstruct_waters(n_waters, num_frames, 250, 7, 3);
+    let frames = reconstruct_waters(n_waters, num_frames, 7, 3);
     frames.par_iter().enumerate()
         .for_each(|(idx, waters)| {
             // to_pdb(&unoptimized_system, &format!("{save_path}/water_{idx}_unoptimized.pdb"), None);
@@ -613,17 +615,17 @@ pub fn test_gpu(receptor_points: Vec<Atom>,
     }
 }
 
-fn reconstruct_waters(waters: Vec<f32>, num_frames: usize, max_n_waters: usize, atom_features: usize, atoms_per_water: usize) -> Vec<Vec<Atom>> {
+fn reconstruct_waters(waters: Vec<f32>, num_frames: usize, atom_features: usize, atoms_per_water: usize) -> Vec<Vec<Atom>> {
     let mut frames = Vec::new();
     for sim in 0..num_frames {
         // Calculate the starting index for this simulation's water data
-        let base_wat_idx = sim * max_n_waters * atom_features * atoms_per_water;
+        let base_wat_idx = sim * waters.len();
         let mut water_molecules = Vec::<Atom>::new();
         
         // Iterate through each potential water molecule slot
-        for water_idx in 0..max_n_waters {
+        for water_idx in 0..waters.len() / 7 * 3 {
             // Calculate the starting index for this water molecule
-            let wat_index = base_wat_idx + (water_idx * atom_features * atoms_per_water);
+            let wat_index = base_wat_idx + (water_idx * atom_features * atom_features);
             
             // Check if this water slot contains valid data
             // (assuming invalid waters have coordinates of 0.0, 0.0, 0.0)
@@ -632,9 +634,9 @@ fn reconstruct_waters(waters: Vec<f32>, num_frames: usize, max_n_waters: usize, 
             let o_z = waters[wat_index + 2] as f64;
             
             // Skip if this water slot is empty (all coordinates are 0)
-            // if o_x == 0.0 && o_y == 0.0 && o_z == 0.0 {
-            //     continue;
-            // }
+            if o_x == 0.0 && o_y == 0.0 && o_z == 0.0 {
+                continue;
+            }
             
             // Extract hydrogen coordinates
             let h1_x = waters[wat_index + 7] as f64;       // Start of H1
