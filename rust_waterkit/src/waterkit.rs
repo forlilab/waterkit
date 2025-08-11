@@ -20,7 +20,7 @@ use crate::atom::Atom;
 use crate::energy::energy;
 use crate::energy::energy_for_real_water;
 use crate::gcmc::GCMC;
-use crate::{geometry, gpu_gcmc};
+use crate::{geometry, gpu_gcmc, gpu_gcmc_moves};
 use crate::geometry::dihedral;
 use crate::grid::Grid3D;
 use crate::grid::GridPoint;
@@ -606,7 +606,7 @@ pub fn test_gpu(receptor_points: Vec<Atom>,
         // println!("C {} {} {}", n_waters[idx], n_waters[idx+1], n_waters[idx+2]);
     // }
     println!("Done sampling...saving results!");
-    let frames = reconstruct_waters(n_waters, num_frames, 7, 3);
+    let frames = reconstruct_waters(n_waters, num_frames,  gpu_gcmc_moves::MAX_N_WATERS as usize, 4, 3);
     frames.par_iter().enumerate()
         .for_each(|(idx, waters)| {
             // to_pdb(&unoptimized_system, &format!("{save_path}/water_{idx}_unoptimized.pdb"), None);
@@ -615,23 +615,24 @@ pub fn test_gpu(receptor_points: Vec<Atom>,
     }
 }
 
-fn reconstruct_waters(waters: Vec<f32>, num_frames: usize, atom_features: usize, atoms_per_water: usize) -> Vec<Vec<Atom>> {
+fn reconstruct_waters(waters: Vec<f32>, num_frames: usize, max_n_waters: usize, atom_features: usize, atoms_per_water: usize) -> Vec<Vec<Atom>> {
     let mut frames = Vec::new();
     for sim in 0..num_frames {
         // Calculate the starting index for this simulation's water data
-        let base_wat_idx = sim * waters.len();
+        let base_wat_idx = sim * max_n_waters * atom_features * atoms_per_water;
         let mut water_molecules = Vec::<Atom>::new();
         
         // Iterate through each potential water molecule slot
-        for water_idx in 0..waters.len() / 7 * 3 {
+        for water_idx in 0..max_n_waters {
             // Calculate the starting index for this water molecule
-            let wat_index = base_wat_idx + (water_idx * atom_features * atom_features);
+            let wat_index = base_wat_idx + (water_idx * atom_features * atoms_per_water);
             
             // Check if this water slot contains valid data
             // (assuming invalid waters have coordinates of 0.0, 0.0, 0.0)
             let o_x = waters[wat_index] as f64;
             let o_y = waters[wat_index + 1] as f64;
             let o_z = waters[wat_index + 2] as f64;
+            // println!("{} - {} - {}", o_x, o_y, o_z);
             
             // Skip if this water slot is empty (all coordinates are 0)
             if o_x == 0.0 && o_y == 0.0 && o_z == 0.0 {
@@ -639,16 +640,16 @@ fn reconstruct_waters(waters: Vec<f32>, num_frames: usize, atom_features: usize,
             }
             
             // Extract hydrogen coordinates
-            let h1_x = waters[wat_index + 7] as f64;       // Start of H1
-            let h1_y = waters[wat_index + 8] as f64;
-            let h1_z = waters[wat_index + 9] as f64;
+            let h1_x = waters[wat_index + 4] as f64;       // Start of H1
+            let h1_y = waters[wat_index + 5] as f64;
+            let h1_z = waters[wat_index + 6] as f64;
             
-            let h2_x = waters[wat_index + 14] as f64;   // Start of H2
-            let h2_y = waters[wat_index + 15] as f64;
-            let h2_z = waters[wat_index + 16] as f64;
+            let h2_x = waters[wat_index + 8] as f64;   // Start of H2
+            let h2_y = waters[wat_index + 9] as f64;
+            let h2_z = waters[wat_index + 10] as f64;
             
             // Extract residue number (assuming it's stored in the last field of oxygen)
-            let resnumber = waters[wat_index + 6] as usize;  // 7th field (index 6) of oxygen
+            let resnumber = waters[wat_index + 3] as usize;  // 7th field (index 6) of oxygen
             
             // Create water molecule
             let wat_mol = WaterMolecule::new(
