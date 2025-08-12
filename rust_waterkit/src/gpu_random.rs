@@ -81,7 +81,7 @@ pub fn xoshiro128_next(state: &mut Array<u32>) -> u32 {
     result
 }
 
-// 9. Thread-safe initialization (corrected)
+// 9. Thread-safe initialization
 #[cube]
 pub fn initialize_rng_states(
     base_seed: u32,

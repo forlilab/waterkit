@@ -89,7 +89,7 @@ def run_mcswell(receptor_path, project_path, center, alg_type="gcmc"):
     # sa_steps to be adjusted
     if alg_type == "gcmc":
         # rust_waterkit.run_waterkit_gcmc(parametrized_atoms, [], grid, n_frames, 400000, save_path)
-        rust_waterkit.test_gpu(parametrized_atoms, [], grid, n_frames, 10000, save_path)  
+        rust_waterkit.test_gpu(parametrized_atoms, [], grid, n_frames, 100000, save_path)  
     elif alg_type == "gcmcmc":
         rust_waterkit.run_waterkit_gcmcmc(parametrized_atoms, [], grid, n_frames, 400000, 75000, save_path)
     elif alg_type == "gcmcsa":

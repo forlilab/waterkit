@@ -2,7 +2,7 @@ use core::f32;
 
 use crate::atom::Atom;
 use crate::gpu_gcmc_moves::WATER_SIZE;
-use crate::{consts, gpu_gcmc_moves, gpu_geometry};
+use crate::{consts, gpu_gcmc_moves, gpu_geometry, gpu_random};
 use crate::water::WaterMolecule;
 use cubecl::std::tensor::TensorHandle;
 use cubecl::{compute, prelude::*};
@@ -14,8 +14,9 @@ use rand::prelude::Distribution;
 use rand::rngs::ThreadRng;
 use rand::{random, Rng};
 
-const MAX_N_WATERS: u32 = 200;
+const MAX_N_WATERS: u32 = 500;
 const ATOM_FEATURES: u32 = 7;
+
 const MOVE_TYPE_IDX: u32 = 0;
 const TRANSLATION_X_IDX: u32 = 1;
 const TRANSLATION_Y_IDX: u32 = 2;
@@ -88,82 +89,61 @@ fn run_gcmc(
     boundaries: &Array<f32>,
     receptor_atoms: &Array<f32>,
     water_atoms: &mut Array<f32>,
-    random_numbers: &Array<f32>,
-    seeds: &Array<u32>,
-    num_waters: &mut Array<u32>,
+    seeds: &mut Array<u32>,           // persistent RNG state
+    num_waters: &mut Array<u32>,      // persistent per-sim water count
     last_resnum: u32,
     B: f32,
     volume: f32,
-    epochs: u32,
+    steps: u32,                       // steps per launch (batch)
 ) {
     let sim_id = CUBE_POS_X;
     let n_receptor_atoms = receptor_atoms.len() / ATOM_FEATURES;
-    let n_water_atoms = water_atoms.len() /4;
-    
-    // Each simulation has its own compact water array starting at this offset
-    let waters_base_idx = sim_id * MAX_N_WATERS * gpu_gcmc_moves::WATER_SIZE;
-    
-    // Track number of active waters for this simulation
-    // let mut active_waters: u32 = waters_in_the_system[sim_id];
-    let mut active_waters = 0;
-    let receptor_idx = sim_id * (n_receptor_atoms + n_water_atoms);
 
-    for epoch in 0..epochs {
-        // energies_debug[epoch] = active_waters as f32;
-        let base_idx_for_rng = (sim_id * epochs + epoch) * 12;
-        let move_type = 1.0;
-        let base_water_idx = waters_base_idx + active_waters * gpu_gcmc_moves::WATER_SIZE;
-        // if move_type == 1.0 { // INSERTION
-        if gpu_gcmc_moves::insertion_move(
+    // Load persistent RNG state
+    let mut rng_state = seeds[sim_id];
+    // Load current water count for this simulation
+    let mut active_waters = 0;
+
+    // Preallocate random number buffer
+    let mut random_numbers = Array::<f32>::new(8);
+
+    // Base offset for water atoms of this simulation
+    // let waters_base_idx = sim_id * MAX_N_WATERS * gpu_gcmc_moves::WATER_SIZE;
+
+    for _ in 0..steps {
+        // Fill random numbers once per move
+        random_numbers[0] = gpu_random::random_range(&mut rng_state, boundaries[0], boundaries[1]);
+        random_numbers[1] = gpu_random::random_range(&mut rng_state, boundaries[2], boundaries[3]);
+        random_numbers[2] = gpu_random::random_range(&mut rng_state, boundaries[4], boundaries[5]);
+        random_numbers[3] = gpu_random::random_range(&mut rng_state, -180.0, 180.0);
+        random_numbers[4] = gpu_random::random_range(&mut rng_state, -0.5, 0.5);
+        random_numbers[5] = gpu_random::random_range(&mut rng_state, -0.5, 0.5);
+        random_numbers[6] = gpu_random::random_range(&mut rng_state, -0.5, 0.5);
+        random_numbers[7] = gpu_random::random_float(&mut rng_state);
+
+        // Bounds check: don’t add water if array full
+        if active_waters < MAX_N_WATERS {
+            // let base_water_idx = waters_base_idx + active_waters * gpu_gcmc_moves::WATER_SIZE;
+            if gpu_gcmc_moves::insertion_move(
                 boundaries,
                 receptor_atoms,
                 water_atoms,
-                random_numbers,
+                &random_numbers,
                 sim_id,
-                epoch,
                 active_waters,
                 n_receptor_atoms,
                 last_resnum,
                 B,
-                epochs){
+            ) {
                 active_waters += 1;
             }
-            num_waters[sim_id] += active_waters;
-
-        // } else if move_type == 2.0 && active_waters > 0 { // DELETION
-        //     gpu_gcmc_moves::deletion_move(
-        //         receptor_atoms,
-        //         water_atoms,
-        //         random_numbers,
-        //         energies,
-        //         seeds,
-        //         sim_id,
-        //         epoch,
-        //         &mut active_waters,
-        //         waters_base_idx,
-        //         n_receptor_atoms,
-        //         B,
-        //         epochs
-        //     );
-            
-        // } else if move_type == 0.0 && active_waters > 0 { // TRANSLATION
-        //     gpu_gcmc_moves::translation_move(
-        //         boundaries,
-        //         receptor_atoms,
-        //         water_atoms,
-        //         random_numbers,
-        //         energies,
-        //         seeds,
-        //         sim_id,
-        //         epoch,
-        //         active_waters,
-        //         waters_base_idx,
-        //         n_receptor_atoms,
-        //         epochs
-        //     );
-        // }
+        }
     }
+
+    // Save updated state for next batch
+    seeds[sim_id] = rng_state;
 }
+
 
 pub fn simulate<R: Runtime>(
     n_simulations: usize,
@@ -175,16 +155,11 @@ pub fn simulate<R: Runtime>(
     volume: f32,
     num_steps: usize) -> Vec<f32> {
     let client: ComputeClient<<R as Runtime>::Server, <R as Runtime>::Channel> = R::client(device);
-    let random_buffer = prepare_random_numbers(n_simulations * num_steps, 
-        &boundaries, 
-        -0.5, 
-        0.5, 
-        -180.0, 
-    180.0);
 
     // Try to use cubecl-random to create random seeds to pass to the kernels
     // These are the seeds that will be used to generate random numbers for the simulation
     // One seed per simulation per epoch -> random molecule to affect will be picked with xorshift function + the seed
+    debug_buffer_calculations(n_simulations);
     let seed_tensor = TensorHandle::<R, u32>::empty(&client, [n_simulations*num_steps].to_vec());
     random_normal::<R, u32>(&client, 42, 2, seed_tensor.as_ref());
 
@@ -217,33 +192,24 @@ pub fn simulate<R: Runtime>(
         let o_c = water[0].coords();
         let h1_c = water[1].coords();
         let h2_c = water[2].coords();
-        waters_buffer.push(o_c[0] as f32);
-        waters_buffer.push(o_c[1] as f32);
-        waters_buffer.push(o_c[2] as f32);
+        waters_buffer.push(0.0);
+        waters_buffer.push(0.0);
+        waters_buffer.push(0.0);
         waters_buffer.push(0.);
-        // waters_buffer.push(0.);
-        // waters_buffer.push(0.);
-        // waters_buffer.push(0.);
-        waters_buffer.push(h1_c[0] as f32);
-        waters_buffer.push(h1_c[1] as f32);
-        waters_buffer.push(h1_c[2] as f32);
+        waters_buffer.push(0.0);
+        waters_buffer.push(0.0);
+        waters_buffer.push(0.0);
         waters_buffer.push(0.);
-        // waters_buffer.push(0.);
-        // waters_buffer.push(0.);
-        // waters_buffer.push(0.);
-        waters_buffer.push(h2_c[0] as f32);
-        waters_buffer.push(h2_c[1] as f32);
-        waters_buffer.push(h2_c[2] as f32);
+        waters_buffer.push(0.0);
+        waters_buffer.push(0.0);
+        waters_buffer.push(0.0);
         waters_buffer.push(0.);
-        // waters_buffer.push(0.);
-        // waters_buffer.push(0.);
-        // waters_buffer.push(0.);
     }
     println!("N WATERS: {}", waters_buffer.len());
     let boundaries_handle = client.create(f32::as_bytes(&boundaries));
     let receptor_atoms_handle = client.create(f32::as_bytes(&receptor_atoms_buffer));
     let water_atoms_handle = client.create(f32::as_bytes(&waters_buffer));
-    let random_numbers_handle = client.create(f32::as_bytes(&random_buffer));
+    // let random_numbers_handle = client.create(f32::as_bytes(&random_buffer));
     let wat_num_handle = client.empty(n_simulations * core::mem::size_of::<u32>());
     
     let volume_var = volume / consts::STANDARD_VOLUME;
@@ -260,7 +226,6 @@ pub fn simulate<R: Runtime>(
             ArrayArg::from_raw_parts::<f32>(&boundaries_handle, 6, 1), 
             ArrayArg::from_raw_parts::<f32>(&receptor_atoms_handle, receptor_atoms_buffer.len(), 1), 
             ArrayArg::from_raw_parts::<f32>(&water_atoms_handle, waters_buffer.len(), 1), 
-            ArrayArg::from_raw_parts::<f32>(&random_numbers_handle, n_simulations * num_steps * 12, 1), 
             ArrayArg::from_raw_parts::<u32>(&seed_tensor.handle, n_simulations*num_steps, 1), 
             ArrayArg::from_raw_parts::<u32>(&wat_num_handle, n_simulations, 1),
             ScalarArg {elem: receptor_atoms_buffer[receptor_atoms_buffer.len() -1] as u32}, 
@@ -274,9 +239,13 @@ pub fn simulate<R: Runtime>(
     let output: Vec<f32> = f32::from_bytes(&bytes).to_vec();
     println!("{}", output.len() / 4 / 3);
 
-    let wat_bytes = client.read_one(wat_num_handle.clone().binding());
-    let w_out = u32::from_bytes(&wat_bytes).to_vec();
-    println!("{:?}", w_out);
+    for chunk in output.chunks(12) {
+        println!("{:?}", chunk);
+    }
+
+    // let wat_bytes = client.read_one(wat_num_handle.clone().binding());
+    // let w_out = u32::from_bytes(&wat_bytes).to_vec();
+    // println!("{:?}", w_out);
     output
 }
 
@@ -297,7 +266,7 @@ pub fn simulate<R: Runtime>(
 //     let effective_batch_size = batch_size.unwrap_or_else(|| {
 //         // Conservative default: limit to 1000 steps per batch to avoid memory issues
 //         // You can tune this based on your GPU memory
-//         std::cmp::min(100, num_steps)
+//         std::cmp::min(5000, num_steps)
 //     });
     
 //     println!("Processing {} steps in batches of {}", num_steps, effective_batch_size);
@@ -325,24 +294,20 @@ pub fn simulate<R: Runtime>(
 //     println!("N FRAMES: {}", n_simulations);
 
 //     // Initialize waters buffer (this remains the same size regardless of batch size)
-//     let mut waters_buffer = Vec::with_capacity(n_simulations * max_n_waters * ATOM_FEATURES as usize * 3);
+//     let mut waters_buffer = Vec::with_capacity(n_simulations * max_n_waters * 4 as usize * 3);
 //     for idx in 0..(n_simulations * max_n_waters) {
-//         let water = water_configuration.as_vec();
-//         let o_c = water[0].coords();
-//         let h1_c = water[1].coords();
-//         let h2_c = water[2].coords();
-//         waters_buffer.push(o_c[0] as f32);
-//         waters_buffer.push(o_c[1] as f32);
-//         waters_buffer.push(o_c[2] as f32);
-//         waters_buffer.push(0.); waters_buffer.push(0.); waters_buffer.push(0.); waters_buffer.push(0.);
-//         waters_buffer.push(h1_c[0] as f32);
-//         waters_buffer.push(h1_c[1] as f32);
-//         waters_buffer.push(h1_c[2] as f32);
-//         waters_buffer.push(0.); waters_buffer.push(0.); waters_buffer.push(0.); waters_buffer.push(0.);
-//         waters_buffer.push(h2_c[0] as f32);
-//         waters_buffer.push(h2_c[1] as f32);
-//         waters_buffer.push(h2_c[2] as f32);
-//         waters_buffer.push(0.); waters_buffer.push(0.); waters_buffer.push(0.); waters_buffer.push(0.);
+//         waters_buffer.push(0.0);
+//         waters_buffer.push(0.0);
+//         waters_buffer.push(0.0);
+//         waters_buffer.push(0.);
+//         waters_buffer.push(0.0);
+//         waters_buffer.push(0.0);
+//         waters_buffer.push(0.0);
+//         waters_buffer.push(0.);
+//         waters_buffer.push(0.0);
+//         waters_buffer.push(0.0);
+//         waters_buffer.push(0.0);
+//         waters_buffer.push(0.);
 //     }
 
 //     // Create static GPU handles that will be reused across batches
@@ -350,13 +315,13 @@ pub fn simulate<R: Runtime>(
 //     let receptor_atoms_handle = client.create(f32::as_bytes(&receptor_atoms_buffer));
 //     let water_atoms_handle = client.empty(waters_buffer.len() * core::mem::size_of::<f32>());
 //     let waters_in_the_system_handle = client.create(u32::as_bytes(&vec![0u32; n_simulations]));
+//     let wat_num_handle = client.empty(n_simulations * core::mem::size_of::<u32>());
     
 //     // Calculate volume variables
 //     let volume_var = volume / consts::STANDARD_VOLUME;
 //     let B = consts::CHEMICAL_POTENTIAL * consts::BETA + volume_var.ln();
     
 //     // Result accumulator
-//     let mut all_energies_debug = Vec::new();
     
 //     // Process in batches
 //     let num_batches = (num_steps + effective_batch_size - 1) / effective_batch_size;
@@ -388,31 +353,26 @@ pub fn simulate<R: Runtime>(
         
 //         // Launch kernel for this batch
 //         unsafe {
-//             run_gcmc::launch_unchecked::<R>(
-//                 &client, 
-//                 CubeCount::Static(n_simulations as u32, 1, 1),
-//                 CubeDim::new(1, 1, 1),
-//                 ArrayArg::from_raw_parts::<f32>(&boundaries_handle, 6, 1), 
-//                 ArrayArg::from_raw_parts::<f32>(&receptor_atoms_handle, receptor_atoms_buffer.len(), 1), 
-//                 ArrayArg::from_raw_parts::<f32>(&water_atoms_handle, waters_buffer.len(), 1), 
-//                 ArrayArg::from_raw_parts::<f32>(&batch_random_numbers_handle, n_simulations * current_batch_size * 12, 1), 
-//                 ArrayArg::from_raw_parts::<u32>(&batch_seed_tensor.handle, n_simulations * current_batch_size, 1), 
-//                 ArrayArg::from_raw_parts::<u32>(&waters_in_the_system_handle, n_simulations, 1),
-//                 ScalarArg { elem: receptor_atoms_buffer[receptor_atoms_buffer.len() - 1] as u32 },
-//                 ScalarArg { elem: B },
-//                 ScalarArg { elem: volume }, 
-//                 ScalarArg { elem: current_batch_size as u32 },
-//                 ArrayArg::from_raw_parts::<f32>(&batch_energies_debug, n_simulations * current_batch_size, 1)
-//             );
-//         }
+//         run_gcmc::launch_unchecked::<R>(
+//             &client, 
+//             CubeCount::Static(n_simulations as u32, 1, 1),
+//             CubeDim::new(1,1, 1),
+//             ArrayArg::from_raw_parts::<f32>(&boundaries_handle, 6, 1), 
+//             ArrayArg::from_raw_parts::<f32>(&receptor_atoms_handle, receptor_atoms_buffer.len(), 1), 
+//             ArrayArg::from_raw_parts::<f32>(&water_atoms_handle, waters_buffer.len(), 1), 
+//             ArrayArg::from_raw_parts::<u32>(&batch_seed_tensor.handle, n_simulations*num_steps, 1), 
+//             ArrayArg::from_raw_parts::<u32>(&wat_num_handle, n_simulations, 1),
+//             ScalarArg {elem: receptor_atoms_buffer[receptor_atoms_buffer.len() -1] as u32}, 
+//             ScalarArg {elem: B},
+//             ScalarArg {elem: volume}, 
+//             ScalarArg {elem: num_steps as u32},
+//         );
+//     }
         
 //         // Read results from this batch
 //         let batch_energies_bytes = client.read_one(batch_energies_debug.clone().binding());
 //         let batch_energies: Vec<f32> = f32::from_bytes(&batch_energies_bytes).to_vec();
-        
-//         // Accumulate results
-//         all_energies_debug.extend(batch_energies);
-        
+                
 //         println!("Completed batch {}/{}", batch_idx + 1, num_batches);
 //     }
     
@@ -420,7 +380,48 @@ pub fn simulate<R: Runtime>(
 //     let bytes = client.read_one(water_atoms_handle.clone().binding());
 //     let output: Vec<f32> = f32::from_bytes(&bytes).to_vec();
     
-//     println!("Total active waters across all batches: {:?}", all_energies_debug.len());
+//     println!("Total active waters across all batches: {:?}", output.len() / gpu_gcmc_moves::WATER_SIZE as usize);
     
 //     output
 // }
+
+// Add this debugging to your host code to check for overflow issues
+
+pub fn debug_buffer_calculations(n_simulations: usize) {
+    println!("=== BUFFER SIZE DEBUGGING ===");
+    println!("MAX_N_WATERS: {}", MAX_N_WATERS);
+    println!("WATER_SIZE: {}", gpu_gcmc_moves::WATER_SIZE);
+    println!("n_simulations: {}", n_simulations);
+    
+    // Check for potential overflow in index calculations
+    let waters_per_sim = MAX_N_WATERS as usize * gpu_gcmc_moves::WATER_SIZE as usize;
+    let total_water_elements = n_simulations * waters_per_sim;
+    
+    println!("Waters per simulation: {}", waters_per_sim);
+    println!("Total water buffer elements: {}", total_water_elements);
+    println!("Total buffer size (MB): {:.2}", (total_water_elements * 4) as f64 / 1_048_576.0);
+    
+    // Check if calculations would overflow u32
+    let max_sim_id = n_simulations - 1;
+    let max_base_idx = max_sim_id as u32 * MAX_N_WATERS * gpu_gcmc_moves::WATER_SIZE;
+    let max_water_idx = max_base_idx + (MAX_N_WATERS - 1) * gpu_gcmc_moves::WATER_SIZE;
+    
+    println!("Max simulation base index: {}", max_base_idx);
+    println!("Max water index: {}", max_water_idx);
+    println!("Total buffer length: {}", total_water_elements);
+    
+    if max_water_idx as usize >= total_water_elements {
+        println!("❌ OVERFLOW DETECTED! Max index {} >= buffer size {}", 
+                 max_water_idx, total_water_elements);
+    } else {
+        println!("✅ Index calculations look safe");
+    }
+    
+    // Check for u32 overflow in the multiplication itself
+    let check_overflow = (max_sim_id as u64) * (MAX_N_WATERS as u64) * (gpu_gcmc_moves::WATER_SIZE as u64);
+    if check_overflow > u32::MAX as u64 {
+        println!("❌ U32 OVERFLOW in index calculation! {} > {}", check_overflow, u32::MAX);
+    } else {
+        println!("✅ No u32 overflow in index calculations");
+    }
+}
