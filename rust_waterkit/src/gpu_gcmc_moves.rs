@@ -61,7 +61,7 @@ pub fn insertion_move(
         // Generate new water configuration
         propose_insertion_compact(boundaries, random_numbers, &mut new_water, possible_resnum as f32);
         
-        // Calculate energy of new water interacting with receptor and existing waters
+        // // Calculate energy of new water interacting with receptor and existing waters
         let receptor_energy = energy_for_real_water_kernel(receptor_atoms,
             &new_water,
             n_receptor_atoms,
@@ -72,7 +72,9 @@ pub fn insertion_move(
             waters_energy = energy_for_real_water_with_waters_kernel(water_atoms, &new_water, sim_id, active_waters);
             // let new_energy = 0.0;
         }
-        let new_energy = receptor_energy;
+        let new_energy = receptor_energy + waters_energy;
+
+        // let new_energy = -1.0;
 
         // Calculate acceptance probability
         let deltaE = new_energy + consts::CHEMICAL_POTENTIAL;
@@ -81,7 +83,7 @@ pub fn insertion_move(
             1.0
         );
 
-        // Check acceptances
+        // // Check acceptances
         let rnd_acceptance = random_numbers[7];
         if rnd_acceptance < acceptance_prob {
         // if new_energy <= 0.0 {

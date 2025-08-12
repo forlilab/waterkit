@@ -6,7 +6,7 @@ use crate::{consts, gpu_gcmc_moves, gpu_geometry, gpu_random};
 use crate::water::WaterMolecule;
 use cubecl::std::tensor::TensorHandle;
 use cubecl::{compute, prelude::*};
-use cubecl_random::random_normal;
+use cubecl_random::{random_normal, random_uniform};
 use fixed::types::extra::Unsigned;
 use nalgebra::Scalar;
 use rand::distributions::Uniform;
@@ -84,7 +84,7 @@ pub fn prepare_random_numbers(n_epochs: usize,
     random_numbers
 }
 
-#[cube(launch_unchecked)]
+#[cube(launch)]
 fn run_gcmc(
     boundaries: &Array<f32>,
     receptor_atoms: &Array<f32>,
@@ -110,7 +110,7 @@ fn run_gcmc(
     // Base offset for water atoms of this simulation
     // let waters_base_idx = sim_id * MAX_N_WATERS * gpu_gcmc_moves::WATER_SIZE;
 
-    for _ in 0..steps {
+    for step in 0..steps {
         // Fill random numbers once per move
         random_numbers[0] = gpu_random::random_range(&mut rng_state, boundaries[0], boundaries[1]);
         random_numbers[1] = gpu_random::random_range(&mut rng_state, boundaries[2], boundaries[3]);
@@ -145,6 +145,147 @@ fn run_gcmc(
 }
 
 
+// pub fn simulate<R: Runtime>(
+//     n_simulations: usize,
+//     device: &R::Device,
+//     receptor_atoms: Vec<Atom>,
+//     water_configuration: WaterMolecule,
+//     cutoff: f32,
+//     boundaries: Vec<f32>,
+//     volume: f32,
+//     num_steps: usize,
+// ) -> Vec<f32> {
+//     const EPOCHS_PER_BATCH: usize = 5000; // Adjust based on your GPU timeout limits
+    
+//     let client: ComputeClient<<R as Runtime>::Server, <R as Runtime>::Channel> = R::client(device);
+
+//     debug_buffer_calculations(n_simulations);
+    
+//     // Calculate batching parameters
+//     let num_batches = (num_steps + EPOCHS_PER_BATCH - 1) / EPOCHS_PER_BATCH; // Ceiling division
+//     println!("Running {} total epochs in {} batches of up to {} epochs each", 
+//              num_steps, num_batches, EPOCHS_PER_BATCH);
+
+//     println!("# Atoms in the receptor: {}", receptor_atoms.len());
+
+//     // Move the receptor to the global memory on the GPU (this stays the same across batches)
+//     let mut receptor_atoms_buffer = Vec::with_capacity(receptor_atoms.len() * ATOM_FEATURES as usize);
+//     let n_receptor_atoms = receptor_atoms.len();
+
+//     for atom in receptor_atoms {
+//         let coords = atom.coords();
+//         receptor_atoms_buffer.push(coords[0] as f32);
+//         receptor_atoms_buffer.push(coords[1] as f32);
+//         receptor_atoms_buffer.push(coords[2] as f32);
+//         receptor_atoms_buffer.push(atom.charge() as f32);
+//         receptor_atoms_buffer.push(atom.epsilon() as f32);
+//         receptor_atoms_buffer.push(atom.rmin_half() as f32);
+//         receptor_atoms_buffer.push(atom.residue_number as f32);
+//     }
+//     println!("Last element of the receptor before going to GPU: {}", 
+//              receptor_atoms_buffer[receptor_atoms_buffer.len() - 1]);
+
+//     let max_n_waters = MAX_N_WATERS as usize;
+//     println!("N FRAMES: {}", n_simulations);
+
+//     // Initialize waters buffer (this will accumulate results across batches)
+//     let mut accumulated_waters_buffer = Vec::with_capacity(n_simulations * max_n_waters * gpu_gcmc_moves::WATER_SIZE as usize);
+//     for idx in 0..(n_simulations * max_n_waters) {
+//         for _ in 0..gpu_gcmc_moves::WATER_SIZE {
+//             accumulated_waters_buffer.push(0.0);
+//         }
+//     }
+
+//     // Create persistent GPU buffers that we'll reuse across batches
+//     let boundaries_handle = client.create(f32::as_bytes(&boundaries));
+//     let receptor_atoms_handle = client.create(f32::as_bytes(&receptor_atoms_buffer));
+    
+//     let volume_var = volume / consts::STANDARD_VOLUME;
+//     let B = consts::CHEMICAL_POTENTIAL * consts::BETA + volume_var.ln();
+
+//     // Process each batch
+//     for batch_idx in 0..num_batches {
+//         let batch_start = batch_idx * EPOCHS_PER_BATCH;
+//         let batch_end = std::cmp::min(batch_start + EPOCHS_PER_BATCH, num_steps);
+//         let current_batch_size = batch_end - batch_start;
+        
+//         println!("Processing batch {}/{}: epochs {}-{} ({} epochs)", 
+//                  batch_idx + 1, num_batches, batch_start, batch_end - 1, current_batch_size);
+
+//         // Create seeds for this batch only
+//         let seed_tensor = TensorHandle::<R, u32>::empty(&client, [n_simulations * current_batch_size].to_vec());
+//         random_uniform::<R, u32>(&client, 42 + batch_idx as u32, u32::MAX - 1, seed_tensor.as_ref());
+
+//         // Create waters buffer for this batch (start with accumulated results)
+//         let water_atoms_handle = client.create(f32::as_bytes(&accumulated_waters_buffer));
+//         let wat_num_handle = client.empty(n_simulations * core::mem::size_of::<u32>());
+
+//         unsafe {
+//             run_gcmc::launch_unchecked::<R>(
+//                 &client,
+//                 CubeCount::Static(n_simulations as u32, 1, 1),
+//                 CubeDim::new(1, 1, 1),
+//                 ArrayArg::from_raw_parts::<f32>(&boundaries_handle, 6, 1),
+//                 ArrayArg::from_raw_parts::<f32>(&receptor_atoms_handle, receptor_atoms_buffer.len(), 1),
+//                 ArrayArg::from_raw_parts::<f32>(&water_atoms_handle, accumulated_waters_buffer.len(), 1),
+//                 ArrayArg::from_raw_parts::<u32>(&seed_tensor.handle, n_simulations * current_batch_size, 1),
+//                 ArrayArg::from_raw_parts::<u32>(&wat_num_handle, n_simulations, 1),
+//                 ScalarArg { elem: receptor_atoms_buffer[receptor_atoms_buffer.len() - 1] as u32 },
+//                 ScalarArg { elem: B },
+//                 ScalarArg { elem: volume },
+//                 ScalarArg { elem: current_batch_size as u32 }, // Pass current batch size instead of total
+//             );
+//         }
+
+//         // Synchronize to prevent timeout and ensure batch completion
+//         client.sync();
+
+//         // Read back results from this batch and update accumulated buffer
+//         let bytes = client.read_one(water_atoms_handle.clone().binding());
+//         let batch_output: Vec<f32> = f32::from_bytes(&bytes).to_vec();
+        
+//         // Update accumulated results
+//         accumulated_waters_buffer = batch_output;
+
+//         println!("Batch {} completed", 
+//                  batch_idx + 1);
+//     }
+
+//     println!("All {} batches completed successfully!", num_batches);
+//     println!("Final total waters: {}", accumulated_waters_buffer.len() / 4 / 3);
+
+//     accumulated_waters_buffer
+// }
+
+#[cube(launch_unchecked)]
+fn run_stupid_random(
+    seeds: &mut Array<u32>,           // persistent RNG state
+    steps: u32,                       // steps per launch (batch)
+) {
+    let sim_id = ABSOLUTE_POS;
+    // Load persistent RNG state
+    let mut rng_state = seeds[sim_id];
+    // Load current water count for this simulation
+
+    // Preallocate random number buffer
+    let mut random_numbers = Array::<f32>::new(8);
+
+    for step in 0..steps {
+        // Fill random numbers once per move
+        random_numbers[0] = gpu_random::random_range(&mut rng_state, -80.0, 20.0);
+        random_numbers[1] = gpu_random::random_range(&mut rng_state, -2.5, 34.2);
+        random_numbers[2] = gpu_random::random_range(&mut rng_state, -19.32, 76.3);
+        random_numbers[3] = gpu_random::random_range(&mut rng_state, -180.0, 180.0);
+        random_numbers[4] = gpu_random::random_range(&mut rng_state, -0.5, 0.5);
+        random_numbers[5] = gpu_random::random_range(&mut rng_state, -0.5, 0.5);
+        random_numbers[6] = gpu_random::random_range(&mut rng_state, -0.5, 0.5);
+        random_numbers[7] = gpu_random::random_float(&mut rng_state);
+    }
+
+    // Save updated state for next batch
+    seeds[sim_id] = rng_state;
+}
+
 pub fn simulate<R: Runtime>(
     n_simulations: usize,
     device: &R::Device,
@@ -161,7 +302,7 @@ pub fn simulate<R: Runtime>(
     // One seed per simulation per epoch -> random molecule to affect will be picked with xorshift function + the seed
     debug_buffer_calculations(n_simulations);
     let seed_tensor = TensorHandle::<R, u32>::empty(&client, [n_simulations*num_steps].to_vec());
-    random_normal::<R, u32>(&client, 42, 2, seed_tensor.as_ref());
+    random_uniform::<R, u32>(&client, u32::MIN, u32::MAX - 1, seed_tensor.as_ref());
 
     println!("# Atoms in the receptor: {}", receptor_atoms.len());
 
@@ -219,7 +360,7 @@ pub fn simulate<R: Runtime>(
     // let num_workgroups = (n_receptor_atoms as u32 + threads_per_workgroup - 1) / threads_per_workgroup;
 
     unsafe {
-        run_gcmc::launch_unchecked::<R>(
+        run_gcmc::launch::<R>(
             &client, 
             CubeCount::Static(n_simulations as u32, 1, 1),
             CubeDim::new(1,1, 1),
@@ -235,157 +376,27 @@ pub fn simulate<R: Runtime>(
         );
     }
 
+    // unsafe {
+    //     run_stupid_random::launch_unchecked::<R>(
+    //         &client, 
+    //         CubeCount::Static(1, 1, 1),
+    //         CubeDim::new(1,1, 1),
+    //         ArrayArg::from_raw_parts::<u32>(&seed_tensor.handle, n_simulations * num_steps as usize, 1), 
+    //         ScalarArg {elem: num_steps as u32},
+    //     );
+    // }
+
     let bytes = client.read_one(water_atoms_handle.clone().binding());
     let output: Vec<f32> = f32::from_bytes(&bytes).to_vec();
-    println!("{}", output.len() / 4 / 3);
+    // println!("{}", output.len() / 4 / 3);
 
-    for chunk in output.chunks(12) {
-        println!("{:?}", chunk);
-    }
+    // let n_waters_bytes = client.read_one(wat_num_handle.clone().binding());
+    // let output_n_waters: Vec<f32> = f32::from_bytes(&n_waters_bytes).to_vec();
+    // println!("# Accepted: {:?}", output_n_waters);
 
-    // let wat_bytes = client.read_one(wat_num_handle.clone().binding());
-    // let w_out = u32::from_bytes(&wat_bytes).to_vec();
-    // println!("{:?}", w_out);
     output
 }
 
-// pub fn simulate<R: Runtime>(
-//     n_simulations: usize,
-//     device: &R::Device,
-//     receptor_atoms: Vec<Atom>,
-//     water_configuration: WaterMolecule,
-//     cutoff: f32,
-//     boundaries: Vec<f32>,
-//     volume: f32,
-//     num_steps: usize,
-//     batch_size: Option<usize>) -> Vec<f32> {
-    
-//     let client: ComputeClient<<R as Runtime>::Server, <R as Runtime>::Channel> = R::client(device);
-    
-//     // Determine optimal batch size based on available memory or user preference
-//     let effective_batch_size = batch_size.unwrap_or_else(|| {
-//         // Conservative default: limit to 1000 steps per batch to avoid memory issues
-//         // You can tune this based on your GPU memory
-//         std::cmp::min(5000, num_steps)
-//     });
-    
-//     println!("Processing {} steps in batches of {}", num_steps, effective_batch_size);
-//     println!("# Atoms in the receptor: {}", receptor_atoms.len());
-
-//     // Prepare static data that doesn't change between batches
-//     let mut receptor_atoms_buffer = Vec::with_capacity(receptor_atoms.len() * ATOM_FEATURES as usize);
-//     let n_receptor_atoms = receptor_atoms.len();
-
-//     for atom in receptor_atoms {
-//         let coords = atom.coords();
-//         receptor_atoms_buffer.push(coords[0] as f32);
-//         receptor_atoms_buffer.push(coords[1] as f32);
-//         receptor_atoms_buffer.push(coords[2] as f32);
-//         receptor_atoms_buffer.push(atom.charge() as f32);
-//         receptor_atoms_buffer.push(atom.epsilon() as f32);
-//         receptor_atoms_buffer.push(atom.rmin_half() as f32);
-//         receptor_atoms_buffer.push(atom.residue_number as f32);
-//     }
-    
-//     println!("Last element of the receptor before going to GPU: {}", 
-//              receptor_atoms_buffer[receptor_atoms_buffer.len() - 1]);
-
-//     let max_n_waters = MAX_N_WATERS as usize;
-//     println!("N FRAMES: {}", n_simulations);
-
-//     // Initialize waters buffer (this remains the same size regardless of batch size)
-//     let mut waters_buffer = Vec::with_capacity(n_simulations * max_n_waters * 4 as usize * 3);
-//     for idx in 0..(n_simulations * max_n_waters) {
-//         waters_buffer.push(0.0);
-//         waters_buffer.push(0.0);
-//         waters_buffer.push(0.0);
-//         waters_buffer.push(0.);
-//         waters_buffer.push(0.0);
-//         waters_buffer.push(0.0);
-//         waters_buffer.push(0.0);
-//         waters_buffer.push(0.);
-//         waters_buffer.push(0.0);
-//         waters_buffer.push(0.0);
-//         waters_buffer.push(0.0);
-//         waters_buffer.push(0.);
-//     }
-
-//     // Create static GPU handles that will be reused across batches
-//     let boundaries_handle = client.create(f32::as_bytes(&boundaries));
-//     let receptor_atoms_handle = client.create(f32::as_bytes(&receptor_atoms_buffer));
-//     let water_atoms_handle = client.empty(waters_buffer.len() * core::mem::size_of::<f32>());
-//     let waters_in_the_system_handle = client.create(u32::as_bytes(&vec![0u32; n_simulations]));
-//     let wat_num_handle = client.empty(n_simulations * core::mem::size_of::<u32>());
-    
-//     // Calculate volume variables
-//     let volume_var = volume / consts::STANDARD_VOLUME;
-//     let B = consts::CHEMICAL_POTENTIAL * consts::BETA + volume_var.ln();
-    
-//     // Result accumulator
-    
-//     // Process in batches
-//     let num_batches = (num_steps + effective_batch_size - 1) / effective_batch_size;
-    
-//     for batch_idx in 0..num_batches {
-//         let batch_start = batch_idx * effective_batch_size;
-//         let current_batch_size = std::cmp::min(effective_batch_size, num_steps - batch_start);
-        
-//         println!("Processing batch {}/{} (steps {}-{})", 
-//                  batch_idx + 1, num_batches, batch_start, batch_start + current_batch_size - 1);
-        
-//         // Create batch-specific buffers
-//         let batch_random_buffer = prepare_random_numbers(
-//             n_simulations * current_batch_size, 
-//             &boundaries, 
-//             -0.5, 0.5, -180.0, 180.0
-//         );
-        
-//         // Create seed tensor for this batch
-//         let batch_seed_tensor = TensorHandle::<R, u32>::empty(
-//             &client, 
-//             [n_simulations * current_batch_size].to_vec()
-//         );
-//         random_normal::<R, u32>(&client, 42 + batch_idx as u32, 2, batch_seed_tensor.as_ref());
-        
-//         // Create GPU handles for this batch
-//         let batch_random_numbers_handle = client.create(f32::as_bytes(&batch_random_buffer));
-//         let batch_energies_debug = client.empty(n_simulations * current_batch_size * core::mem::size_of::<f32>());
-        
-//         // Launch kernel for this batch
-//         unsafe {
-//         run_gcmc::launch_unchecked::<R>(
-//             &client, 
-//             CubeCount::Static(n_simulations as u32, 1, 1),
-//             CubeDim::new(1,1, 1),
-//             ArrayArg::from_raw_parts::<f32>(&boundaries_handle, 6, 1), 
-//             ArrayArg::from_raw_parts::<f32>(&receptor_atoms_handle, receptor_atoms_buffer.len(), 1), 
-//             ArrayArg::from_raw_parts::<f32>(&water_atoms_handle, waters_buffer.len(), 1), 
-//             ArrayArg::from_raw_parts::<u32>(&batch_seed_tensor.handle, n_simulations*num_steps, 1), 
-//             ArrayArg::from_raw_parts::<u32>(&wat_num_handle, n_simulations, 1),
-//             ScalarArg {elem: receptor_atoms_buffer[receptor_atoms_buffer.len() -1] as u32}, 
-//             ScalarArg {elem: B},
-//             ScalarArg {elem: volume}, 
-//             ScalarArg {elem: num_steps as u32},
-//         );
-//     }
-        
-//         // Read results from this batch
-//         let batch_energies_bytes = client.read_one(batch_energies_debug.clone().binding());
-//         let batch_energies: Vec<f32> = f32::from_bytes(&batch_energies_bytes).to_vec();
-                
-//         println!("Completed batch {}/{}", batch_idx + 1, num_batches);
-//     }
-    
-//     // Read final water configuration
-//     let bytes = client.read_one(water_atoms_handle.clone().binding());
-//     let output: Vec<f32> = f32::from_bytes(&bytes).to_vec();
-    
-//     println!("Total active waters across all batches: {:?}", output.len() / gpu_gcmc_moves::WATER_SIZE as usize);
-    
-//     output
-// }
-
-// Add this debugging to your host code to check for overflow issues
 
 pub fn debug_buffer_calculations(n_simulations: usize) {
     println!("=== BUFFER SIZE DEBUGGING ===");

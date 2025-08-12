@@ -228,15 +228,15 @@ impl GCMC {
                 // Using single energy
                 // let start_gpu = Instant::now();
                 // GPU
-                #[cfg(feature = "cuda")]
-                let old_energy = compute_energy::<cubecl::cuda::CudaRuntime>(&Default::default(), &system_atoms, &self.waters.last().unwrap().as_vec(), &hw_mapping_system, &vec![0, 1, 1]);
-                #[cfg(feature = "wgpu")]
-                let old_energy = compute_energy::<cubecl::wgpu::WgpuRuntime>(&Default::default(), &system_atoms, &current_water.as_vec(), &hw_mapping_system, &vec![0, 1, 1]);
+                // #[cfg(feature = "cuda")]
+                // let old_energy = compute_energy::<cubecl::cuda::CudaRuntime>(&Default::default(), &system_atoms, &self.waters.last().unwrap().as_vec(), &hw_mapping_system, &vec![0, 1, 1]);
+                // #[cfg(feature = "wgpu")]
+                // let old_energy = compute_energy::<cubecl::wgpu::WgpuRuntime>(&Default::default(), &system_atoms, &current_water.as_vec(), &hw_mapping_system, &vec![0, 1, 1]);
                 // println!("Time for GPU: {:?}", start_gpu.elapsed());
                 // println!("GPU energy: {}", old_energy_gpu);
                 // let start_cpu = Instant::now();
                 // CPU
-                #[cfg(feature = "cpu")]
+                // #[cfg(feature = "cpu")]
                 let old_energy = energy::energy_for_real_water(&system_atoms, &current_water.as_vec());
                 // println!("Time for CPU: {:?}", start_cpu.elapsed());
                 // println!("CPU energy: {}", old_energy);
@@ -250,13 +250,13 @@ impl GCMC {
 
                     // Using single energy
                     // CPU
-                    #[cfg(feature = "cpu")]
+                    // #[cfg(feature = "cpu")]
                     let new_energy = energy::energy_for_real_water(&system_atoms, &self.waters[water_idx].as_vec());
                     // GPU
-                    #[cfg(feature = "cuda")]
-                    let new_energy = compute_energy::<cubecl::cuda::CudaRuntime>(&Default::default(), &system_atoms, &self.waters.last().unwrap().as_vec(), &hw_mapping_system, &vec![0, 1, 1]);
-                    #[cfg(feature = "wgpu")]
-                    let new_energy = compute_energy::<cubecl::wgpu::WgpuRuntime>(&Default::default(), &system_atoms, &current_water.as_vec(), &hw_mapping_system, &vec![0, 1, 1]);
+                    // #[cfg(feature = "cuda")]
+                    // let new_energy = compute_energy::<cubecl::cuda::CudaRuntime>(&Default::default(), &system_atoms, &self.waters.last().unwrap().as_vec(), &hw_mapping_system, &vec![0, 1, 1]);
+                    // #[cfg(feature = "wgpu")]
+                    // let new_energy = compute_energy::<cubecl::wgpu::WgpuRuntime>(&Default::default(), &system_atoms, &current_water.as_vec(), &hw_mapping_system, &vec![0, 1, 1]);
                     let delta_e = new_energy - old_energy;
                     let acceptance_prob = (-self.beta * delta_e).exp().min(1.0);
 
@@ -288,13 +288,13 @@ impl GCMC {
 
                     // Using single energy
                     // CPU
-                    #[cfg(feature = "cpu")]
+                    // #[cfg(feature = "cpu")]
                     let new_energy = energy::energy_for_real_water(&system_atoms, &self.waters.last().unwrap().as_vec());
                     // GPU
-                    #[cfg(feature = "cuda")]
-                    let new_energy = compute_energy::<cubecl::cuda::CudaRuntime>(&Default::default(), &system_atoms, &self.waters.last().unwrap().as_vec(), &hw_mapping_system, &vec![0, 1, 1]);
-                    #[cfg(feature = "wgpu")]
-                    let new_energy = compute_energy::<cubecl::wgpu::WgpuRuntime>(&Default::default(), &system_atoms, &self.waters.last().unwrap().as_vec(), &hw_mapping_system, &vec![0, 1, 1]);
+                    // #[cfg(feature = "cuda")]
+                    // let new_energy = compute_energy::<cubecl::cuda::CudaRuntime>(&Default::default(), &system_atoms, &self.waters.last().unwrap().as_vec(), &hw_mapping_system, &vec![0, 1, 1]);
+                    // #[cfg(feature = "wgpu")]
+                    // let new_energy = compute_energy::<cubecl::wgpu::WgpuRuntime>(&Default::default(), &system_atoms, &self.waters.last().unwrap().as_vec(), &hw_mapping_system, &vec![0, 1, 1]);
                     let delta_e = new_energy + self.mu;
 
                     let acceptance_prob = ((1.0/(n+1.0)) * B.exp() * (-self.beta * delta_e).exp()).min(1.0);
@@ -317,13 +317,13 @@ impl GCMC {
                 // Using single energy
                 let removed_water = self.waters[removed_water_idx].clone();
                 // CPU
-                #[cfg(feature = "cpu")]
+                // #[cfg(feature = "cpu")]
                 let removed_water_energy = energy::energy_for_real_water(&system_atoms, &removed_water.as_vec());
                 // GPU
-                #[cfg(feature = "cuda")]
-                let removed_water_energy = compute_energy::<cubecl::cuda::CudaRuntime>(&Default::default(), &system_atoms, &removed_water.as_vec(), &hw_mapping_system, &vec![0, 1, 1]);
-                #[cfg(feature = "wgpu")]
-                let removed_water_energy = compute_energy::<cubecl::wgpu::WgpuRuntime>(&Default::default(), &system_atoms, &removed_water.as_vec(), &hw_mapping_system, &vec![0, 1, 1]);
+                // #[cfg(feature = "cuda")]
+                // let removed_water_energy = compute_energy::<cubecl::cuda::CudaRuntime>(&Default::default(), &system_atoms, &removed_water.as_vec(), &hw_mapping_system, &vec![0, 1, 1]);
+                // #[cfg(feature = "wgpu")]
+                // let removed_water_energy = compute_energy::<cubecl::wgpu::WgpuRuntime>(&Default::default(), &system_atoms, &removed_water.as_vec(), &hw_mapping_system, &vec![0, 1, 1]);
                 // Subtract the removed water energy to the previous energy
                 let new_energy = -removed_water_energy;
 

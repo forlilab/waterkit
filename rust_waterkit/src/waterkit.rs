@@ -590,28 +590,48 @@ pub fn test_gpu(receptor_points: Vec<Atom>,
             water_model[2],
         "A".to_string(),
     0);
-    let n_waters = gpu_gcmc::simulate::<cubecl::wgpu::WgpuRuntime>(
-        num_frames,
-        &Default::default(), 
-        receptor_points, 
-        water_configuration, 
-        12.0, 
-        vec![min[0] as f32, max[0] as f32, 
-             min[1] as f32, max[1] as f32,
-             min[2] as f32, max[2] as f32], 
-        total_volume as f32, 
-        gcmc_steps as usize);
-    // for idx in 0..n_waters.len() {
-        // println!("{idx} - {}", n_waters[idx]);
-        // println!("C {} {} {}", n_waters[idx], n_waters[idx+1], n_waters[idx+2]);
-    // }
-    println!("Done sampling...saving results!");
-    let frames = reconstruct_waters(n_waters, num_frames,  gpu_gcmc_moves::MAX_N_WATERS as usize, 4, 3);
-    frames.par_iter().enumerate()
-        .for_each(|(idx, waters)| {
-            // to_pdb(&unoptimized_system, &format!("{save_path}/water_{idx}_unoptimized.pdb"), None);
-            to_pdb(&waters, &format!("{save_path}/water_{idx}_optimized.pdb"), None)}
-        );
+
+    // let epochs_test = vec![10, 100, 1000, 2000, 4000, 8000, 10000, 20000, 30000, 40000, 50000]; 
+
+    // for epochs in epochs_test {
+        println!("Simulation with {} epochs", gcmc_steps);
+        #[cfg(feature = "wgpu")]
+        let n_waters = gpu_gcmc::simulate::<cubecl::wgpu::WgpuRuntime>(
+            num_frames,
+            &Default::default(), 
+            receptor_points.clone(), 
+            water_configuration.clone(), 
+            12.0, 
+            vec![min[0] as f32, max[0] as f32, 
+                min[1] as f32, max[1] as f32,
+                min[2] as f32, max[2] as f32], 
+            total_volume as f32,
+            gcmc_steps as usize);
+        #[cfg(feature = "cuda")]
+        let n_waters = gpu_gcmc::simulate::<cubecl::cuda::CudaRuntime>(
+            num_frames,
+            &Default::default(), 
+            receptor_points.clone(), 
+            water_configuration.clone(), 
+            12.0, 
+            vec![min[0] as f32, max[0] as f32, 
+                min[1] as f32, max[1] as f32,
+                min[2] as f32, max[2] as f32], 
+            total_volume as f32,
+            gcmc_steps as usize); 
+            // gcmc_steps as usize);
+        // for idx in 0..n_waters.len() {
+            // println!("{idx} - {}", n_waters[idx]);
+            // println!("C {} {} {}", n_waters[idx], n_waters[idx+1], n_waters[idx+2]);
+        // }
+        println!("Done sampling...saving results!");
+        let frames = reconstruct_waters(n_waters, num_frames,  gpu_gcmc_moves::MAX_N_WATERS as usize, 4, 3);
+        frames.par_iter().enumerate()
+            .for_each(|(idx, waters)| {
+                // to_pdb(&unoptimized_system, &format!("{save_path}/water_{idx}_unoptimized.pdb"), None);
+                to_pdb(&waters, &format!("{save_path}/water_{idx}_optimized.pdb"), None)}
+            );
+        // }
     }
 }
 
@@ -665,7 +685,7 @@ fn reconstruct_waters(waters: Vec<f32>, num_frames: usize, max_n_waters: usize, 
                 water_molecules.push(atom);
             }
         }
-    println!("Simulation {}: Found {} water molecules", sim, water_molecules.len() / 3);
+    println!("Simulation {}: Found {} water molecules\n", sim, water_molecules.len() / 3);
     frames.push(water_molecules);
     
     }
