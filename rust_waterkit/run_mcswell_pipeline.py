@@ -87,28 +87,28 @@ if __name__ == "__main__":
                     center=center,
                     alg_type=alg_type)
         
-        # os.chdir(f"{project_path}")
-        # # Create trajectory from the frames
-        # make_trajectory(receptor_filename=receptor_path,
-        #                 water_directory=os.path.join(project_path, "frames"),
-        #                 output_prefix=trajectory_out_prefix)
+        os.chdir(f"{project_path}")
+        # Create trajectory from the frames
+        make_trajectory(receptor_filename=receptor_path,
+                        water_directory=os.path.join(project_path, "frames"),
+                        output_prefix=trajectory_out_prefix)
         
-        # # Create GIST file and run it
-        # input_topology = trajectory_out_prefix + "_system.prmtop"
-        # input_traj = trajectory_out_prefix + "_system.nc"
-        # create_gist_input(input_topology=input_topology,
-        #                 input_traj=input_traj,
-        #                 center=center)
+        # Create GIST file and run it
+        input_topology = trajectory_out_prefix + "_system.prmtop"
+        input_traj = trajectory_out_prefix + "_system.nc"
+        create_gist_input(input_topology=input_topology,
+                        input_traj=input_traj,
+                        center=center)
         
-        # gist_command = "cpptraj gist.inp"
-        # process = subprocess.run(gist_command, shell=True, capture_output=True, text=True)
-        # if process.returncode == 0:
-        #     print("Command executed successfully:")
-        #     print(process.stdout)
-        # else:
-        #     print("Command failed:")
-        #     print(process.stderr)
+        gist_command = "cpptraj gist.inp"
+        process = subprocess.run(gist_command, shell=True, capture_output=True, text=True)
+        if process.returncode == 0:
+            print("Command executed successfully:")
+            print(process.stdout)
+        else:
+            print("Command failed:")
+            print(process.stderr)
 
-        # # Hydration Sites Analysis
-        # run_hydration_sites_analysis(path_to_grids=project_path,
-        #                             out_path=os.path.join(hydration_sites_out, alg_type.upper()))
+        # Hydration Sites Analysis
+        run_hydration_sites_analysis(path_to_grids=project_path,
+                                    out_path=os.path.join(hydration_sites_out, alg_type.upper()))

@@ -1,7 +1,7 @@
 use core::f32;
 
 use crate::atom::Atom;
-use crate::{consts, gpu_gcmc_moves, gpu_geometry, gpu_random};
+use crate::{consts, gpu_energy, gpu_gcmc_moves, gpu_geometry, gpu_random};
 use crate::water::WaterMolecule;
 use cubecl::std::tensor::TensorHandle;
 use cubecl::{compute, prelude::*};
@@ -100,6 +100,33 @@ fn run_gcmc(
             }
         }
     }
+    
+    // Run normal MC
+    for step in 0..100000 {
+        // Fill random numbers once per move
+        random_numbers[0] = gpu_random::random_range(&mut rng_state, boundaries[0], boundaries[1]);
+        random_numbers[1] = gpu_random::random_range(&mut rng_state, boundaries[2], boundaries[3]);
+        random_numbers[2] = gpu_random::random_range(&mut rng_state, boundaries[4], boundaries[5]);
+        random_numbers[3] = gpu_random::random_range(&mut rng_state, -0.5, 0.5);
+        random_numbers[4] = gpu_random::random_range(&mut rng_state, -0.5, 0.5);
+        random_numbers[5] = gpu_random::random_range(&mut rng_state, -0.5, 0.5);
+        random_numbers[6] = gpu_random::random_float(&mut rng_state);
+        random_numbers[7] = gpu_random::random_float(&mut rng_state);
+        random_numbers[8] = gpu_random::random_float(&mut rng_state);
+        random_numbers[9] = gpu_random::random_range(&mut rng_state, -180_f32, 180_f32);
+        random_numbers[10] = gpu_random::random_int_range(&mut rng_state, active_waters) as f32;
+        random_numbers[11] = gpu_random::random_float(&mut rng_state);
+        
+        gpu_gcmc_moves::translation_move(
+                    boundaries,
+                    receptor_atoms,
+                    water_atoms,
+                    &random_numbers,
+                    sim_id,
+                    active_waters,
+                    n_receptor_atoms,
+                );
+    }
 
     // Save updated state for next batch
     seeds[sim_id] = rng_state;
@@ -148,10 +175,6 @@ pub fn simulate<R: Runtime>(
     let mut waters_buffer = Vec::with_capacity(n_simulations * max_n_waters * consts::WATER_SIZE as usize);
 
     for idx in 0..(n_simulations * max_n_waters) {
-        let water = water_configuration.as_vec();
-        let o_c = water[0].coords();
-        let h1_c = water[1].coords();
-        let h2_c = water[2].coords();
         waters_buffer.push(0.0);
         waters_buffer.push(0.0);
         waters_buffer.push(0.0);
@@ -173,7 +196,6 @@ pub fn simulate<R: Runtime>(
     
     let volume_var = volume / consts::STANDARD_VOLUME;
     let B = consts::CHEMICAL_POTENTIAL * consts::BETA + volume_var.ln();
-
 
     unsafe {
         run_gcmc::launch::<R>(

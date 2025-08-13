@@ -32,11 +32,13 @@ pub fn insertion_move(
         propose_insertion_compact(boundaries, random_numbers, &mut new_water, possible_resnum as f32);
         
         // // Calculate energy of new water interacting with receptor and existing waters
+        // Single-thread
         let receptor_energy = energy_for_real_water_kernel(receptor_atoms,
             &new_water,
             n_receptor_atoms,
             sim_id);
-        
+
+
         let mut waters_energy = 0.0;
         if active_waters > 0 {
             waters_energy = energy_for_real_water_with_waters_kernel(water_atoms, &new_water, sim_id, active_waters);
@@ -202,7 +204,7 @@ pub fn copy_water_to_array(source: &Array<f32>, dest: &mut Array<f32>, dest_base
 }
 
 #[cube]
-fn load_water_from_array(source: &Array<f32>, source_base_idx: u32, dest: &mut Array<f32>) {
+pub fn load_water_from_array(source: &Array<f32>, source_base_idx: u32, dest: &mut Array<f32>) {
     dest[0] = source[source_base_idx];
     dest[1] = source[source_base_idx + 1];
     dest[2] = source[source_base_idx + 2];
@@ -218,7 +220,7 @@ fn load_water_from_array(source: &Array<f32>, source_base_idx: u32, dest: &mut A
 }
 
 #[cube]
-fn move_water_in_array(waters: &mut Array<f32>, from_idx: u32, to_idx: u32) {
+pub fn move_water_in_array(waters: &mut Array<f32>, from_idx: u32, to_idx: u32) {
     waters[to_idx] = waters[from_idx];
     waters[to_idx + 1] = waters[from_idx + 1];
     waters[to_idx + 2] = waters[from_idx + 2];
@@ -234,7 +236,7 @@ fn move_water_in_array(waters: &mut Array<f32>, from_idx: u32, to_idx: u32) {
 }
 
 #[cube]
-fn clear_water_in_array(waters: &mut Array<f32>, base_idx: u32) {
+pub fn clear_water_in_array(waters: &mut Array<f32>, base_idx: u32) {
     waters[base_idx] = 0.0;
     waters[base_idx+1] = 0.0;
     waters[base_idx+2] = 0.0;
@@ -252,7 +254,6 @@ fn clear_water_in_array(waters: &mut Array<f32>, base_idx: u32) {
 }
 
 #[cube]
-/// This is just for TIP3P for now
 pub fn create_water_std(resnum: u32) -> Array<f32>{
     let mut new_water: Array<f32> = Array::new(consts::WATER_SIZE);
     #[cfg(feature = "tip3p")]
@@ -290,7 +291,7 @@ pub fn create_water_std(resnum: u32) -> Array<f32>{
 
 // Modified insertion proposal for compact layout
 #[cube]
-fn propose_insertion_compact(
+pub fn propose_insertion_compact(
     boundaries: &Array<f32>,
     random_numbers: &Array<f32>,
     new_water: &mut Array<f32>,
@@ -363,7 +364,7 @@ fn propose_insertion_compact(
 }
 
 #[cube]
-fn propose_perturbation(
+pub fn propose_perturbation(
     boundaries: &Array<f32>,
     old_water: &Array<f32>, // Flattened water coordinates [ox, oy, oz, charge_o, epsilon_o, rmin_half_o, resnum_o, h1x, h1y, h1z, charge_h1, epsilon_h1, rmin_half_h1, resnum_h1, h2x, h2y, h2z, charge_h2, epsilon_h2, rmin_half_h2, resnum_h2]
     rng_array: &Array<f32>) -> Array<f32> {
@@ -438,11 +439,6 @@ fn propose_perturbation(
         axis_array[1] = axis_y;
         axis_array[2] = axis_z; 
 
-        // let mut original_oxygen = Array::new(3);
-        // original_oxygen[0] = ox;
-        // original_oxygen[1] = oy;
-        // original_oxygen[2] = oz;
-
         let mut normalized_axis_array = gpu_geometry::normalize(&mut axis_array);
 
         let mut new_h1: Array::<f32> = Array::new(3);
@@ -463,219 +459,6 @@ fn propose_perturbation(
     } 
     new_water
 }
-
-// #[cube]
-// pub fn energy_for_real_water_kernel(
-//     receptor_atoms: &Array<f32>,      // [n_receptor * 7]
-//     target_water: &Array<f32>,        // [3 * 4]
-//     n_receptor: u32,
-//     sim_id: u32,
-// ) -> f32 {
-//     let mut total_energy = 0.0f32;
-//     let water_atom_stride = 4;
-//     let atoms_per_water = 3;
-//     let receptor_stride = consts::ATOM_FEATURES; // 7
-//     let target_oxygen_base = 0 * water_atom_stride;
-//     let target_resnum = target_water[target_oxygen_base + 3];
-
-//     // === Interact with receptor atoms ===
-//     let n_receptor_atoms = receptor_atoms.len() as u32 / receptor_stride;
-    
-//     // Parallelize over receptor atoms using strided access
-//     let thread_id = CUBE_POS_X;
-//     let num_threads = CUBE_COUNT_X;
-    
-//     // Each thread processes atoms with indices: thread_id, thread_id + num_threads, thread_id + 2*num_threads, ...
-//     let mut r_idx = thread_id;
-//     while r_idx < n_receptor_atoms {
-//         let r_base = r_idx * receptor_stride;
-
-//         let r_x = receptor_atoms[r_base];
-//         let r_y = receptor_atoms[r_base + 1];
-//         let r_z = receptor_atoms[r_base + 2];
-//         let r_charge = receptor_atoms[r_base + 3];
-//         let r_epsilon = receptor_atoms[r_base + 4];
-//         let r_rmin_half = receptor_atoms[r_base + 5];
-//         let r_resnum = receptor_atoms[r_base + 6];
-
-//         for target_atom_idx in 0..atoms_per_water {
-//             let t_base = target_atom_idx * water_atom_stride;
-
-//             let t_x = target_water[t_base];
-//             let t_y = target_water[t_base + 1];
-//             let t_z = target_water[t_base + 2];
-//             let t_resnum_t = target_water[t_base + 3];
-
-//             let mut t_charge = 0.0;
-//             let mut t_epsilon = 0.0;
-//             let mut t_rmin_half = 0.0;
-
-//             #[cfg(feature = "tip3p")]
-//             if target_atom_idx == 0 {  // Oxygen
-//                 t_charge = -0.8340;
-//                 t_epsilon = 0.15210325;
-//                 t_rmin_half = 1.7682;
-//             } else {  // Hydrogen
-//                 t_charge = 0.4170;
-//             }
-
-//             #[cfg(feature = "tip3pfp")]
-//             if target_atom_idx == 0 {  // Oxygen
-//                 t_charge = -0.8484;
-//                 t_epsilon = 0.15586604;
-//                 t_rmin_half = 1.7835723;
-//             } else {  // Hydrogen
-//                 t_charge = 0.4242;
-//             }
-
-//             let t_is_hw = t_epsilon == 0.0;
-
-//             let dx = t_x - r_x;
-//             let dy = t_y - r_y;
-//             let dz = t_z - r_z;
-//             let distance_sq = dx*dx + dy*dy + dz*dz;
-//             let distance = f32::sqrt(distance_sq);
-//             let r_val = f32::max(distance, 1e-8);
-
-//             let mut lj_energy = 0.0;
-//             if !t_is_hw {
-//                 lj_energy = gpu_energy::lennard_jones_rmin_half(
-//                     t_epsilon, r_epsilon, r_val, t_rmin_half, r_rmin_half);
-//             }
-//             total_energy += lj_energy;
-
-//             let electrostatics_energy = gpu_energy::coulomb_energy::<f32>(t_charge, r_charge, r_val);
-//             total_energy += electrostatics_energy;
-//         }
-        
-//         // Move to next atom for this thread (strided access)
-//         r_idx += num_threads;
-//     }
-    
-//     total_energy
-// }
-
-// #[cube]
-// fn energy_for_real_water_with_waters_kernel(
-//     water_atoms: &Array<f32>, 
-//     target_water: &Array<f32>, 
-//     sim_id: u32,
-//     active_waters: u32
-// ) -> f32 {
-//     let mut total_energy: f32 = 0.0;
-//     let water_atom_stride = 4;
-//     let atoms_per_water = 3;
-//     let waters_base_idx = sim_id * consts::MAX_N_WATERS * consts::WATER_SIZE;
-    
-//     // Parallelize over water molecules using strided access
-//     let thread_id = CUBE_POS_X;
-//     let num_threads = CUBE_COUNT_X;
-    
-//     // Each thread processes waters with indices: thread_id, thread_id + num_threads, thread_id + 2*num_threads, ...
-//     let mut w_idx = thread_id;
-//     while w_idx < active_waters {
-//         let water_base = waters_base_idx + w_idx * consts::WATER_SIZE;
-        
-//         // Process each atom in this water molecule
-//         for w_atom_idx in 0..atoms_per_water {
-//             let base = water_base + w_atom_idx * water_atom_stride;
-//             let w_x = water_atoms[base];
-//             let w_y = water_atoms[base + 1];
-//             let w_z = water_atoms[base + 2];
-//             let w_resnum = water_atoms[base + 3];
-            
-//             // Skip if this is an uninitialized water (resnum = 0)
-//             if w_resnum != 0.0 {
-//                 let mut w_charge = 0.0;
-//                 let mut w_epsilon = 0.0;
-//                 let mut w_rmin_half = 0.0;
-                
-//                 #[cfg(feature = "tip3p")]
-//                 if w_atom_idx == 0 {  // Oxygen
-//                     w_charge = -0.8340;
-//                     w_epsilon = 0.15210325;
-//                     w_rmin_half = 1.7682;
-//                 } else {  // Hydrogen
-//                     w_charge = 0.4170;
-//                 }
-
-//                 #[cfg(feature = "tip3pfp")]
-//                 if w_atom_idx == 0 {  // Oxygen
-//                     w_charge = -0.8484;
-//                     w_epsilon = 0.15586604;
-//                     w_rmin_half = 1.7835723;
-//                 } else {  // Hydrogen
-//                     w_charge = 0.4242;
-//                 }
-                
-//                 // Calculate interaction with target water
-//                 for target_atom_idx in 0..atoms_per_water {
-//                     let t_base = target_atom_idx * water_atom_stride;
-//                     let t_x = target_water[t_base];
-//                     let t_y = target_water[t_base + 1];
-//                     let t_z = target_water[t_base + 2];
-//                     let t_resnum = target_water[t_base + 3];
-                    
-//                     let mut t_charge = 0.0;
-//                     let mut t_epsilon = 0.0;
-//                     let mut t_rmin_half = 0.0;
-                    
-//                     #[cfg(feature = "tip3p")]
-//                     if target_atom_idx == 0 {  // Oxygen
-//                         t_charge = -0.8340;
-//                         t_epsilon = 0.15210325;
-//                         t_rmin_half = 1.7682;
-//                     } else {  // Hydrogen
-//                         t_charge = 0.4170;
-//                     }
-
-//                     #[cfg(feature = "tip3pfp")]
-//                     if target_atom_idx == 0 {  // Oxygen
-//                         t_charge = -0.8484;
-//                         t_epsilon = 0.15586604;
-//                         t_rmin_half = 1.7835723;
-//                     } else {  // Hydrogen
-//                         t_charge = 0.4242;
-//                     }
-                    
-//                     // Skip same residue interactions
-//                     if t_resnum != w_resnum {
-                    
-//                         let dx = t_x - w_x;
-//                         let dy = t_y - w_y;
-//                         let dz = t_z - w_z;
-//                         let distance_sq = dx * dx + dy * dy + dz * dz;
-//                         let distance = f32::sqrt(distance_sq);
-//                         let r_val = f32::max(distance, 1e-8);
-                        
-//                         // Calculate LJ energy (only for O-O interactions)
-//                         let w_is_hw = w_epsilon == 0.0;
-//                         let t_is_hw = t_epsilon == 0.0;
-                        
-//                         if !t_is_hw && !w_is_hw {
-//                             let lj_energy = gpu_energy::lennard_jones_rmin_half(
-//                                 t_epsilon, w_epsilon, r_val, t_rmin_half, w_rmin_half
-//                             );
-//                             total_energy += lj_energy;
-//                         }
-                        
-//                         // Calculate electrostatic energy
-//                         let electrostatics_energy = gpu_energy::coulomb_energy::<f32>(
-//                             t_charge, w_charge, r_val
-//                         );
-//                         total_energy += electrostatics_energy;
-//                     }
-//                 }
-//             }
-//         }
-        
-//         // Move to next water for this thread (strided access)
-//         w_idx += num_threads;
-//     }
-    
-//     total_energy
-// }
-
 
 #[cube]
 pub fn energy_for_real_water_kernel(
@@ -743,22 +526,24 @@ pub fn energy_for_real_water_kernel(
             let distance = f32::sqrt(distance_sq);
             let r_val = f32::max(distance, 1e-8);
 
-            let mut lj_energy = 0.0;
-            if !t_is_hw {
-                lj_energy = gpu_energy::lennard_jones_rmin_half(
-                    t_epsilon, r_epsilon, r_val, t_rmin_half, r_rmin_half);
-            }
-            total_energy += lj_energy;
+            // if r_val < f32::cast_from(consts::ELECTROSTATICS_CUTOFF) {
+                let mut lj_energy = 0.0;
+                if !t_is_hw {
+                    lj_energy = gpu_energy::lennard_jones_rmin_half(
+                        t_epsilon, r_epsilon, r_val, t_rmin_half, r_rmin_half);
+                }
+                total_energy += lj_energy;
 
-            let electrostatics_energy = gpu_energy::coulomb_energy::<f32>(t_charge, r_charge, r_val);
-            total_energy += electrostatics_energy;
+                let electrostatics_energy = gpu_energy::coulomb_energy::<f32>(t_charge, r_charge, r_val);
+                total_energy += electrostatics_energy;
+            // }
         }
     }
     total_energy
 }
 
 #[cube]
-fn energy_for_real_water_with_waters_kernel(
+pub fn energy_for_real_water_with_waters_kernel(
     water_atoms: &Array<f32>, 
     target_water: &Array<f32>, 
     sim_id: u32,
@@ -845,22 +630,24 @@ fn energy_for_real_water_with_waters_kernel(
                         let distance = f32::sqrt(distance_sq);
                         let r_val = f32::max(distance, 1e-8);
                         
-                        // Calculate LJ energy (only for O-O interactions)
-                        let w_is_hw = w_epsilon == 0.0;
-                        let t_is_hw = t_epsilon == 0.0;
-                        
-                        if !t_is_hw && !w_is_hw {
-                            let lj_energy = gpu_energy::lennard_jones_rmin_half(
-                                t_epsilon, w_epsilon, r_val, t_rmin_half, w_rmin_half
+                        // if r_val < f32::cast_from(consts::ELECTROSTATICS_CUTOFF) { 
+                            // Calculate LJ energy (only for O-O interactions)
+                            let w_is_hw = w_epsilon == 0.0;
+                            let t_is_hw = t_epsilon == 0.0;
+                            
+                            if !t_is_hw && !w_is_hw {
+                                let lj_energy = gpu_energy::lennard_jones_rmin_half(
+                                    t_epsilon, w_epsilon, r_val, t_rmin_half, w_rmin_half
+                                );
+                                total_energy += lj_energy;
+                            }
+                            
+                            // Calculate electrostatic energy
+                            let electrostatics_energy = gpu_energy::coulomb_energy::<f32>(
+                                t_charge, w_charge, r_val
                             );
-                            total_energy += lj_energy;
-                        }
-                        
-                        // Calculate electrostatic energy
-                        let electrostatics_energy = gpu_energy::coulomb_energy::<f32>(
-                            t_charge, w_charge, r_val
-                        );
-                        total_energy += electrostatics_energy;
+                            total_energy += electrostatics_energy;
+                        // }
                     }
                 }
             }
