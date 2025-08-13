@@ -80,7 +80,7 @@ def run_mcswell(receptor_path, project_path, center, alg_type="gcmc"):
     parametrized_atoms = get_data_from_meeko(pdb_file=receptor_path, project_path=project_path)
     spacing = 0.375
     x_size, y_size, z_size = 24.0, 24.0, 24.0
-    n_frames = 500
+    n_frames = 1000
     print("Starting MCSwell!")
     start = time.time()
     grid = rust_waterkit.setup_system(parametrized_atoms, x_size, y_size, z_size, spacing, center)

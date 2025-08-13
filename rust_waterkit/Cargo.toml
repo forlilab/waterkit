@@ -32,6 +32,9 @@ extension-module = ["pyo3/extension-module"]
 wgpu = ["cubecl/wgpu"]
 cuda = ["cubecl/cuda"]
 cpu = []
+tip3p = []
+tip3pfp = []
+
 
 # [profile.release]
 # debug = true

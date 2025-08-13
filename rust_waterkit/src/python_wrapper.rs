@@ -6,7 +6,6 @@ use crate::grid::GridPoint;
 use crate::anchor_point::AnchorPoint;
 use crate::rotatable_bond::RotatableBond;
 use crate::setup::setup_system;
-use crate::waterkit::get_energies_for_system;
 use crate::waterkit::optimize_disordered_hydrogens;
 use crate::waterkit::run_parallel_waterkit;
 use crate::waterkit::run_waterkit_gcmc;
@@ -25,7 +24,6 @@ fn rust_waterkit(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(run_waterkit_gcmc))?;
     m.add_wrapped(wrap_pyfunction!(run_waterkit_gcmcmc))?;
     m.add_wrapped(wrap_pyfunction!(test_gpu))?;
-    m.add_wrapped(wrap_pyfunction!(get_energies_for_system))?;
     m.add_wrapped(wrap_pyfunction!(optimize_disordered_hydrogens))?;
     Ok(())
 }

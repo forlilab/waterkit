@@ -591,8 +591,6 @@ pub fn test_gpu(receptor_points: Vec<Atom>,
         "A".to_string(),
     0);
 
-    // let epochs_test = vec![10, 100, 1000, 2000, 4000, 8000, 10000, 20000, 30000, 40000, 50000]; 
-
     // for epochs in epochs_test {
         println!("Simulation with {} epochs", gcmc_steps);
         #[cfg(feature = "wgpu")]
@@ -625,7 +623,7 @@ pub fn test_gpu(receptor_points: Vec<Atom>,
             // println!("C {} {} {}", n_waters[idx], n_waters[idx+1], n_waters[idx+2]);
         // }
         println!("Done sampling...saving results!");
-        let frames = reconstruct_waters(n_waters, num_frames,  gpu_gcmc_moves::MAX_N_WATERS as usize, 4, 3);
+        let frames = reconstruct_waters(n_waters, num_frames,  consts::MAX_N_WATERS as usize, 4, 3);
         frames.par_iter().enumerate()
             .for_each(|(idx, waters)| {
                 // to_pdb(&unoptimized_system, &format!("{save_path}/water_{idx}_unoptimized.pdb"), None);
@@ -690,127 +688,4 @@ fn reconstruct_waters(waters: Vec<f32>, num_frames: usize, max_n_waters: usize, 
     
     }
     frames
-}
-#[pyfunction]
-pub fn get_energies_for_system(receptor_points: Vec<Atom>, 
-    waters: Vec<[Atom; 3]>, center: [f64; 3], x: f64, y: f64, z: f64) {
-    let water_params = consts::WATER_PARAMS.get(consts::WATER_FF).unwrap();
-    let grid_receptor = setup_grid(&receptor_points, x, y, z, 0.375, center);
-
-    for (index, water) in waters.iter().enumerate() {
-        let mut points = receptor_points.clone();
-        // println!("Points before: {}", points.len());
-        let water_atoms = vec![water[0].clone(), water[1].clone(), water[2].clone()];
-        let waters_excluding: Vec<&[Atom; 3]> = waters.iter().filter(|x| &water != x).collect();
-        let mut waters_network = Vec::new();
-        for excluded_w in waters_excluding {
-            for excluded_atom in excluded_w {
-                points.push(excluded_atom.clone());
-                waters_network.push(excluded_atom.clone());
-            }
-        }
-        // println!("Waters network: {}", waters_network.len());
-        // println!("Points after: {}", points.len());
-        let use_grids = true;
-
-        if use_grids {
-            // let grid_receptor_and_w = setup_grid(&points, 21.0, 24.0, 26.0, 0.375, [71.5, 73.1, 243.4]);
-            let grid_receptor_and_w = setup_grid(&points, x, y, z, 0.375, center);
-
-            let oxygen = water_atoms[0].clone();
-            println!("{:?}", oxygen.coords());
-            let h1 = water_atoms[1].clone();
-            let h2 = water_atoms[2].clone();
-            // println!("{}", receptor_points.len());
-            // let mut energy = energy_for_real_water(&points, &vec![oxygen.clone()]);
-            let mut energy = grid_receptor_and_w.trilinear_interpolation(oxygen.coords(), ProbeType::OW).unwrap();
-            println!("Total LJ: {}", energy);
-            let e_elec = grid_receptor_and_w.trilinear_interpolation(oxygen.coords(), ProbeType::HW).unwrap() * water_params.OXYGEN_W_Q;
-            println!("Total Coulomb: {}", e_elec);
-            energy += e_elec;
-            println!("{index} {index} {energy} O (rec+wat)");
-
-            // let mut energy_rec = energy_for_real_water(&receptor_points, &vec![oxygen.clone()]);
-            let mut energy_rec = grid_receptor.trilinear_interpolation(oxygen.coords(), ProbeType::OW).unwrap();
-            energy_rec += grid_receptor.trilinear_interpolation(oxygen.coords(), ProbeType::HW).unwrap() * water_params.OXYGEN_W_Q;
-            println!("{index} {index} {energy_rec} O (just rec)");
-
-            // let e = energy_for_real_water(&points, &vec![h1.clone()]);
-            let e = grid_receptor_and_w.trilinear_interpolation(h1.coords(), ProbeType::HW).unwrap() * water_params.HYDROGEN_W_Q;
-            println!("Total Coulomb: {}", e);
-            println!("{index} {index} {e} H (rec+wat)");
-            energy += e;
-
-            // let er = energy_for_real_water(&receptor_points, &vec![h1.clone()]);
-            let er = grid_receptor.trilinear_interpolation(h1.coords(), ProbeType::HW).unwrap() * water_params.HYDROGEN_W_Q;
-            println!("{index} {index} {er} H (just rec)");
-            energy_rec += er;
-
-            // let e = energy_for_real_water(&points, &vec![h2.clone()]);
-            let e = grid_receptor_and_w.trilinear_interpolation(h2.coords(), ProbeType::HW).unwrap() * water_params.HYDROGEN_W_Q;
-            println!("Total Coulomb: {}", e);
-            println!("{index} {index} {e} H (rec+wat)");
-            energy += e;
-
-            // let er = energy_for_real_water(&receptor_points, &vec![h2.clone()]);
-            let er = grid_receptor.trilinear_interpolation(h2.coords(), ProbeType::HW).unwrap() * water_params.HYDROGEN_W_Q;
-            println!("{index} {index} {er} H (just rec)");
-            energy_rec += er;
-
-            println!("{index} {index} {energy} HOH (rec+wat)");
-            println!("{index} {index} {energy_rec} HOH (just rec)");
-            println!();
-        } else {
-            // println!("waters network: {:?}", waters_network);
-            // println!("Target water: {:?}", water_atoms);
-
-            let oxygen = water_atoms[0].clone();
-            println!("{:?}", oxygen.coords());
-            let h1 = water_atoms[1].clone();
-            let h2 = water_atoms[2].clone();
-            println!("{}", receptor_points.len());
-            let mut energy = energy_for_real_water(&points, &vec![oxygen.clone()]);
-            println!("{index} {index} {energy} O (rec+wat)");
-
-            let mut energy_w = energy_for_real_water(&waters_network, &vec![oxygen.clone()]);
-            println!("{index} {index} {energy_w} O (just wat)");
-
-            let mut energy_rec = energy_for_real_water(&receptor_points, &vec![oxygen.clone()]);
-            println!("{index} {index} {energy_rec} O (just rec)");
-
-            let e = energy_for_real_water(&points, &vec![h1.clone()]);
-            println!("{index} {index} {e} H (rec+wat)");
-            energy += e;
-
-            let ew = energy_for_real_water(&waters_network, &vec![h1.clone()]);
-            println!("{index} {index} {ew} H (just wat)");
-            energy_w += ew;
-
-            let er = energy_for_real_water(&receptor_points, &vec![h1.clone()]);
-            println!("{index} {index} {er} H (just rec)");
-            energy_rec += er;
-
-            let e = energy_for_real_water(&points, &vec![h2.clone()]);
-            println!("{index} {index} {e} H (rec+wat)");
-            energy += e;
-
-            let ew = energy_for_real_water(&waters_network, &vec![h2.clone()]);
-            println!("{index} {index} {ew} H (just wat)");
-            energy_w += ew;
-
-            let er = energy_for_real_water(&receptor_points, &vec![h2.clone()]);
-            println!("{index} {index} {er} H (just rec)");
-            energy_rec += er;
-
-            println!("{index} {index} {energy} HOH (rec+wat)");
-            println!("{index} {index} {energy_w} HOH (just wat)");
-            println!("{index} {index} {energy_rec} HOH (just rec)");
-            // println!();
-        }
-        // println!("{:?}", water);
-        // println!("{:?}\n", water_atoms);
-        // let energy = energy_for_real_water(&points, &water_atoms);
-        // println!("Energy for water: {}", energy);
-    }
-
 }

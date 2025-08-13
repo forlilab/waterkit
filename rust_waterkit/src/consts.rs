@@ -83,6 +83,26 @@ pub const VINA_GAUSS2_W: f64 = -0.005156;
 
 pub const USE_DIELECTRIC: bool = false;
 
+// GPU
+pub const MAX_N_WATERS: u32 = 500;
+pub const ATOM_FEATURES: u32 = 7;
+
+// 0 -> oxygen, 1 -> hydrogen_1, 2 -> hydrogen_2, 3 -> resnum
+pub const WATER_SIZE: u32 = 4 * 3;
+
+pub const INSERTION_X_IDX: u32 = 0;
+pub const INSERTION_Y_IDX: u32 = 1;
+pub const INSERTION_Z_IDX: u32 = 2;
+pub const TRANSLATION_X_IDX: u32 = 3;
+pub const TRANSLATION_Y_IDX: u32 = 4;
+pub const TRANSLATION_Z_IDX: u32 = 5;
+pub const ROT_AXIS_X_IDX: u32 = 6;
+pub const ROT_AXIS_Y_IDX: u32 = 7;
+pub const ROT_AXIS_Z_IDX: u32 = 8;
+pub const ROTATION_ANGLE: u32 = 9;
+pub const WATER_TARGET_IDX: u32 = 10;
+pub const ACCEPTANCE_IDX: u32 = 11;
+
 // MC 
 pub const KB: f32 = 0.0019872041; // Boltzmann constant in kcal/mol/K
 pub const KT: f32 = KB * TEMPERATURE as f32;
