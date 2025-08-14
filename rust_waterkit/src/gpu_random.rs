@@ -1,7 +1,7 @@
 use std::f32::EPSILON;
 use cubecl::prelude::*;
 
-// 1. Basic XorShift32 (corrected)
+// 1. Basic XorShift32
 #[cube]
 pub fn xorshift32(state: &mut u32) -> u32 {
     let mut x = *state;
@@ -12,7 +12,7 @@ pub fn xorshift32(state: &mut u32) -> u32 {
     x
 }
 
-// 2. Linear Congruential Generator (LCG) - corrected
+// 2. Linear Congruential Generator (LCG)
 #[cube]
 pub fn lcg_next(state: &mut u32) -> u32 {
     // Manual wrapping multiply and add
@@ -28,13 +28,13 @@ pub fn random_float(rng_state: &mut u32) -> f32 {
     (rand_int >> 8) as f32 / 16777216.0 // 2^24
 }
 
-// 4. Random float in custom range [min, max) - same as before
+// 4. Random float in custom range [min, max)
 #[cube]
 pub fn random_range(rng_state: &mut u32, min: f32, max: f32) -> f32 {
     random_float(rng_state) * (max - min) + min
 }
 
-// 5. Random integer in range [0, max) - same as before
+// 5. Random integer in range [0, max)
 #[cube]
 pub fn random_int_range(rng_state: &mut u32, max: u32) -> u32 {
     xorshift32(rng_state) % max
@@ -100,22 +100,6 @@ pub fn initialize_rng_states(
     rng_states[thread_id] = seed;
 }
 
-// 10. Initialize xoshiro128 state array
-// #[cube]
-// pub fn initialize_xoshiro128_states(
-//     base_seed: u32,
-//     states: &mut Array<Array<u32>>  // Each thread gets 4 u32s
-// ) {
-//     let thread_id = CUBE_POS_X;
-    
-//     // Generate 4 seed values using simple LCG
-//     let mut seed = base_seed + (thread_id as u32);
-    
-//     for i in 0..4 {
-//         seed = seed * 1103515245u32 + 12345u32;
-//         states[thread_id][i] = seed;
-//     }
-// }
 
 // 11. Alternative normal distribution using central limit theorem
 #[cube]

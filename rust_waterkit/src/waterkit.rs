@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use std::env;
 use std::fs::File;
 use std::io::Write;
-use std::time::SystemTime;
+use std::time::{Instant, SystemTime};
 use cubecl::wgpu::{WebGpu, WgpuDevice};
 use cubecl::{prelude::*};
 use ncollide3d::shape::FeatureId;
@@ -46,6 +46,46 @@ use crate::waterkit_system;
 use crate::waterkit_system::AtomSystem;
 use crate::waterkit_system::AtomType;
 use crate::waterkit_system::WaterSystem;
+
+fn run_mc(water_molecules: Vec<WaterMolecule>, receptor_points: &Vec<Atom> ) -> (Vec<Atom>, Vec<WaterMolecule>) {
+    let mut system_waters: Vec<WaterSystem> = Vec::with_capacity(water_molecules.len());
+    let mut system_atoms = Vec::new();
+    
+    let mut cnt = 0;
+    for water in water_molecules.iter() {
+        let water_vec = water.as_vec();
+        for atom in water_vec {
+            let atom_type = match atom.atom_type().as_str() {
+                "HW" => AtomType::WaterH,
+                "OW" => AtomType::WaterO,
+                _ => panic!("Unknown atom type: {}", atom.atom_type()),
+            };
+            system_atoms.push(AtomSystem::new(atom, atom_type));
+            // system_atoms.push(atom.clone());
+        }
+        system_waters.push(WaterSystem::new(cnt, cnt+1, cnt+2));
+        cnt += 3;
+    }
+    for atom in receptor_points {
+        system_atoms.push(AtomSystem::new(atom.clone(), AtomType::Protein))
+    }
+    let system = waterkit_system::System::new(system_atoms, system_waters);
+    let mut sa = optimizer::SimulatedAnnealing::new(
+        system,
+        water_molecules,
+        299.0,
+        300.0,
+        0.995,
+        12.0,
+        200000
+    );
+    let acceptance_rate = sa.run();
+    let mut waters = Vec::with_capacity(sa.waters.len() * 3);
+    for w in sa.waters.iter() {
+        waters.extend(w.as_vec());
+    }
+    (waters, sa.waters)
+}
 
 fn run_single_waterkit_gcmc_sa(receptor_points: &[Atom], 
     water_configurations: &Vec<[f64; 6]>, 
@@ -592,6 +632,7 @@ pub fn test_gpu(receptor_points: Vec<Atom>,
     0);
 
     // for epochs in epochs_test {
+    let start_gcmc = Instant::now();
         println!("Simulation with {} epochs", gcmc_steps);
         #[cfg(feature = "wgpu")]
         let n_waters = gpu_gcmc::simulate::<cubecl::wgpu::WgpuRuntime>(
@@ -622,24 +663,39 @@ pub fn test_gpu(receptor_points: Vec<Atom>,
             // println!("{idx} - {}", n_waters[idx]);
             // println!("C {} {} {}", n_waters[idx], n_waters[idx+1], n_waters[idx+2]);
         // }
-        println!("Done sampling...saving results!");
-        let frames = reconstruct_waters(n_waters, num_frames,  consts::MAX_N_WATERS as usize, 4, 3);
+        println!("Done sampling GCMC: {}s", start_gcmc.elapsed().as_secs());
+        
+        let (frames, water_molecules) = reconstruct_waters(n_waters, num_frames,  consts::MAX_N_WATERS as usize, 4, 3);
+        
+        // let start_mc = Instant::now();
+        // let waters: Vec<(Vec<Atom>, Vec<WaterMolecule>)> = (0..num_frames).into_par_iter()
+        // .map(|epoch| run_mc(
+        //     water_molecules[epoch],
+        //     &receptor_points,
+        // )).collect();
+        // println!("Done sampling MC: {}s", start_mc.elapsed().as_secs());
+
+        // waters.par_iter().enumerate()
+        // .for_each(|(idx, (optimized_system, water_moleucles))| {
+        //     // to_pdb(&unoptimized_system, &format!("{save_path}/water_{idx}_unoptimized.pdb"), None);
+        //     to_pdb(&optimized_system, &format!("{save_path}/water_{idx}_optimized.pdb"), None)}
+        // );
+
         frames.par_iter().enumerate()
-            .for_each(|(idx, waters)| {
-                // to_pdb(&unoptimized_system, &format!("{save_path}/water_{idx}_unoptimized.pdb"), None);
-                to_pdb(&waters, &format!("{save_path}/water_{idx}_optimized.pdb"), None)}
-            );
-        // }
+        .for_each(|(idx, frame)| {
+            to_pdb(&frame, &format!("{save_path}/water_{idx}_optimized.pdb"), None);
+        });
     }
 }
 
-fn reconstruct_waters(waters: Vec<f32>, num_frames: usize, max_n_waters: usize, atom_features: usize, atoms_per_water: usize) -> Vec<Vec<Atom>> {
+fn reconstruct_waters(waters: Vec<f32>, num_frames: usize, max_n_waters: usize, atom_features: usize, atoms_per_water: usize) -> (Vec<Vec<Atom>>, Vec<Vec<WaterMolecule>>) {
     let mut frames = Vec::new();
+    let mut waters_frames: Vec<Vec<WaterMolecule>> = Vec::new();
     for sim in 0..num_frames {
         // Calculate the starting index for this simulation's water data
         let base_wat_idx = sim * max_n_waters * atom_features * atoms_per_water;
         let mut water_molecules = Vec::<Atom>::new();
-        
+        let mut water_mol = Vec::new();
         // Iterate through each potential water molecule slot
         for water_idx in 0..max_n_waters {
             // Calculate the starting index for this water molecule
@@ -682,10 +738,13 @@ fn reconstruct_waters(waters: Vec<f32>, num_frames: usize, max_n_waters: usize, 
             for atom in wat_mol.as_vec() {
                 water_molecules.push(atom);
             }
+
+            water_mol.push(wat_mol);
         }
     println!("Simulation {}: Found {} water molecules\n", sim, water_molecules.len() / 3);
     frames.push(water_molecules);
+    waters_frames.push(water_mol);
     
     }
-    frames
+    (frames, waters_frames)
 }

@@ -58,7 +58,7 @@ def get_data_form_meeko(pdb_file, save=False):
     # with open("target.json", "w") as fo:
     #     fo.write(json_s)
 
-    with open("/data/phd/waterkit/rust_waterkit/target.json") as fi:
+    with open("/data/phd/waterkit/validation/hsp90_target/GCMC/target.json") as fi:
         json_string = fi.read()
 
     polymer = meeko.Polymer.from_json(json_string)
@@ -76,7 +76,7 @@ def load_waters(waters_pdb):
     waters_molsetups = list()
     for residue in waters.iterResidues():
         mk_prep = meeko.MoleculePreparation(load_atom_params="openff",
-                                            charge_model="espaloma")
+                                            charge_model="gasteiger")
         w_rdkit = Chem.MolFromSmiles("[H]O[H]")
         w_rdkit = Chem.AddHs(w_rdkit)
         rdkit.Chem.rdDistGeom.EmbedMolecule(w_rdkit)
@@ -110,21 +110,21 @@ def get_molsetup_coords(molsetup):
     return coords
 
 if __name__ == "__main__":
-    # polymer = get_data_form_meeko("/data/phd/waterkit/example/1uyg_no_ligand.pdb")
+    polymer = get_data_form_meeko("/data/phd/waterkit/example/1uyg_no_ligand.pdb")
     
     # molsetups_names = ["/data/phd/waterkit/example/traj/water_000001.pdb",
     # for i in range(0, 100):
     # molsetups_names = [f"/data/phd/waterkit/rust_waterkit/test/water_{i}_unoptimized.pdb",
     #                 f"/data/phd/waterkit/rust_waterkit/test/water_{i}_optimized.pdb"]
     
-    molsetups_names = ["/data/phd/waterkit/rust_waterkit/test/water_0_0_optimized.pdb"]
+    molsetups_names = ["/data/phd/waterkit/validation/hsp90_target/GCMC/frames/water_0_optimized.pdb"]
     for name in molsetups_names:
         molsetups = load_waters(name)
         docksys = jova.DockingSystem(
                 moving_molsetups=molsetups,
                 parameters=PARAMS,
                 static_molsetup=None,
-                polymer=None,
+                polymer=polymer,
                 mapo=None,
                 grid_desolv=None
             )

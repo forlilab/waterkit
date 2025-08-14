@@ -39,7 +39,7 @@ fn run_gcmc(
     let mut random_numbers = Array::<f32>::new(12);
 
     for step in 0..steps {
-
+        // debug_print!("\nEpoch: %d\n", step);
         let move_type = gpu_random::random_int_range(&mut rng_state, 3) as u32; // 0: insertion, 1: deletion, 2: displacement
 
         // Fill random numbers once per move
@@ -59,7 +59,6 @@ fn run_gcmc(
         // Bounds check: don’t add water if array full
         if active_waters < consts::MAX_N_WATERS {
             if move_type == 0 {
-                // let base_water_idx = waters_base_idx + active_waters * gpu_gcmc_moves::WATER_SIZE;
                 if gpu_gcmc_moves::insertion_move(
                     boundaries,
                     receptor_atoms,
@@ -71,6 +70,8 @@ fn run_gcmc(
                     last_resnum,
                     B,
                 ) {
+                    // let accepted = true;
+                    // debug_print!("Insertion accepted: %d\n", accepted);
                     active_waters += 1;
                 }
             } else if move_type == 1 && active_waters > 0 {
@@ -84,6 +85,8 @@ fn run_gcmc(
                     n_receptor_atoms,
                     B
                 ) {
+                    // let deleted = true;
+                    // debug_print!("Deletion accepted: %d\n", deleted);
                     active_waters -= 1;
                 }
             } else if move_type == 2 && active_waters > 0 {
@@ -98,6 +101,7 @@ fn run_gcmc(
                     n_receptor_atoms,
                 );
             }
+            // sync_cube();
         }
     }
     
@@ -107,9 +111,9 @@ fn run_gcmc(
         random_numbers[0] = gpu_random::random_range(&mut rng_state, boundaries[0], boundaries[1]);
         random_numbers[1] = gpu_random::random_range(&mut rng_state, boundaries[2], boundaries[3]);
         random_numbers[2] = gpu_random::random_range(&mut rng_state, boundaries[4], boundaries[5]);
-        random_numbers[3] = gpu_random::random_range(&mut rng_state, -0.5, 0.5);
-        random_numbers[4] = gpu_random::random_range(&mut rng_state, -0.5, 0.5);
-        random_numbers[5] = gpu_random::random_range(&mut rng_state, -0.5, 0.5);
+        random_numbers[3] = gpu_random::random_range(&mut rng_state, -0.3, 0.3);
+        random_numbers[4] = gpu_random::random_range(&mut rng_state, -0.3, 0.3);
+        random_numbers[5] = gpu_random::random_range(&mut rng_state, -0.3, 0.3);
         random_numbers[6] = gpu_random::random_float(&mut rng_state);
         random_numbers[7] = gpu_random::random_float(&mut rng_state);
         random_numbers[8] = gpu_random::random_float(&mut rng_state);
@@ -118,14 +122,14 @@ fn run_gcmc(
         random_numbers[11] = gpu_random::random_float(&mut rng_state);
         
         gpu_gcmc_moves::translation_move(
-                    boundaries,
-                    receptor_atoms,
-                    water_atoms,
-                    &random_numbers,
-                    sim_id,
-                    active_waters,
-                    n_receptor_atoms,
-                );
+            boundaries,
+            receptor_atoms,
+            water_atoms,
+            &random_numbers,
+            sim_id,
+            active_waters,
+            n_receptor_atoms,
+        );
     }
 
     // Save updated state for next batch

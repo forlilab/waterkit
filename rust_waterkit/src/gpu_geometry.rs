@@ -1,3 +1,4 @@
+use std::f32::consts::PI;
 use std::f64;
 use cubecl::prelude::*;
 use cubecl::cube;
@@ -119,8 +120,9 @@ pub fn rodrigues_rotation<F: Float>(
     pivot: &Array<F>,           // [x, y, z] - pivot point (oxygen position)
     result: &mut Array<F>       // [x, y, z] - output rotated point
 ) {
-    let cos_theta = F::cos(angle);
-    let sin_theta = F::sin(angle);
+    let rad_angle = angle * (F::cast_from(PI) * F::cast_from(180.0));
+    let cos_theta = F::cos(rad_angle);
+    let sin_theta = F::sin(rad_angle);
     
     let v_rel = subtract_points(point, pivot);
     let term1 = scale_point(&v_rel, cos_theta);
