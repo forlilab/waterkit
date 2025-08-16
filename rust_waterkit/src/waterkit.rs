@@ -597,7 +597,7 @@ pub fn test_gpu(receptor_points: Vec<Atom>,
     let water_params = consts::WATER_PARAMS.get(consts::WATER_FF).unwrap();
     let mut receptor_map = receptor_points.to_vec();
     let mut last_residue_number = receptor_points.iter().map(|n| n.residue_number).max().unwrap_or(1);
-    let distance_cutoff = 25.0;
+    let distance_cutoff = 10.0;
     let mut receptor_points_tree = None;
     if receptor_map.len() > 0 {
         receptor_points_tree = Some(build_kd_tree(&receptor_map.clone()));
@@ -706,7 +706,6 @@ fn reconstruct_waters(waters: Vec<f32>, num_frames: usize, max_n_waters: usize, 
             let o_x = waters[wat_index] as f64;
             let o_y = waters[wat_index + 1] as f64;
             let o_z = waters[wat_index + 2] as f64;
-            // println!("{} - {} - {}", o_x, o_y, o_z);
             
             // Skip if this water slot is empty (all coordinates are 0)
             if o_x == 0.0 && o_y == 0.0 && o_z == 0.0 {

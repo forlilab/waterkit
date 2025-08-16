@@ -58,6 +58,7 @@ pub fn insertion_move(
     random_numbers: &Array<f32>,
     sim_id: u32,
     active_waters: u32,
+    res_counter: &mut Array<u32>,
     n_receptor_atoms: u32,
     last_resnum: u32,
     B: f32,
@@ -65,13 +66,15 @@ pub fn insertion_move(
     let mut accepted = false;
     let waters_handle_idx = sim_id  * consts::MAX_N_WATERS * consts::WATER_SIZE;
     // Check if we have space for another water
-    debug_print!("Insertion move - active waters: %d\n", active_waters);
+    // debug_print!("Insertion move - active waters: %d\n", active_waters);
     if active_waters < consts::MAX_N_WATERS {
         // Calculate position for new water (at end of active waters)
         let new_water_idx = waters_handle_idx + active_waters * consts::WATER_SIZE;
 
         // Create temporary water for testing
-        let possible_resnum = last_resnum + active_waters + 1;
+        let counter_idx = sim_id;
+        let current_res = res_counter[counter_idx];
+        let possible_resnum = current_res + 1;
         let mut new_water = randomize_water(random_numbers);
 
         // Generate new water configuration
@@ -89,6 +92,8 @@ pub fn insertion_move(
                 sim_id);
 
             let waters_energy = energy_for_real_water_with_waters_kernel(water_atoms, &new_water, sim_id, active_waters);
+            // debug_print!("Insertion move - receptor's energy: %f\n", receptor_energy);
+            // debug_print!("Insertion move - waters' energy: %f\n", waters_energy);
             // debug_print!("Insertion move waters energy: %f\n", waters_energy);
             let new_energy = receptor_energy + waters_energy;
             // debug_print!("Insertion move new energy: %f\n", new_energy);
@@ -107,13 +112,16 @@ pub fn insertion_move(
             if rnd_acceptance < acceptance_prob {
             // if new_energy < 0.0 {
                 // ACCEPT: Copy new water to the active position
+                // Wait for energy calculations to complete -> avoid race conditions
+                sync_cube();
                 copy_water_to_array(&new_water, water_atoms, new_water_idx);
+                res_counter[counter_idx] = possible_resnum;
                 accepted = true;
+                // debug_print!("Insertion move - water %d inserted\n", possible_resnum);
             }
         }
     }
     // If rejected, do nothing - the slot remains empty
-    debug_print!("Insertion move - accepted: %d\n", accepted);
     accepted
 }
 
@@ -129,7 +137,7 @@ pub fn deletion_move(
     B: f32,
 ) -> bool {
     let mut deleted = false;
-    debug_print!("Deletion move - active waters: %d\n", active_waters);
+    // debug_print!("Deletion move - active waters: %d\n", active_waters);
     if active_waters > 0 {
         let waters_handle_idx = sim_id  * consts::MAX_N_WATERS * consts::WATER_SIZE;
 
@@ -138,7 +146,7 @@ pub fn deletion_move(
 
         // Calculate position of water to delete
         let delete_water_idx = waters_handle_idx + water_to_delete * consts::WATER_SIZE;
-        debug_print!("Water to delete: %d from %d active waters\n", water_to_delete, active_waters);
+        // debug_print!("Water to delete: %d from %d active waters\n", water_to_delete, active_waters);
         // Load water to be deleted for energy calculation
         let mut water_to_remove = Array::<f32>::new(consts::WATER_SIZE);
         load_water_from_array(water_atoms, delete_water_idx, &mut water_to_remove);
@@ -150,7 +158,8 @@ pub fn deletion_move(
             sim_id);
         
         let waters_energy = energy_for_real_water_with_waters_kernel(water_atoms, &water_to_remove, sim_id, active_waters);
-
+        // debug_print!("Deletion move - receptor's energy: %f\n", receptor_energy);
+        // debug_print!("Deletion move - waters' energy: %f\n", waters_energy);
         let removed_energy = receptor_energy + waters_energy;
         
         // Calculate acceptance probability for deletion
@@ -161,7 +170,8 @@ pub fn deletion_move(
             active_waters as f32 * f32::exp(-B) * f32::exp(-consts::BETA * deltaE),
             1.0
         );
-        
+        // debug_print!("Deletion move - deltaE: %f\n", deltaE);
+        // debug_print!("Deletion move - acceptance prob: %f\n", acceptance_prob);
         // Check acceptance
         let rnd_acceptance = random_numbers[consts::ACCEPTANCE_IDX];
         
@@ -173,8 +183,12 @@ pub fn deletion_move(
             if water_to_delete < active_waters - 1 {
                 // Move the LAST water (index active_waters - 1) to the deleted position
                 let last_water_idx = waters_handle_idx + (active_waters - 1) * consts::WATER_SIZE;
-                debug_print!("Moving last water from index %d to deleted position %d\n", 
-                            last_water_idx, delete_water_idx);
+                // debug_print!("Moving last water from index %d to deleted position %d\n", 
+                //             last_water_idx, delete_water_idx);
+                
+                // Wait for energy calculations to complete -> avoid race conditions
+                sync_cube();
+
                 move_water_in_array(water_atoms, last_water_idx, delete_water_idx);
             // } else {
                 // debug_print!("Deleted water was already the last one, no moving needed\n", active_waters);
@@ -182,11 +196,11 @@ pub fn deletion_move(
             
             // FIXED: Clear the last position (where the last water was before moving)
             let last_water_idx = waters_handle_idx + (active_waters - 1) * consts::WATER_SIZE;
-            debug_print!("Clearing water at last position: %d\n", last_water_idx);
+            // debug_print!("Clearing water at last position: %d\n", last_water_idx);
             clear_water_in_array(water_atoms, last_water_idx);
         }
     }
-    debug_print!("Deletion move - accepted: %d\n", deleted);
+    // debug_print!("Deletion move - accepted: %d\n", deleted);
     deleted
     // If rejected, do nothing - water stays in place
 }
@@ -202,6 +216,7 @@ pub fn translation_move(
     sim_id: u32,
     active_waters: u32,
     n_receptor_atoms: u32,
+    production_mc: bool
 ) {
     let waters_handle_idx = sim_id  * consts::MAX_N_WATERS * consts::WATER_SIZE;
     // Select random active water to move
@@ -235,11 +250,29 @@ pub fn translation_move(
     let rnd_acceptance = random_numbers[consts::ACCEPTANCE_IDX];
     
     let deltaE = energy_new - energy_old; // Calculate actual energy difference
-    let acceptance_prob = f32::min(f32::exp(-consts::BETA * deltaE), 1.0);
-    
-    if rnd_acceptance < acceptance_prob {
-    // if energy_new < 0.0 {
-        copy_water_to_array(&new_water, water_atoms, move_water_idx);
+
+    if !production_mc {
+        let acceptance_prob = f32::min(f32::exp(-consts::BETA * deltaE), 1.0);
+
+        if rnd_acceptance < acceptance_prob {
+                // Wait for energy calculations to complete -> avoid race conditions
+            sync_cube();
+            copy_water_to_array(&new_water, water_atoms, move_water_idx);
+        }
+    } else {
+        if energy_new < energy_old {
+            // Wait for energy calculations to complete -> avoid
+            sync_cube();
+            copy_water_to_array(&new_water, water_atoms, move_water_idx);
+        } else {
+            let factor = f32::cast_from(consts::BOLTZMANN_K * consts::TEMPERATURE);
+            let p_acc = f32::min(f32::exp(-deltaE / factor), 1.0);
+            if rnd_acceptance < p_acc {
+                // Wait for energy calculations to complete -> avoid race conditions
+                sync_cube();
+                copy_water_to_array(&new_water, water_atoms, move_water_idx);
+            }
+        }
     }
 }
 
@@ -299,8 +332,6 @@ pub fn clear_water_in_array(waters: &mut Array<f32>, base_idx: u32) {
     waters[base_idx+2] = 0.0;
     waters[base_idx+3] = 0.0;
     waters[base_idx+4] = 0.0;
-    waters[base_idx+5] = 0.0;
-    waters[base_idx+5] = 0.0;
     waters[base_idx+5] = 0.0;
     waters[base_idx+6] = 0.0;
     waters[base_idx+7] = 0.0;
@@ -553,17 +584,19 @@ pub fn energy_for_real_water_kernel(
             let distance = f32::sqrt(distance_sq);
             let r_val = f32::max(distance, 1e-8);
 
-            if r_val < f32::cast_from(consts::ELECTROSTATICS_CUTOFF) {
+            // if r_val < f32::cast_from(consts::ELECTROSTATICS_CUTOFF) {
                 let mut lj_energy = 0.0;
                 if !t_is_hw {
                     lj_energy = gpu_energy::lennard_jones_rmin_half(
                         t_epsilon, r_epsilon, r_val, t_rmin_half, r_rmin_half);
+                    //     debug_print!("Receptor - Distance: %f for %d and %d\n", r_val, t_resnum_t, r_resnum);
+                    // debug_print!("Receptor - LJ energy: %f\n", lj_energy);
                 }
                 total_energy += lj_energy;
 
                 let electrostatics_energy = gpu_energy::coulomb_energy::<f32>(t_charge, r_charge, r_val);
                 total_energy += electrostatics_energy;
-            }
+            // }
         }
     }
     total_energy
@@ -677,28 +710,28 @@ pub fn energy_for_real_water_with_waters_kernel(
                 let distance = f32::sqrt(distance_sq);
                 let r_val = f32::max(distance, 1e-8);
                 
-                // debug_print!("Distance: %f\n", r_val);
-                
-                // Calculate LJ energy (only for O-O interactions)
-                let w_is_hw = w_epsilon == 0.0;
-                let t_is_hw = t_epsilon == 0.0;
-                
-                if !t_is_hw && !w_is_hw {
-                    let lj_energy = gpu_energy::lennard_jones_rmin_half(
-                        t_epsilon, w_epsilon, r_val, t_rmin_half, w_rmin_half
+                // debug_print!("Distance: %f for %d and %d\n", r_val, t_resnum_int, w_resnum_int);
+                // if r_val < f32::cast_from(consts::ELECTROSTATICS_CUTOFF) {
+                    // Calculate LJ energy (only for O-O interactions)
+                    let w_is_hw = w_epsilon == 0.0;
+                    let t_is_hw = t_epsilon == 0.0;
+                    
+                    if !t_is_hw && !w_is_hw {
+                        let lj_energy = gpu_energy::lennard_jones_rmin_half(
+                            t_epsilon, w_epsilon, r_val, t_rmin_half, w_rmin_half
+                        );
+                        // debug_print!("Water - Distance: %f for %d and %d\n", r_val, t_resnum_int, w_resnum_int);
+                        // debug_print!("Water - LJ energy: %f\n", lj_energy);
+                        total_energy += lj_energy;
+                    }
+                    
+                    // Calculate electrostatic energy
+                    let electrostatics_energy = gpu_energy::coulomb_energy::<f32>(
+                        t_charge, w_charge, r_val
                     );
-                    // debug_print!("LJ energy: %f\n", lj_energy);
-                    total_energy += lj_energy;
-                }
-                
-                // Calculate electrostatic energy
-                let electrostatics_energy = gpu_energy::coulomb_energy::<f32>(
-                    t_charge, w_charge, r_val
-                );
-                // debug_print!("Electrostatic energy: %f\n", electrostatics_energy);
-                total_energy += electrostatics_energy;
-            } else {
-                // debug_print!("Skipping same residue interaction: %d and %d\n", t_resnum_int, w_resnum_int);
+                    // debug_print!("Electrostatic energy: %f\n", electrostatics_energy);
+                    total_energy += electrostatics_energy;
+                // }
             }
         }
     }

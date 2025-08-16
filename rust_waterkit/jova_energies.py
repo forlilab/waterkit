@@ -111,13 +111,14 @@ def get_molsetup_coords(molsetup):
 
 if __name__ == "__main__":
     polymer = get_data_form_meeko("/data/phd/waterkit/example/1uyg_no_ligand.pdb")
+    # polymer=None
     
     # molsetups_names = ["/data/phd/waterkit/example/traj/water_000001.pdb",
-    # for i in range(0, 100):
-    # molsetups_names = [f"/data/phd/waterkit/rust_waterkit/test/water_{i}_unoptimized.pdb",
-    #                 f"/data/phd/waterkit/rust_waterkit/test/water_{i}_optimized.pdb"]
-    
-    molsetups_names = ["/data/phd/waterkit/validation/hsp90_target/GCMC/frames/water_0_optimized.pdb"]
+    molsetups_names = list()
+    for i in range(0, 1):
+        molsetups_names.append(f"/data/phd/waterkit/validation/hsp90_target/GCMC/frames/water_{i}_optimized.pdb")
+
+    # molsetups_names = ["/data/phd/waterkit/validation/hsp90_target/GCMC/frames/water_0_optimized.pdb"]
     for name in molsetups_names:
         molsetups = load_waters(name)
         docksys = jova.DockingSystem(
@@ -134,13 +135,13 @@ if __name__ == "__main__":
         energies = {}
         g = docksys.get_current_genes()
         e = docksys.eval(g, log=energies)
-        # print(energies)
+        print(energies.keys())
         # terms_of_interest = ["lj_12_6", "coulomb"]
-        # mapping = {0: "Receptor", 
-        #            1: f"Water at coords: {get_molsetup_coords(molsetups[0])}", 
-        #            2: f"Water at coords: {get_molsetup_coords(molsetups[1])}",
-        #            3: f"Water at coords: {get_molsetup_coords(molsetups[2])}",
-        #            4: f"Water at coords: {get_molsetup_coords(molsetups[3])}"}
+        # mapping = {0: "Receptor", }
+                #    1: f"Water at coords: {get_molsetup_coords(molsetups[0])}", 
+                #    2: f"Water at coords: {get_molsetup_coords(molsetups[1])}",
+                #    3: f"Water at coords: {get_molsetup_coords(molsetups[2])}",
+                #    4: f"Water at coords: {get_molsetup_coords(molsetups[3])}"}
         # for term in terms_of_interest:
         #     data = energies['direct']['terms'][term]
         #     print(f"{term}")

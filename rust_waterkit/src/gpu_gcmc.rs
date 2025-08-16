@@ -20,6 +20,7 @@ fn run_gcmc(
     water_atoms: &mut Array<f32>,
     seeds: &mut Array<u32>,           // persistent RNG state
     num_waters: &mut Array<u32>,      // persistent per-sim water count
+    waters_res_numbers: &mut Array<u32>, // persistent water residue numbers
     last_resnum: u32,
     B: f32,
     volume: f32,
@@ -40,7 +41,7 @@ fn run_gcmc(
 
     for step in 0..steps {
         // debug_print!("\nEpoch: %d\n", step);
-        let move_type = gpu_random::random_int_range(&mut rng_state, 3) as u32; // 0: insertion, 1: deletion, 2: displacement
+        let move_type = gpu_random::random_int_range(&mut rng_state, 2) as u32; // 0: insertion, 1: deletion, 2: displacement
 
         // Fill random numbers once per move
         random_numbers[0] = gpu_random::random_range(&mut rng_state, boundaries[0], boundaries[1]);
@@ -53,12 +54,18 @@ fn run_gcmc(
         random_numbers[7] = gpu_random::random_float(&mut rng_state);
         random_numbers[8] = gpu_random::random_float(&mut rng_state);
         random_numbers[9] = gpu_random::random_range(&mut rng_state, -180_f32, 180_f32);
+        if active_waters > 0 {
         random_numbers[10] = gpu_random::random_int_range(&mut rng_state, active_waters) as f32;
+        } else {
+            random_numbers[10] = 0.0;
+        }
         random_numbers[11] = gpu_random::random_float(&mut rng_state);
 
+        let target_water = random_numbers[10] as u32;
         // Bounds check: don’t add water if array full
         if active_waters < consts::MAX_N_WATERS {
             if move_type == 0 {
+                // debug_print!("Insertion move - %d\n", active_waters);
                 if gpu_gcmc_moves::insertion_move(
                     boundaries,
                     receptor_atoms,
@@ -66,6 +73,7 @@ fn run_gcmc(
                     &random_numbers,
                     sim_id,
                     active_waters,
+                    waters_res_numbers,
                     n_receptor_atoms,
                     last_resnum,
                     B,
@@ -75,6 +83,7 @@ fn run_gcmc(
                     active_waters += 1;
                 }
             } else if move_type == 1 && active_waters > 0 {
+                // debug_print!("Deletion move - %d - water %d\n", target_water);
                 // Deletion move
                 if gpu_gcmc_moves::deletion_move(
                     receptor_atoms,
@@ -90,6 +99,7 @@ fn run_gcmc(
                     active_waters -= 1;
                 }
             } else if move_type == 2 && active_waters > 0 {
+                // debug_print!("Displacement move - %d - water %d\n", active_waters, target_water);
                 // Displacement move
                 gpu_gcmc_moves::translation_move(
                     boundaries,
@@ -99,9 +109,10 @@ fn run_gcmc(
                     sim_id,
                     active_waters,
                     n_receptor_atoms,
+                    false // production_mc
                 );
             }
-            // sync_cube();
+            sync_cube();
         }
     }
     
@@ -121,6 +132,8 @@ fn run_gcmc(
         random_numbers[10] = gpu_random::random_int_range(&mut rng_state, active_waters) as f32;
         random_numbers[11] = gpu_random::random_float(&mut rng_state);
         
+        let target_water = random_numbers[10] as u32;
+        // debug_print!("Production move - %d - water %d\n", active_waters, target_water);
         gpu_gcmc_moves::translation_move(
             boundaries,
             receptor_atoms,
@@ -129,6 +142,7 @@ fn run_gcmc(
             sim_id,
             active_waters,
             n_receptor_atoms,
+            true // production_mc
         );
     }
 
@@ -192,11 +206,15 @@ pub fn simulate<R: Runtime>(
         waters_buffer.push(0.0);
         waters_buffer.push(0.);
     }
+
+    let waters_res_numbers: Vec<u32> = vec![0; n_simulations];
+
     println!("N WATERS: {}", waters_buffer.len());
     let boundaries_handle = client.create(f32::as_bytes(&boundaries));
     let receptor_atoms_handle = client.create(f32::as_bytes(&receptor_atoms_buffer));
     let water_atoms_handle = client.create(f32::as_bytes(&waters_buffer));
     let wat_num_handle = client.empty(n_simulations * core::mem::size_of::<u32>());
+    let waters_res_numbers_handle = client.create(u32::as_bytes(&waters_res_numbers));
     
     let volume_var = volume / consts::STANDARD_VOLUME;
     let B = consts::CHEMICAL_POTENTIAL * consts::BETA + volume_var.ln();
@@ -211,6 +229,7 @@ pub fn simulate<R: Runtime>(
             ArrayArg::from_raw_parts::<f32>(&water_atoms_handle, waters_buffer.len(), 1), 
             ArrayArg::from_raw_parts::<u32>(&seed_tensor.handle, n_simulations*num_steps, 1), 
             ArrayArg::from_raw_parts::<u32>(&wat_num_handle, n_simulations, 1),
+            ArrayArg::from_raw_parts::<i32>(&waters_res_numbers_handle, n_simulations, 1),
             ScalarArg {elem: receptor_atoms_buffer[receptor_atoms_buffer.len() -1] as u32}, 
             ScalarArg {elem: B},
             ScalarArg {elem: volume}, 

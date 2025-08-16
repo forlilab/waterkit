@@ -21,7 +21,7 @@ pub fn lennard_jones_rmin_half(epsilon_1: f32, epsilon_2: f32, dist: f32, rmin_h
 ///     f64: Coulomb energy (in kcal/mol).
 #[cube]
 pub fn coulomb_energy<F: Float>(q1: F, q2: F, r: F) -> F {
-    let k_e = F::new(332.0636); // Electrostatic constant in kcal·Å/(mol·e^2)
+    let k_e = F::cast_from(332.0636); // Electrostatic constant in kcal·Å/(mol·e^2)
     // let dielectric = 1.0; // Dielectric constant of the medium (default: 1.0)
     let coulomb = k_e * (q1 * q2) / r;
     coulomb
