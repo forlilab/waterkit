@@ -22,6 +22,7 @@ pub mod gpu_gcmc;
 pub mod gpu_geometry;
 pub mod gpu_gcmc_moves;
 pub mod gpu_random;
+pub mod gpu_multithread;
 pub mod replica_exchange;
 pub mod python_wrapper;
 

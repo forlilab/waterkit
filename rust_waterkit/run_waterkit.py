@@ -1,3 +1,4 @@
+import io
 import numpy as np
 import time
 import sys
@@ -5,6 +6,9 @@ import os
 import meeko
 import rust_waterkit
 from rdkit import Chem
+from openmm.app import *
+from openmm import *
+import openmm.unit as openmmunit
 
 def get_data_from_meeko(pdb_file, project_path, save=True):
     rotatable_hydrogens = list()
@@ -69,6 +73,52 @@ def get_data_from_meeko(pdb_file, project_path, save=True):
             surface_atoms.append(new_atom)
     return surface_atoms
 
+def _build_box(positions, padding=2*openmmunit.angstrom):
+        """Builds the simulation box
+        """
+        padding = padding.value_in_unit(openmmunit.nanometer)
+        positions = positions.value_in_unit(openmmunit.nanometer)
+        minRange = Vec3(*(min((pos[i] for pos in positions)) for i in range(3)))
+        maxRange = Vec3(*(max((pos[i] for pos in positions)) for i in range(3)))
+        center = 0.5*(minRange+maxRange)
+        radius = max(unit.norm(center-pos) for pos in positions)
+        width = max(2*radius+padding, 2*padding)
+        vectors = (Vec3(width, 0, 0), Vec3(0, width, 0), Vec3(0, 0, width))
+        box = Vec3(vectors[0][0], vectors[1][1], vectors[2][2])
+        origin = center - (np.ceil(np.array((width, width, width))))
+        _box_origin = origin
+        _box_size = np.ceil(np.array([maxRange[0]-minRange[0],
+                                           maxRange[1]-minRange[1],
+                                           maxRange[2]-minRange[2]])).astype(int)
+        lowerBound = center-box/2
+        upperBound = center+box/2
+        return vectors
+
+def get_data_from_openmm(pdb_file, project_path, protein_ff="amber14-all.xml", small_molecule=False, small_molecule_ff="espaloma"):
+    with open(pdb_file) as f:
+        pdb_string = f.read()
+    pdb_string = io.StringIO(pdb_string)
+    if not pdb_file.endswith(".pdb"):
+        pdb = PDBxFile(pdb_string)
+    else:
+        pdb = PDBFile(pdb_string)
+    protein_topology, protein_positions = pdb.topology, pdb.positions
+    protein_modeller = Modeller(protein_topology, protein_positions)
+    vectors = _build_box(protein_positions)
+    protein_modeller.topology.setPeriodicBoxVectors(vectors)
+    forcefield = ForceField(protein_ff)
+    # if small_molecule:
+    #     small_molecule_ff = self._parametrize_cosolvents(cosolvents, small_molecule_ff=sm_ff)
+    #     forcefield.registerTemplateGenerator(small_molecule_ff.generator)
+    system = forcefield.createSystem(protein_topology,
+                                    nonbondedMethod=PME,
+                                    nonbondedCutoff=10*openmmunit.angstrom,
+                                    switchDistance=9*openmmunit.angstrom,
+                                    removeCMMotion=True,
+                                    constraints=HBonds,
+                                    hydrogenMass=1.0*openmmunit.amu)
+    return system
+
 def load_waters_orientations(orientations="/data/phd/waterkit/waterkit/data/water_orientations.txt"):
 # def load_waters_orientations(orientations="/Users/niccolobruciaferri/phd/waterkit/waterkit/data/water_orientations.txt"):
     usecols = [0, 1, 2, 3, 4, 5]
@@ -89,7 +139,7 @@ def run_mcswell(receptor_path, project_path, center, alg_type="gcmc"):
     # sa_steps to be adjusted
     if alg_type == "gcmc":
         # rust_waterkit.run_waterkit_gcmc(parametrized_atoms, [], grid, n_frames, 400000, save_path)
-        rust_waterkit.test_gpu(parametrized_atoms, [], grid, n_frames, 500000, save_path)  
+        rust_waterkit.test_gpu(parametrized_atoms, [], grid, n_frames, 400000, save_path)  
     elif alg_type == "gcmcmc":
         rust_waterkit.run_waterkit_gcmcmc(parametrized_atoms, [], grid, n_frames, 400000, 75000, save_path)
     elif alg_type == "gcmcsa":

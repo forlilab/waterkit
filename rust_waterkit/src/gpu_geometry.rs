@@ -120,15 +120,18 @@ pub fn rodrigues_rotation<F: Float>(
     pivot: &Array<F>,           // [x, y, z] - pivot point (oxygen position)
     result: &mut Array<F>       // [x, y, z] - output rotated point
 ) {
-    let rad_angle = angle * (F::cast_from(PI) * F::cast_from(180.0));
+    let rad_angle = angle * (F::cast_from(PI) * F::cast_from(180.0f32));
     let cos_theta = F::cos(rad_angle);
     let sin_theta = F::sin(rad_angle);
     
     let v_rel = subtract_points(point, pivot);
     let term1 = scale_point(&v_rel, cos_theta);
     let term2 = scale_point(&cross(&axis, &v_rel), sin_theta);
-    let term3 = scale_point(&scale_point(&axis, dot(axis, &v_rel)), (F::new(1.0) - cos_theta));
-    let summed = sum_points(&sum_points(&sum_points(&term1, &term2), &term3), &pivot);
+    let term3 = scale_point(&scale_point(&axis, dot(axis, &v_rel)), (F::new(1.0f32) - cos_theta));
+    let sum1 = &sum_points(&term1, &term2);
+    let sum2 = &sum_points(sum1, &term3);
+    let sum3 = &sum_points(sum2, &pivot);
+    let summed = sum3;
     result[0] = summed[0];
     result[1] = summed[1];
     result[2] = summed[2];

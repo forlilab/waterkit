@@ -6,6 +6,7 @@ use crate::gpu_random;
 
 #[cube]
 pub fn randomize_water(random_numbers: &Array<f32>) -> Array<f32> {
+    let d: f32 = f32::cast_from(0f32);
     let rot_axis_x = random_numbers[consts::ROT_AXIS_X_IDX];
     let rot_axis_y = random_numbers[consts::ROT_AXIS_Y_IDX];
     let rot_axis_z = random_numbers[consts::ROT_AXIS_Z_IDX];
@@ -345,31 +346,31 @@ pub fn clear_water_in_array(waters: &mut Array<f32>, base_idx: u32) {
 pub fn create_water_std(resnum: u32) -> Array<f32>{
     let mut new_water: Array<f32> = Array::new(consts::WATER_SIZE);
     #[cfg(feature = "tip3p")]
-    new_water[0] = 0.000;
-    new_water[1] = 0.000;
-    new_water[2] = 0.000;
+    new_water[0] = 0.000f32;
+    new_water[1] = 0.000f32;
+    new_water[2] = 0.000f32;
     new_water[3] = resnum as f32;
-    new_water[4] = 0.000;
-    new_water[5] = 0.756;
-    new_water[6] = 0.586;
+    new_water[4] = 0.000f32;
+    new_water[5] = 0.756f32;
+    new_water[6] = 0.586f32;
     new_water[7] = resnum as f32;
-    new_water[8] = 0.000;
-    new_water[9] = -0.761;
-    new_water[10] = 0.594;
+    new_water[8] = 0.000f32;
+    new_water[9] = -0.761f32;
+    new_water[10] = 0.594f32;
     new_water[11] = resnum as f32;
 
     #[cfg(feature = "tip3pfp")]
-    new_water[0] = 0.000;
-    new_water[1] = 0.000;
-    new_water[2] = -0.018;
+    new_water[0] = 0.000f32;
+    new_water[1] = 0.000f32;
+    new_water[2] = -0.018f32;
     new_water[3] = resnum as f32;
-    new_water[4] = 0.000;
-    new_water[5] = 0.761;
-    new_water[6] = 0.595;
+    new_water[4] = 0.000f32;
+    new_water[5] = 0.761f32;
+    new_water[6] = 0.595f32;
     new_water[7] = resnum as f32;
-    new_water[8] = 0.000;
-    new_water[9] = -0.761;
-    new_water[10] = 0.594;
+    new_water[8] = 0.000f32;
+    new_water[9] = -0.761f32;
+    new_water[10] = 0.594f32;
     new_water[11] = resnum as f32;
 
     new_water
@@ -739,111 +740,3 @@ pub fn energy_for_real_water_with_waters_kernel(
     // debug_print!("Final total energy: %f\n", total_energy);
     total_energy
 }
-
-// #[cube]
-// pub fn energy_for_real_water_with_waters_kernel(
-//     water_atoms: &Array<f32>, 
-//     target_water: &Array<f32>, 
-//     sim_id: u32,
-//     active_waters: u32
-// ) -> f32 {
-//     let mut total_energy: f32 = 0.0;
-//     let water_atom_stride = 4;
-//     let atoms_per_water = 3;
-//     let waters_base_idx = sim_id * consts::MAX_N_WATERS * consts::WATER_SIZE;
-    
-//     // Only iterate through active waters, not all possible waters
-//     for w_idx in waters_base_idx..waters_base_idx + active_waters {
-//         let water_base = w_idx * water_atom_stride;
-        
-//         let w_x = water_atoms[water_base];
-//         let w_y = water_atoms[water_base + 1];
-//         let w_z = water_atoms[water_base + 2];
-//         let w_resnum = water_atoms[water_base + 3];
-        
-//         let mut w_charge = 0.0;
-//         let mut w_epsilon = 0.0;
-//         let mut w_rmin_half = 0.0;
-        
-//         #[cfg(feature = "tip3p")]
-//         if w_idx % 4 == 0 {  // Oxygen
-//             w_charge = -0.8340;
-//             w_epsilon = 0.15210325;
-//             w_rmin_half = 1.7682;
-//         } else {  // Hydrogen
-//             w_charge = 0.4170;
-//         }
-
-//         #[cfg(feature = "tip3pfp")]
-//         if w_idx % 4 == 0 {  // Oxygen
-//             w_charge = -0.8484;
-//             w_epsilon = 0.15586604;
-//             w_rmin_half = 1.7835723;
-//         } else {  // Hydrogen
-//             w_charge = 0.4242;
-//         }
-        
-//         // Calculate interaction with target water
-//         for target_atom_idx in 0..atoms_per_water {
-//             let t_base = target_atom_idx * water_atom_stride;
-//             let t_x = target_water[t_base];
-//             let t_y = target_water[t_base + 1];
-//             let t_z = target_water[t_base + 2];
-//             let t_resnum = target_water[t_base + 3];
-            
-//             let mut t_charge = 0.0;
-//             let mut t_epsilon = 0.0;
-//             let mut t_rmin_half = 0.0;
-            
-//             #[cfg(feature = "tip3p")]
-//             if target_atom_idx == 0 {  // Oxygen
-//                 t_charge = -0.8340;
-//                 t_epsilon = 0.15210325;
-//                 t_rmin_half = 1.7682;
-//             } else {  // Hydrogen
-//                 t_charge = 0.4170;
-//             }
-
-//             #[cfg(feature = "tip3pfp")]
-//             if target_atom_idx == 0 {  // Oxygen
-//                 t_charge = -0.8484;
-//                 t_epsilon = 0.15586604;
-//                 t_rmin_half = 1.7835723;
-//             } else {  // Hydrogen
-//                 t_charge = 0.4242;
-//             }
-            
-//             // Skip same residue interactions
-//             if t_resnum != w_resnum {  
-//                 let dx = t_x - w_x;
-//                 let dy = t_y - w_y;
-//                 let dz = t_z - w_z;
-//                 let distance_sq = dx * dx + dy * dy + dz * dz;
-//                 let distance = f32::sqrt(distance_sq);
-//                 let r_val = f32::max(distance, 1e-8);
-                
-//                 // if r_val < f32::cast_from(25.0) { 
-//                     // Calculate LJ energy (only for O-O interactions)
-//                     let w_is_hw = w_epsilon == 0.0;
-//                     let t_is_hw = t_epsilon == 0.0;
-                    
-//                     if !t_is_hw && !w_is_hw {
-//                         let lj_energy = gpu_energy::lennard_jones_rmin_half(
-//                             t_epsilon, w_epsilon, r_val, t_rmin_half, w_rmin_half
-//                         );
-//                         total_energy += lj_energy;
-//                     }
-                    
-//                     // Calculate electrostatic energy
-//                     let electrostatics_energy = gpu_energy::coulomb_energy::<f32>(
-//                         t_charge, w_charge, r_val
-//                     );
-//                     total_energy += electrostatics_energy;
-//                 // }
-//             }
-//         }
-//         // }
-//     }
-    
-//     total_energy
-// }

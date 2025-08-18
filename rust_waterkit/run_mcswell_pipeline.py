@@ -87,8 +87,8 @@ if __name__ == "__main__":
         #             center=center,
         #             alg_type=alg_type)
         
-        # # full_pipeline = False
-        # # if full_pipeline:
+        # full_pipeline = False
+        # if full_pipeline:
         os.chdir(f"{project_path}")
         # Create trajectory from the frames
         make_trajectory(receptor_filename=receptor_path,
