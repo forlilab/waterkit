@@ -63,12 +63,13 @@ pub fn insertion_move(
     n_receptor_atoms: u32,
     last_resnum: u32,
     B: f32,
+    target_n_waters: u32,
 ) -> bool {
     let mut accepted = false;
-    let waters_handle_idx = sim_id  * consts::MAX_N_WATERS * consts::WATER_SIZE;
+    let waters_handle_idx = sim_id  * target_n_waters * consts::WATER_SIZE;
     // Check if we have space for another water
     // debug_print!("Insertion move - active waters: %d\n", active_waters);
-    if active_waters < consts::MAX_N_WATERS {
+    if active_waters < target_n_waters {
         // Calculate position for new water (at end of active waters)
         let new_water_idx = waters_handle_idx + active_waters * consts::WATER_SIZE;
 
@@ -92,7 +93,7 @@ pub fn insertion_move(
                 n_receptor_atoms,
                 sim_id);
 
-            let waters_energy = energy_for_real_water_with_waters_kernel(water_atoms, &new_water, sim_id, active_waters);
+            let waters_energy = energy_for_real_water_with_waters_kernel(water_atoms, &new_water, sim_id, active_waters, target_n_waters);
             // debug_print!("Insertion move - receptor's energy: %f\n", receptor_energy);
             // debug_print!("Insertion move - waters' energy: %f\n", waters_energy);
             // debug_print!("Insertion move waters energy: %f\n", waters_energy);
@@ -136,11 +137,12 @@ pub fn deletion_move(
     active_waters: u32,
     n_receptor_atoms: u32,
     B: f32,
+    target_n_waters: u32,
 ) -> bool {
     let mut deleted = false;
     // debug_print!("Deletion move - active waters: %d\n", active_waters);
     if active_waters > 0 {
-        let waters_handle_idx = sim_id  * consts::MAX_N_WATERS * consts::WATER_SIZE;
+        let waters_handle_idx = sim_id  * target_n_waters * consts::WATER_SIZE;
 
         // Select random water to delete (0 to active_waters-1)
         let water_to_delete = random_numbers[consts::WATER_TARGET_IDX] as u32;
@@ -158,7 +160,7 @@ pub fn deletion_move(
             n_receptor_atoms,
             sim_id);
         
-        let waters_energy = energy_for_real_water_with_waters_kernel(water_atoms, &water_to_remove, sim_id, active_waters);
+        let waters_energy = energy_for_real_water_with_waters_kernel(water_atoms, &water_to_remove, sim_id, active_waters, target_n_waters);
         // debug_print!("Deletion move - receptor's energy: %f\n", receptor_energy);
         // debug_print!("Deletion move - waters' energy: %f\n", waters_energy);
         let removed_energy = receptor_energy + waters_energy;
@@ -217,9 +219,10 @@ pub fn translation_move(
     sim_id: u32,
     active_waters: u32,
     n_receptor_atoms: u32,
-    production_mc: bool
+    production_mc: bool,
+    target_n_waters: u32,
 ) {
-    let waters_handle_idx = sim_id  * consts::MAX_N_WATERS * consts::WATER_SIZE;
+    let waters_handle_idx = sim_id  * target_n_waters * consts::WATER_SIZE;
     // Select random active water to move
     let water_to_move = random_numbers[consts::WATER_TARGET_IDX] as u32;
     let move_water_idx = waters_handle_idx + water_to_move * consts::WATER_SIZE;
@@ -227,12 +230,12 @@ pub fn translation_move(
     // Load current water
     let mut old_water = Array::<f32>::new(consts::WATER_SIZE);
     load_water_from_array(water_atoms, move_water_idx, &mut old_water);
-    
     let receptor_energy_old = energy_for_real_water_kernel(receptor_atoms,
-            &old_water,
+        &old_water,
+        
             n_receptor_atoms,
             sim_id);
-    let waters_energy_old = energy_for_real_water_with_waters_kernel(water_atoms, &old_water, sim_id, active_waters);
+    let waters_energy_old = energy_for_real_water_with_waters_kernel(water_atoms, &old_water, sim_id, active_waters, target_n_waters);
     
     let energy_old = receptor_energy_old + waters_energy_old;
     
@@ -243,7 +246,7 @@ pub fn translation_move(
             &new_water,
             n_receptor_atoms,
             sim_id);
-    let waters_energy_new = energy_for_real_water_with_waters_kernel(water_atoms, &new_water, sim_id, active_waters);
+    let waters_energy_new = energy_for_real_water_with_waters_kernel(water_atoms, &new_water, sim_id, active_waters, target_n_waters);
 
     let energy_new = receptor_energy_new + waters_energy_new;
 
@@ -608,7 +611,8 @@ pub fn energy_for_real_water_with_waters_kernel(
     water_atoms: &Array<f32>,
     target_water: &Array<f32>,
     sim_id: u32,
-    active_waters: u32
+    active_waters: u32,
+    target_n_waters: u32
 ) -> f32 {
     let mut total_energy: f32 = 0.0;
     let water_atom_stride = 4;
@@ -618,7 +622,7 @@ pub fn energy_for_real_water_with_waters_kernel(
     
     // Calculate total number of active atoms (3 atoms per water)
     let total_active_atoms = active_waters * atoms_per_water;
-    let atoms_base_idx = sim_id * consts::MAX_N_WATERS * atoms_per_water;
+    let atoms_base_idx = sim_id * target_n_waters * atoms_per_water;
     // debug_print!("atoms_base_idx = %d, total_active_atoms = %d\n", atoms_base_idx, total_active_atoms);
 
     // Iterate through all active water atoms

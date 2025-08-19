@@ -106,6 +106,7 @@ def get_data_from_openmm(pdb_file, project_path, protein_ff="amber14-all.xml", s
     protein_modeller = Modeller(protein_topology, protein_positions)
     vectors = _build_box(protein_positions)
     protein_modeller.topology.setPeriodicBoxVectors(vectors)
+    protein_atoms = [atom for atom in protein_topology.atoms() if atom.residue.name not in ["HOH"]]
     forcefield = ForceField(protein_ff)
     # if small_molecule:
     #     small_molecule_ff = self._parametrize_cosolvents(cosolvents, small_molecule_ff=sm_ff)
@@ -117,7 +118,43 @@ def get_data_from_openmm(pdb_file, project_path, protein_ff="amber14-all.xml", s
                                     removeCMMotion=True,
                                     constraints=HBonds,
                                     hydrogenMass=1.0*openmmunit.amu)
-    return system
+
+    # Retrieve all Force objects from the System
+    forces = system.getForces()
+    mcswell_atoms = list()
+    # Find the NonbondedForce object
+    nonbonded_force = [f for f in forces if isinstance(f, NonbondedForce)][0]
+    for idx, atom in enumerate(protein_atoms):
+        charge, sigma, epsilon = nonbonded_force.getParticleParameters(atom.index)
+        atom_type = atom.name
+        residue = atom.residue
+        chain = residue.chain
+        chain_id = chr(ord('@')+ chain.index + 1)
+        unique_id = f"{chain_id}:{residue.name}:{residue.index}"
+        atom_id = f"{unique_id}:{atom_type}"
+        coords = protein_positions[idx].in_units_of(openmmunit.angstrom)._value
+        rmin_half_value = rmin_half(sigma.in_units_of(openmmunit.angstrom))._value
+        epsilon_value = epsilon.in_units_of(openmmunit.kilocalories_per_mole)._value
+        charge_value = charge.in_units_of(openmmunit.elementary_charge)._value
+        new_atom = rust_waterkit.Atom(atom_type=atom_type,
+                                      atom_id=atom_id,
+                                      coords_point=[coords.x, coords.y, coords.z],
+                                      rmin_half=rmin_half_value,
+                                      epsilon=epsilon_value,
+                                      charge=charge_value,
+                                      vina_rij=0.0,
+                                      vina_donor=False,
+                                      vina_acceptor=False)
+        mcswell_atoms.append(new_atom)
+    return mcswell_atoms
+
+def rmin_half(sigma):
+        """
+        The VdW rmin_half term from sigma
+        """
+        rmin = 2.0 ** (1.0 / 6) * sigma
+        rmin_half = rmin / 2
+        return rmin_half
 
 def load_waters_orientations(orientations="/data/phd/waterkit/waterkit/data/water_orientations.txt"):
 # def load_waters_orientations(orientations="/Users/niccolobruciaferri/phd/waterkit/waterkit/data/water_orientations.txt"):
@@ -127,7 +164,7 @@ def load_waters_orientations(orientations="/data/phd/waterkit/waterkit/data/wate
 
 
 def run_mcswell(receptor_path, project_path, center, alg_type="gcmc"):
-    parametrized_atoms = get_data_from_meeko(pdb_file=receptor_path, project_path=project_path)
+    parametrized_atoms = get_data_from_openmm(pdb_file=receptor_path, project_path=project_path)
     spacing = 0.375
     x_size, y_size, z_size = 24.0, 24.0, 24.0
     n_frames = 500

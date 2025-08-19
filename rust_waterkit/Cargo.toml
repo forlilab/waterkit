@@ -28,12 +28,15 @@ rstar = "0.12.2"
 simple-logging = "2.0.2"
 
 [features]
+default = ["extension-module", "cuda", "tip3p", "gcmc"]
 extension-module = ["pyo3/extension-module"]
 wgpu = ["cubecl/wgpu"]
 cuda = ["cubecl/cuda"]
 cpu = []
 tip3p = []
 tip3pfp = []
+gcmc = []
+mc_after_gcmc = []
 
 
 # [profile.release]

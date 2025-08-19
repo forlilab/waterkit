@@ -84,7 +84,6 @@ pub const VINA_GAUSS2_W: f64 = -0.005156;
 pub const USE_DIELECTRIC: bool = false;
 
 // GPU
-pub const MAX_N_WATERS: u32 = 500;
 pub const ATOM_FEATURES: u32 = 7;
 
 // 0 -> oxygen, 1 -> hydrogen_1, 2 -> hydrogen_2, 3 -> resnum

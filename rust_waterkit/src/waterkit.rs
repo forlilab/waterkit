@@ -619,7 +619,7 @@ pub fn test_gpu(receptor_points: Vec<Atom>,
     let voxel_volume = grid.spacing * grid.spacing * grid.spacing;
     let total_volume = (voxel_volume * gird_points_for_placement.len() as f64);
     println!("Total volume: {}", total_volume);
-    let target_n_waters = (total_volume * bulk_water_density * 0.9) as usize;
+    let target_n_waters = (total_volume * bulk_water_density) as usize;
     let min_max = find_min_max(&gird_points_for_placement);
     if min_max.is_some() {
         let (min, max) = min_max.unwrap();
@@ -657,30 +657,11 @@ pub fn test_gpu(receptor_points: Vec<Atom>,
                 min[1] as f32, max[1] as f32,
                 min[2] as f32, max[2] as f32], 
             total_volume as f32,
-            gcmc_steps as usize); 
-            // gcmc_steps as usize);
-        // for idx in 0..n_waters.len() {
-            // println!("{idx} - {}", n_waters[idx]);
-            // println!("C {} {} {}", n_waters[idx], n_waters[idx+1], n_waters[idx+2]);
-        // }
+            gcmc_steps as usize,
+            target_n_waters as usize); 
         println!("Done sampling GCMC: {}s", start_gcmc.elapsed().as_secs());
         
-        let (frames, water_molecules) = reconstruct_waters(n_waters, num_frames,  consts::MAX_N_WATERS as usize, 4, 3);
-        
-        // let start_mc = Instant::now();
-        // let waters: Vec<(Vec<Atom>, Vec<WaterMolecule>)> = (0..num_frames).into_par_iter()
-        // .map(|epoch| run_mc(
-        //     water_molecules[epoch],
-        //     &receptor_points,
-        // )).collect();
-        // println!("Done sampling MC: {}s", start_mc.elapsed().as_secs());
-
-        // waters.par_iter().enumerate()
-        // .for_each(|(idx, (optimized_system, water_moleucles))| {
-        //     // to_pdb(&unoptimized_system, &format!("{save_path}/water_{idx}_unoptimized.pdb"), None);
-        //     to_pdb(&optimized_system, &format!("{save_path}/water_{idx}_optimized.pdb"), None)}
-        // );
-
+        let (frames, water_molecules) = reconstruct_waters(n_waters, num_frames,  target_n_waters as usize, 4, 3);
         frames.par_iter().enumerate()
         .for_each(|(idx, frame)| {
             to_pdb(&frame, &format!("{save_path}/water_{idx}_optimized.pdb"), None);
@@ -740,7 +721,7 @@ fn reconstruct_waters(waters: Vec<f32>, num_frames: usize, max_n_waters: usize, 
 
             water_mol.push(wat_mol);
         }
-    println!("Simulation {}: Found {} water molecules\n", sim, water_molecules.len() / 3);
+    // println!("Simulation {}: Found {} water molecules\n", sim, water_molecules.len() / 3);
     frames.push(water_molecules);
     waters_frames.push(water_mol);
     

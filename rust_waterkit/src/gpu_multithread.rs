@@ -183,175 +183,45 @@ pub fn energy_for_real_water_kernel_parallel(
     total
 }
 
-#[cube]
-pub fn energy_for_real_water_with_waters_kernel_parallel(
-    water_atoms: &Array<f32>,
-    target_water: &Array<f32>,
-    sim_id: u32,
-    active_waters: u32,
-    out_partials: &mut Array<f32>,
-) {
-    // Initialize output immediately
-    let out_base = sim_id * CUBE_DIM_X;
-    out_partials[out_base + UNIT_POS_X] = 0.0;
-
-    // Early exit if no waters to interact with
-    // if active_waters == 0 {
-    //     terminate!()
-    // }
-
-    let WATER_STRIDE: u32 = u32::cast_from(4);
-    let ATOMS_PER_WATER: u32 = u32::cast_from(3);
-    
-    let mut partial: f32 = 0.0;
-    let waters_base = sim_id * consts::MAX_N_WATERS * consts::WATER_SIZE;
-
-    // Add bounds checking
-    // debug_print!("Thread %d: active_waters=%d, CUBE_DIM_X=%d\n", UNIT_POS_X, active_waters, CUBE_DIM_X);
-
-    // strided over existing (active) waters
-    let mut w = UNIT_POS_X;
-    while w < active_waters {
-        // debug_print!("Thread %d: processing water %d\n", UNIT_POS_X, w);
-        
-        let wb = waters_base + w * consts::WATER_SIZE;
-        
-        // Bounds check
-        // if wb + consts::WATER_SIZE > water_atoms.len() {
-        //     // debug_print!("Thread %d: BOUNDS ERROR - wb=%d, array_len=%d\n", UNIT_POS_X, wb, water_atoms.len());
-        //     break;
-        // }
-        
-        // loop atoms (O,H1,H2) of existing water
-        let mut a = 0u32;
-        while a < ATOMS_PER_WATER {
-            let abase = wb + a * WATER_STRIDE;
-            let wx = water_atoms[abase + 0];
-            let wy = water_atoms[abase + 1];
-            let wz = water_atoms[abase + 2];
-
-            // params for existing-water atom
-            let mut wq: f32 = 0.0;
-            let mut w_eps: f32 = 0.0;
-            let mut w_rminh: f32 = 0.0;
-
-            #[cfg(feature = "tip3p")]
-            {
-                if a == 0 {
-                    wq = -0.8340;
-                    w_eps = 0.15210325;
-                    w_rminh = 1.7682;
-                } else {
-                    wq = 0.4170;
-                }
-            }
-
-            #[cfg(feature = "tip3pfp")]
-            {
-                if a == 0 {
-                    wq = -0.8484;
-                    w_eps = 0.15586604;
-                    w_rminh = 1.7835723;
-                } else {
-                    wq = 0.4242;
-                }
-            }
-
-            // interact with target water atoms
-            let mut t = 0u32;
-            while t < ATOMS_PER_WATER {
-                let tbase = t * WATER_STRIDE;
-                let tx = target_water[tbase + 0];
-                let ty = target_water[tbase + 1];
-                let tz = target_water[tbase + 2];
-                
-                let dx = tx - wx;
-                let dy = ty - wy;
-                let dz = tz - wz;
-                let distance_sq = dx * dx + dy * dy + dz * dz;
-                
-                // Skip if atoms are essentially overlapping
-                if distance_sq > 1e-16 {
-                    
-                    let distance = f32::sqrt(distance_sq);
-                    let r = f32::max(distance, 1e-8);
-
-                    // target atom params
-                    let mut tq: f32 = 0.0;
-                    let mut t_eps: f32 = 0.0;
-                    let mut t_rminh: f32 = 0.0;
-
-                    #[cfg(feature = "tip3p")]
-                    {
-                        if t == 0 {
-                            tq = -0.8340;
-                            t_eps = 0.15210325;
-                            t_rminh = 1.7682;
-                        } else {
-                            tq = 0.4170;
-                        }
-                    }
-
-                    #[cfg(feature = "tip3pfp")]
-                    {
-                        if t == 0 {
-                            tq = -0.8484;
-                            t_eps = 0.15586604;
-                            t_rminh = 1.7683;
-                        } else {
-                            tq = 0.4242;
-                        }
-                    }
-
-                    // LJ only for O–O (no LJ on hydrogens)
-                    if a == 0 && t == 0 {
-                        partial += gpu_energy::lennard_jones_rmin_half(
-                            t_eps, w_eps, r, t_rminh, w_rminh
-                        );
-                    }
-
-                    // Coulomb for all atom pairs
-                    partial += gpu_energy::coulomb_energy::<f32>(tq, wq, r);
-                    
-                    t += 1;
-                }
-            }
-            a += 1;
-        }
-        
-        // debug_print!("Thread %d: completed water %d, moving to %d\n", UNIT_POS_X, w, w + CUBE_DIM_X);
-        w += CUBE_DIM_X;
-    }
-
-    // debug_print!("Thread %d: writing partial=%f to index %d\n", UNIT_POS_X, partial, out_base + UNIT_POS_X);
-    // write partial to per-sim/thread slot in global buffer
-    out_partials[out_base + UNIT_POS_X] = partial;
-}
-
 // #[cube]
 // pub fn energy_for_real_water_with_waters_kernel_parallel(
-//     water_atoms: &Array<f32>, // all waters for the sim: MAX_N_WATERS * WATER_SIZE
-//     target_water: &Array<f32>, // (x,y,z,resnum) × 3
+//     water_atoms: &Array<f32>,
+//     target_water: &Array<f32>,
 //     sim_id: u32,
 //     active_waters: u32,
-//     // OUT: per-thread partials buffer, length must be >= n_sims * CUBE_DIM_X
 //     out_partials: &mut Array<f32>,
+//     target_n_waters: u32,
 // ) {
+//     // Initialize output immediately
+//     let out_base = sim_id * CUBE_DIM_X;
+//     out_partials[out_base + UNIT_POS_X] = 0.0;
+
+//     // Early exit if no waters to interact with
+//     // if active_waters == 0 {
+//     //     terminate!()
+//     // }
+
 //     let WATER_STRIDE: u32 = u32::cast_from(4);
 //     let ATOMS_PER_WATER: u32 = u32::cast_from(3);
     
 //     let mut partial: f32 = 0.0;
-    
-//     // Initialize output slot (clear any previous value)
-//     let out_base = sim_id * CUBE_DIM_X;
-//     out_partials[out_base + UNIT_POS_X] = 0.0;
-    
-//     let waters_base = sim_id * consts::MAX_N_WATERS * consts::WATER_SIZE;
+//     let waters_base = sim_id * target_n_waters * consts::WATER_SIZE;
+
+//     // Add bounds checking
+//     // debug_print!("Thread %d: active_waters=%d, CUBE_DIM_X=%d\n", UNIT_POS_X, active_waters, CUBE_DIM_X);
 
 //     // strided over existing (active) waters
 //     let mut w = UNIT_POS_X;
 //     while w < active_waters {
+//         // debug_print!("Thread %d: processing water %d\n", UNIT_POS_X, w);
+        
 //         let wb = waters_base + w * consts::WATER_SIZE;
+        
+//         // Bounds check
+//         // if wb + consts::WATER_SIZE > water_atoms.len() {
+//         //     // debug_print!("Thread %d: BOUNDS ERROR - wb=%d, array_len=%d\n", UNIT_POS_X, wb, water_atoms.len());
+//         //     break;
+//         // }
         
 //         // loop atoms (O,H1,H2) of existing water
 //         let mut a = 0u32;
@@ -360,7 +230,6 @@ pub fn energy_for_real_water_with_waters_kernel_parallel(
 //             let wx = water_atoms[abase + 0];
 //             let wy = water_atoms[abase + 1];
 //             let wz = water_atoms[abase + 2];
-//             // let w_res = water_atoms[abase + 3]; // not used for energy
 
 //             // params for existing-water atom
 //             let mut wq: f32 = 0.0;
@@ -383,7 +252,7 @@ pub fn energy_for_real_water_with_waters_kernel_parallel(
 //                 if a == 0 {
 //                     wq = -0.8484;
 //                     w_eps = 0.15586604;
-//                     w_rminh = 1.7683;
+//                     w_rminh = 1.7835723;
 //                 } else {
 //                     wq = 0.4242;
 //                 }
@@ -404,7 +273,7 @@ pub fn energy_for_real_water_with_waters_kernel_parallel(
                 
 //                 // Skip if atoms are essentially overlapping
 //                 if distance_sq > 1e-16 {
-                
+                    
 //                     let distance = f32::sqrt(distance_sq);
 //                     let r = f32::max(distance, 1e-8);
 
@@ -450,9 +319,141 @@ pub fn energy_for_real_water_with_waters_kernel_parallel(
 //             }
 //             a += 1;
 //         }
+        
+//         // debug_print!("Thread %d: completed water %d, moving to %d\n", UNIT_POS_X, w, w + CUBE_DIM_X);
 //         w += CUBE_DIM_X;
 //     }
 
+//     // debug_print!("Thread %d: writing partial=%f to index %d\n", UNIT_POS_X, partial, out_base + UNIT_POS_X);
 //     // write partial to per-sim/thread slot in global buffer
 //     out_partials[out_base + UNIT_POS_X] = partial;
 // }
+
+// // #[cube]
+// // pub fn energy_for_real_water_with_waters_kernel_parallel(
+// //     water_atoms: &Array<f32>, // all waters for the sim: MAX_N_WATERS * WATER_SIZE
+// //     target_water: &Array<f32>, // (x,y,z,resnum) × 3
+// //     sim_id: u32,
+// //     active_waters: u32,
+// //     // OUT: per-thread partials buffer, length must be >= n_sims * CUBE_DIM_X
+// //     out_partials: &mut Array<f32>,
+// // ) {
+// //     let WATER_STRIDE: u32 = u32::cast_from(4);
+// //     let ATOMS_PER_WATER: u32 = u32::cast_from(3);
+    
+// //     let mut partial: f32 = 0.0;
+    
+// //     // Initialize output slot (clear any previous value)
+// //     let out_base = sim_id * CUBE_DIM_X;
+// //     out_partials[out_base + UNIT_POS_X] = 0.0;
+    
+// //     let waters_base = sim_id * consts::MAX_N_WATERS * consts::WATER_SIZE;
+
+// //     // strided over existing (active) waters
+// //     let mut w = UNIT_POS_X;
+// //     while w < active_waters {
+// //         let wb = waters_base + w * consts::WATER_SIZE;
+        
+// //         // loop atoms (O,H1,H2) of existing water
+// //         let mut a = 0u32;
+// //         while a < ATOMS_PER_WATER {
+// //             let abase = wb + a * WATER_STRIDE;
+// //             let wx = water_atoms[abase + 0];
+// //             let wy = water_atoms[abase + 1];
+// //             let wz = water_atoms[abase + 2];
+// //             // let w_res = water_atoms[abase + 3]; // not used for energy
+
+// //             // params for existing-water atom
+// //             let mut wq: f32 = 0.0;
+// //             let mut w_eps: f32 = 0.0;
+// //             let mut w_rminh: f32 = 0.0;
+
+// //             #[cfg(feature = "tip3p")]
+// //             {
+// //                 if a == 0 {
+// //                     wq = -0.8340;
+// //                     w_eps = 0.15210325;
+// //                     w_rminh = 1.7682;
+// //                 } else {
+// //                     wq = 0.4170;
+// //                 }
+// //             }
+
+// //             #[cfg(feature = "tip3pfp")]
+// //             {
+// //                 if a == 0 {
+// //                     wq = -0.8484;
+// //                     w_eps = 0.15586604;
+// //                     w_rminh = 1.7683;
+// //                 } else {
+// //                     wq = 0.4242;
+// //                 }
+// //             }
+
+// //             // interact with target water atoms
+// //             let mut t = 0u32;
+// //             while t < ATOMS_PER_WATER {
+// //                 let tbase = t * WATER_STRIDE;
+// //                 let tx = target_water[tbase + 0];
+// //                 let ty = target_water[tbase + 1];
+// //                 let tz = target_water[tbase + 2];
+                
+// //                 let dx = tx - wx;
+// //                 let dy = ty - wy;
+// //                 let dz = tz - wz;
+// //                 let distance_sq = dx * dx + dy * dy + dz * dz;
+                
+// //                 // Skip if atoms are essentially overlapping
+// //                 if distance_sq > 1e-16 {
+                
+// //                     let distance = f32::sqrt(distance_sq);
+// //                     let r = f32::max(distance, 1e-8);
+
+// //                     // target atom params
+// //                     let mut tq: f32 = 0.0;
+// //                     let mut t_eps: f32 = 0.0;
+// //                     let mut t_rminh: f32 = 0.0;
+
+// //                     #[cfg(feature = "tip3p")]
+// //                     {
+// //                         if t == 0 {
+// //                             tq = -0.8340;
+// //                             t_eps = 0.15210325;
+// //                             t_rminh = 1.7682;
+// //                         } else {
+// //                             tq = 0.4170;
+// //                         }
+// //                     }
+
+// //                     #[cfg(feature = "tip3pfp")]
+// //                     {
+// //                         if t == 0 {
+// //                             tq = -0.8484;
+// //                             t_eps = 0.15586604;
+// //                             t_rminh = 1.7683;
+// //                         } else {
+// //                             tq = 0.4242;
+// //                         }
+// //                     }
+
+// //                     // LJ only for O–O (no LJ on hydrogens)
+// //                     if a == 0 && t == 0 {
+// //                         partial += gpu_energy::lennard_jones_rmin_half(
+// //                             t_eps, w_eps, r, t_rminh, w_rminh
+// //                         );
+// //                     }
+
+// //                     // Coulomb for all atom pairs
+// //                     partial += gpu_energy::coulomb_energy::<f32>(tq, wq, r);
+                    
+// //                     t += 1;
+// //                 }
+// //             }
+// //             a += 1;
+// //         }
+// //         w += CUBE_DIM_X;
+// //     }
+
+// //     // write partial to per-sim/thread slot in global buffer
+// //     out_partials[out_base + UNIT_POS_X] = partial;
+// // }
