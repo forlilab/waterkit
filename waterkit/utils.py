@@ -354,7 +354,7 @@ def execute_command(cmd_line):
 
 
 def path_module(module_name):
-    specs = importlib.machinery.PathFinder().find_spec(module_name)
+    specs = importlib.util.find_spec(module_name)
     if specs is not None:
         return specs.submodule_search_locations[0]
 
