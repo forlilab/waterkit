@@ -30,7 +30,7 @@ You need, at a minimum (requirements):
 
 I highly recommand you to install the Anaconda distribution (https://www.continuum.io/downloads) if you want a clean python environnment with nearly all the prerequisites already installed. To install everything properly, you just have to do this:
 ```bash
-$ conda create -n waterkit -c conda-forge python=3 mkl numpy scipy pandas \
+$ conda create -n waterkit -c conda-forge python=3 mkl numpy=2.2.6 scipy pandas \
     openbabel parmed ambertools openmm netcdf4 griddataformats tqdm \
     sphinx sphinx_rtd_theme
 $ conda activate waterkit
