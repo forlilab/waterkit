@@ -342,7 +342,7 @@ def is_writable(pathname):
         testfile = tempfile.NamedTemporaryFile(dir=pathname)
         testfile.close()
     except (PermissionError, FileNotFoundError) as e:
-        raise RuntimeError('Can write in directory %s.' % pathname) from e
+        raise RuntimeError('Can\'t write in directory %s.' % pathname) from e
 
 
 def execute_command(cmd_line):
