@@ -12,10 +12,40 @@ from glob import glob
 
 import numpy as np
 import openbabel as ob
+from vina import Vina
 
 from .molecule import Molecule
 from .autodock_map import Map
 from . import utils
+
+
+
+def calc_spherical_water_map(autogrid_exec_path, receptor, box_center, box_size, receptor_spherical_water_filename=None):
+    with utils.temporary_directory(prefix='wk_', dir='.', clean=False) as tmp_dir:
+        # Generate AutoDock maps using the Amber ff14SB forcefield
+        receptor.to_pdbqt_file('receptor.pdbqt')
+        ff14sb_param_file = os.path.join(utils.path_module('waterkit'), 'data/ff14SB_parameters.dat')
+        ag = AutoGrid(autogrid_exec_path, ff14sb_param_file)
+        ad_map = ag.run('receptor.pdbqt', ['OW'], box_center, box_size, smooth=0, dielectric=1)
+
+        if receptor_spherical_water_filename is None:
+            # Convert amber atom types to AutoDock atom types
+            ad_receptor = utils.convert_amber_to_autodock_types(receptor)
+            ad_receptor.to_pdbqt_file('receptor_ad.pdbqt')
+
+            # Generate Vina maps for the spherical maps
+            v = Vina(verbosity=0)
+            v.set_receptor('receptor_ad.pdbqt')
+            v.compute_vina_maps(box_center, box_size, force_even_voxels=True)
+            v.write_maps('vina')
+            sw_map = Map('vina.O_DA.map', 'SW')
+        else:
+            # The first spherical map is for the receptor
+            sw_map = Map(receptor_spherical_water_filename, 'SW')
+
+        ad_map.add_map('SW', sw_map._maps['SW'])
+
+    return ad_map
 
 
 class AutoGrid():

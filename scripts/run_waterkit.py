@@ -10,12 +10,11 @@ import os
 import argparse
 import shutil
 
-from waterkit import AutoGrid
+from waterkit import calc_spherical_water_map
 from waterkit import Map
 from waterkit import Molecule
 from waterkit import WaterKit
 from waterkit import utils
-from vina import Vina
 
 
 def cmd_lineparser():
@@ -55,7 +54,7 @@ def main():
     temperature = args.temperature
     output_dir = args.output_dir
     spherical_water_maps = args.spherical_water_maps
-    autogrid_exec_path = args.autogrid_exec_path
+    autogrid_exec_path = os.path.abspath(args.autogrid_exec_path)
     water_model = 'tip3p'
 
     # Force to use only one thread per job
@@ -66,29 +65,14 @@ def main():
     # Read PDBQT/MOL2 file, Waterfield file and AutoDock grid map
     receptor = Molecule.from_file(receptor_pdbqtfilename)
 
-    with utils.temporary_directory(prefix='wk_', dir='.', clean=False) as tmp_dir:
-        # Generate AutoDock maps using the Amber ff14SB forcefield
-        receptor.to_pdbqt_file('receptor.pdbqt')
-        ff14sb_param_file = os.path.join(utils.path_module('waterkit'), 'data/ff14SB_parameters.dat')
-        ag = AutoGrid(autogrid_exec_path, ff14sb_param_file)
-        ad_map = ag.run('receptor.pdbqt', ['OW'], box_center, box_size, smooth=0, dielectric=1)
-
-        if spherical_water_maps[0] is None:
-            # Convert amber atom types to AutoDock atom types
-            ad_receptor = utils.convert_amber_to_autodock_types(receptor)
-            ad_receptor.to_pdbqt_file('receptor_ad.pdbqt')
-
-            # Generate Vina maps for the spherical maps
-            v = Vina(verbosity=0)
-            v.set_receptor('receptor_ad.pdbqt')
-            v.compute_vina_maps(box_center, box_size, force_even_voxels=True)
-            v.write_maps('vina')
-            sw_map = Map('vina.O_DA.map', 'SW')
-        else:
-            # The first spherical map is for the receptor
-            sw_map = Map(spherical_water_maps[0], 'SW')
-
-        ad_map.add_map('SW', sw_map._maps['SW'])
+    receptor_spherical_water_map_filename = spherical_water_maps[0]
+    ad_map = calc_spherical_water_map(
+        autogrid_exec_path,
+        receptor,
+        box_center,
+        box_size,
+        receptor_spherical_water_map_filename,
+    )
 
     # It is more cleaner if we prepare the maps (OW, HW for tip3p, OT, HT, LP for tip5p) before
     utils.prepare_water_map(ad_map, water_model)

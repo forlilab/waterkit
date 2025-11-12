@@ -66,6 +66,29 @@ class Molecule():
             hbfield = HydrogenBonds(hb_file)
             self._guess_hydrogen_bond_anchors(OBMol, hbfield)
 
+
+    @classmethod
+    def from_pdbqt_string(cls, string, guess_hydrogen_bonds=True, guess_disordered_hydrogens=True):
+
+        OBMol = ob.OBMol()
+        obconv = ob.OBConversion()
+        obconv.SetInFormat("pdb")
+        errlev = ob.obErrorLog.GetOutputLevel()
+        ob.obErrorLog.SetOutputLevel(0)
+        obconv.ReadString(OBMol, string)
+        ob.obErrorLog.SetOutputLevel(errlev)
+        m = cls(OBMol, guess_hydrogen_bonds, guess_disordered_hydrogens)
+
+        # OpenBabel do chemical perception to define the type
+        # So we override the types with AutoDock atom types
+        # from the PDBQT file
+        qs, ts = m._qt_from_pdbqt_string(string)
+        m.atoms['q'] = qs
+        m.atoms['t'] = ts
+
+        return m
+
+
     @classmethod
     def from_file(cls, fname, guess_hydrogen_bonds=True, guess_disordered_hydrogens=True):
         """Create Molecule object from a PDB file.
@@ -83,16 +106,19 @@ class Molecule():
         name, file_extension = os.path.splitext(fname)
         file_extension = file_extension.split(os.extsep)[-1]
 
+
+        if file_extension == "pdbqt":
+            with open(fname) as f:
+                string = f.read()
+            m = cls.from_pdbqt_string(string, guess_hydrogen_bonds, guess_disordered_hydrogens) 
+            return m
+
         # Read PDB file
         OBMol = ob.OBMol()
         obconv = ob.OBConversion()
-
-        if file_extension == "pdbqt":
-            obconv.SetInFormat("pdb")
-        else:
-            obconv.SetInFormat(file_extension)
+        obconv.SetInFormat(file_extension)
         
-         # set error level to avoid warnings about non-standard input
+        # set error level to avoid warnings about non-standard input
         errlev = ob.obErrorLog.GetOutputLevel()
         ob.obErrorLog.SetOutputLevel(0)
 
@@ -102,18 +128,10 @@ class Molecule():
 
         m = cls(OBMol, guess_hydrogen_bonds, guess_disordered_hydrogens)
 
-        # OpenBabel do chemical perception to define the type
-        # So we override the types with AutoDock atom types
-        # from the PDBQT file
-        if file_extension == "pdbqt":
-            qs, ts = m._qt_from_pdbqt_file(fname)
-            m.atoms['q'] = qs
-            m.atoms['t'] = ts
-
         return m
 
-    def _qt_from_pdbqt_file(self, fname):
-        """Get partial charges and atom types from PDBQT file.
+    def _qt_from_pdbqt_string(self, pdbqt_string):
+        """Get partial charges and atom types from PDBQT string.
 
         Args:
             fname (str): molecule filename
@@ -126,12 +144,10 @@ class Molecule():
         atom_types = []
         partial_charges = []
 
-        with open(fname) as f:
-            lines = f.readlines()
-            for line in lines:
-                if re.search("^ATOM", line) or re.search("^HETATM", line):
-                    atom_types.append(line[77:79].strip())
-                    partial_charges.append(float(line[70:77].strip()))
+        for line in pdbqt_string.splitlines():
+            if re.search("^ATOM", line) or re.search("^HETATM", line):
+                atom_types.append(line[77:79].strip())
+                partial_charges.append(float(line[70:77].strip()))
 
         return partial_charges, atom_types
 
