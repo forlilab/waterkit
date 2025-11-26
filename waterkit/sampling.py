@@ -291,7 +291,7 @@ class WaterSampler():
         """
         spacing = self._ad_map._spacing
         ad_map = self._ad_map
-        boxsize = np.array([8, 8, 8])
+        boxsize = np.array([15, 15, 15])
         npts = np.round(boxsize / spacing).astype(int) // 2 * 2 + 1
         water_xyz = water.coordinates()
 
